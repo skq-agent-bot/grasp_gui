@@ -69,3 +69,7 @@ GRASP `bin` 目录的查找顺序：`$GRASP_BINDIR` → 上次使用的目录 �
 |---|---|
 | `grasp_core.py` | Toolkit-independent core: field definitions and input rules of each program, running (serial / MPI), shell and Slurm export, translations |
 | `grasp_gui.py` | Qt (PySide6) interface; forms are generated from the field definitions in `grasp_core.py` |
+
+## License / 许可证
+
+[MIT](LICENSE)
