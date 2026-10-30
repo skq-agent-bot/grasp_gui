@@ -31,7 +31,51 @@ def fix_wsl_display():
         os.environ["QT_QPA_PLATFORM"] = "wayland;xcb"
 
 
+FONTS_CONF = """<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <dir>/usr/share/fonts</dir>
+  <dir>/usr/local/share/fonts</dir>
+  <dir prefix="xdg">fonts</dir>
+  <dir>~/.fonts</dir>
+  <cachedir>{cache}</cachedir>
+  <alias><family>sans-serif</family>
+    <prefer><family>Noto Sans</family><family>DejaVu Sans</family><family>Noto Sans CJK SC</family></prefer></alias>
+  <alias><family>serif</family>
+    <prefer><family>Noto Serif</family><family>DejaVu Serif</family><family>Noto Serif CJK SC</family></prefer></alias>
+  <alias><family>monospace</family>
+    <prefer><family>DejaVu Sans Mono</family><family>Noto Sans Mono</family><family>Noto Sans Mono CJK SC</family></prefer></alias>
+  <match target="font">
+    <edit name="antialias" mode="assign"><bool>true</bool></edit>
+    <edit name="hinting" mode="assign"><bool>true</bool></edit>
+    <edit name="hintstyle" mode="assign"><const>hintslight</const></edit>
+  </match>
+</fontconfig>
+"""
+
+
+def fix_fontconfig():
+    """打包的程序自带构建机器上的 fontconfig 库；系统的 /etc/fonts 若来自更新的 fontconfig，
+    旧库读它时会打印大量 "invalid attribute 'xsi:nil'" 之类的错误。因此改用一份只列出字体目录的
+    简单配置 (系统和用户字体照常可用；打包的字体在 load_fonts 中直接注册)。"""
+    if not getattr(sys, "frozen", False) or os.environ.get("FONTCONFIG_FILE") or os.environ.get("FONTCONFIG_PATH"):
+        return
+    cache = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "grasp_gui")
+    path = os.path.join(cache, "fonts.conf")
+    text = FONTS_CONF.format(cache=os.path.join(cache, "fontconfig"))
+    try:
+        os.makedirs(cache, exist_ok=True)
+        old = open(path).read() if os.path.exists(path) else None
+        if old != text:
+            with open(path, "w") as f:
+                f.write(text)
+    except OSError:
+        return
+    os.environ["FONTCONFIG_FILE"] = os.environ["GRASP_GUI_FONTCONFIG"] = path
+
+
 fix_wsl_display()
+fix_fontconfig()
 
 from PySide6.QtCore import QByteArray, Qt, QTimer                   # noqa: E402
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFont,    # noqa: E402

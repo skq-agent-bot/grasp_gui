@@ -1281,6 +1281,10 @@ class Runner:
                 env.pop("LD_LIBRARY_PATH", None)
             else:
                 env["LD_LIBRARY_PATH"] = orig
+            # 界面自己设置的 fontconfig 配置 (见 grasp_gui.fix_fontconfig) 也不传给子进程
+            own = env.pop("GRASP_GUI_FONTCONFIG", None)
+            if own and env.get("FONTCONFIG_FILE") == own:
+                env.pop("FONTCONFIG_FILE")
         if mpi and cfg["np"] > 1:
             mpitmp = os.path.join(cwd, cfg["mpitmp"])
             os.makedirs(mpitmp, exist_ok=True)
