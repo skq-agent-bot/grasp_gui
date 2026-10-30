@@ -11,7 +11,7 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 
 - One tab per program: `rnucleus`, `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`, `rangular`, `rwfnestimate`,
   `rmcdhf`, `rsave`, `rci`, `jj2lsj`, `rhfs` (optionally followed by `rhfs_lsj`), `ris4`, `rlevels`,
-  `rtablevels`, `rbiotransform`, `rtransition`, plus a *Custom* tab (grouped as *Nucleus & CSFs*, *SCF & CI*,
+  `rtablevels`, `rtabtrans1`, `rtabtrans2`, `rbiotransform`, `rtransition`, plus a *Custom* tab (grouped as *Nucleus & CSFs*, *SCF & CI*,
   *Properties & transitions*, *Results & tools*) for any other program with hand-written input. Inputs follow the
   default-settings question order of each program; they reproduce the inputs of the test cases in
   `grasptest/` (case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs, which need the *Custom* tab.
@@ -25,7 +25,8 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 - **Slurm**: export the pipeline as a job script for `sbatch` (partition, nodes, tasks, time, memory,
   modules, e-mail, extra `#SBATCH` options).
 - **State groups odd / even**: `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`, `rangular`, `rwfnestimate`,
-  `rmcdhf`, `rsave`, `rci`, `jj2lsj`, `rhfs` and `ris4` keep separate parameters for each group (file names such as `odd2.c` / `even2.c`,
+  `rmcdhf`, `rsave`, `rci`, `jj2lsj`, `rhfs` and `ris4` keep separate parameters for each group
+  (file names such as `odd2.c` / `even2.c`,
   `outodd_rci` / `outeven_rci` correspond automatically); the other tabs are shared. *Copy to …* copies
   the current group to the other one and renames the files.
 - **Per-directory session**: parameters, groups and the pipeline are saved automatically in
@@ -61,6 +62,22 @@ window.
 GRASP `bin` 目录的查找顺序：`$GRASP_BINDIR` → 上次使用的目录 → `PATH` 中 `rmcdhf` 所在目录 →
 本程序上一级目录的 `bin`。也可以在窗口顶部修改。
 
+### Standalone executable / 独立可执行文件
+
+```bash
+./build.sh            # -> dist/grasp_gui   single file, runs without Python or PySide6
+./build.sh --onedir   # -> dist/grasp_gui/  folder variant
+```
+
+`build.sh` creates its own build environment (`build/venv`) with PyInstaller and the essential PySide6
+modules on first use. The executable (about 70 MB) needs a glibc at least as new as the build machine's
+(e.g. built on Ubuntu 22.04: glibc ≥ 2.35); to use it on an older system, run `build.sh` there. GRASP
+itself is not included: point the GUI at a GRASP `bin` directory as usual.
+
+`build.sh` 首次运行时自动建立打包环境。生成的可执行文件约 70 MB，不需要 Python 或 PySide6；
+要求系统的 glibc 不低于打包机器的版本（在 Ubuntu 22.04 上打包则需 glibc ≥ 2.35），
+在更老的系统上使用时，在那台机器上重新运行 `build.sh` 即可。GRASP 本身不包含在内。
+
 ### Submitting to a cluster / 提交到服务器
 
 1. Build the pipeline locally and test it on a small case.
@@ -84,6 +101,7 @@ GRASP `bin` 目录的查找顺序：`$GRASP_BINDIR` → 上次使用的目录 �
 |---|---|
 | `grasp_core.py` | Toolkit-independent core: field definitions and input rules of each program, running (serial / MPI), shell and Slurm export, translations |
 | `grasp_gui.py` | Qt (PySide6) interface; forms are generated from the field definitions in `grasp_core.py` |
+| `build.sh` | Builds a standalone executable with PyInstaller |
 
 ## License / 许可证
 

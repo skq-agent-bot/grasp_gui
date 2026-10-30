@@ -15,6 +15,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -282,11 +283,8 @@ EN = {
     # 态组 / 工作目录记录
     "态组": "State group",
     "复制到 {g}（替换名称）": "Copy to {g} (rename files)",
-    "rcsfgenerate 至 ris4 的参数按态组分别保存；rnucleus、rlevels、rtablevels、rbiotransform、rtransition "
-    "和自定义页两组共用。":
-        "rcsfgenerate to ris4 keep separate parameters per group; rnucleus, rlevels, rtablevels, rbiotransform, "
-        "rtransition "
-        "and the custom tab are shared.",
+    "标签上带组名的程序页按态组分别保存参数，其余程序页两组共用。":
+        "Tabs labelled with the group keep separate parameters per group; the other tabs are shared.",
     # rhfs / ris4
     "计算超精细结构常数 A、B 和朗德 g 因子。读取 isodata (核自旋 I、磁偶极矩、电四极矩在 rnucleus 中设置)、"
     "name.c、name.w、name.(c)m；输出 name.(c)h、name.(c)hoffd。":
@@ -324,6 +322,33 @@ EN = {
     "能级文件": "Energy files",
     "每行一个，按活跃集从小到大；在 rlevels 页用“输出日志文件”生成":
         "one per line, smallest active set first; write them with the output log file of the rlevels tab",
+    # rtabtrans1 / rtabtrans2
+    "为 rtabtrans2 生成能级标记文件 energylabel.latex / energylabel.ascii。读取各混合系数文件及其 jj2lsj 标记 "
+    "(name.lsj.lbl)。":
+        "Write the energy label file energylabel.latex / energylabel.ascii for rtabtrans2. Reads the mixing "
+        "coefficient files and their jj2lsj labels (name.lsj.lbl).",
+    "混合系数文件 (.m / .cm)": "Mixing coefficient files (.m / .cm)",
+    "每行一个，与计算跃迁的波函数对应；需先运行 jj2lsj": "one per line, the wave functions of the transitions; run jj2lsj first",
+    "输出格式": "Output format",
+    "能级标记文件格式": "Energy label file format",
+    "与 rtabtrans1 的输出格式一致": "the format written by rtabtrans1",
+    "由 rtransition 的跃迁数据和 rtabtrans1 的能级标记生成跃迁表、寿命表 (transitiontable、lifetimetable 的 .tex / .txt) "
+    "和 scatterplot.m。":
+        "Make transition and lifetime tables (transitiontable, lifetimetable as .tex / .txt) and scatterplot.m from "
+        "the transition data of rtransition and the energy labels of rtabtrans1.",
+    "注意：跃迁文件里每种跃迁类型都要至少有一条跃迁，否则 rtabtrans2 会报 End of file 错误 "
+    "(例如 odd–even 之间没有 M1 / E2 跃迁时，rtransition 只算 E1)。":
+        "Note: every transition type in the file needs at least one transition, otherwise rtabtrans2 stops with "
+        "End of file (e.g. compute only E1 in rtransition when there are no M1 / E2 transitions between odd and "
+        "even).",
+    "跃迁数据文件": "Transition data file",
+    "rtransition 的 .t / .ct，可把多个文件合并成一个": "a .t / .ct file from rtransition; several may be concatenated",
+    "  离子名称 (表格左列)": "  Ion name (left column)",
+    "仅 ASCII 格式，如 Fe X": "ASCII format only, e.g. Fe X",
+    "A 值打印下限": "Cut-off for printing A values",
+    "跃迁 A 值占上能级总 A 值的最小比例": "Minimum fraction of the upper level's total A value",
+    "跃迁数据已按波长排序": "Transition data sorted by wavelength",
+    "波长小数位数 (1–6)": "Decimals for wavelengths (1–6)",
     "当前态组：{g}": "Current group: {g}",
     "已把 {a} 组的参数复制到 {b} 组 (名称中的 {a} 已替换为 {b})；请检查 {b} 的参考组态、2J 范围和能级。":
         "Copied the {a} parameters to {b} ({a} replaced by {b} in names); check the reference configurations, "
@@ -840,6 +865,45 @@ class RTableLevels(Step):
         return answers([v["nskip"], str(len(files))] + files)
 
 
+class RTabTrans1(Step):
+    key = name = prog = "rtabtrans1"
+    fields = [
+        Note("为 rtabtrans2 生成能级标记文件 energylabel.latex / energylabel.ascii。读取各混合系数文件及其 jj2lsj 标记 "
+             "(name.lsj.lbl)。"),
+        Text("files", "混合系数文件 (.m / .cm)", "oddCI6.cm\nevenCI6.cm", "每行一个，与计算跃迁的波函数对应；需先运行 jj2lsj",
+             lines=3),
+        Entry("nskip", "标签开头跳过的字符数", "0", "如标签以闭壳芯 1s(2). 开头，跳过 6 个字符"),
+        Choice("fmt", "输出格式", [("0", "LaTeX"), ("1", "ASCII")]),
+    ]
+
+    def stdin(self, v):
+        # 文件名逐行给出，空行结束
+        return answers(nonblank_lines(v["files"]) + ["", v["nskip"], v["fmt"]])
+
+
+class RTabTrans2(Step):
+    key = name = prog = "rtabtrans2"
+    fields = [
+        Note("由 rtransition 的跃迁数据和 rtabtrans1 的能级标记生成跃迁表、寿命表 (transitiontable、lifetimetable 的 .tex / .txt) "
+             "和 scatterplot.m。"),
+        Note("注意：跃迁文件里每种跃迁类型都要至少有一条跃迁，否则 rtabtrans2 会报 End of file 错误 "
+             "(例如 odd–even 之间没有 M1 / E2 跃迁时，rtransition 只算 E1)。"),
+        Entry("tfile", "跃迁数据文件", "oddCI6.evenCI6.ct", "rtransition 的 .t / .ct，可把多个文件合并成一个"),
+        Choice("fmt", "能级标记文件格式", [("0", "LaTeX"), ("1", "ASCII")], "与 rtabtrans1 的输出格式一致"),
+        Entry("ion", "  离子名称 (表格左列)", "", "仅 ASCII 格式，如 Fe X"),
+        Entry("cutoff", "A 值打印下限", "0"),
+        Entry("frac", "跃迁 A 值占上能级总 A 值的最小比例", "0"),
+        Check("sorted", "跃迁数据已按波长排序", True),
+        Entry("digits", "波长小数位数 (1–6)", "3"),
+    ]
+
+    def stdin(self, v):
+        lines = [v["tfile"].strip(), v["fmt"]]
+        if v["fmt"] == "1":                 # ASCII 时询问表格左列的离子名称
+            lines.append(v["ion"])
+        return answers(lines + [v["cutoff"], v["frac"], yn(v["sorted"]), v["digits"]])
+
+
 class RBioTransform(Step):
     key = name = prog = "rbiotransform"
     mpi = True
@@ -908,14 +972,15 @@ class Custom(Step):
 
 
 STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
-         RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RBioTransform(), RTransition(), Custom()]
+         RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RTabTrans1(), RTabTrans2(),
+         RBioTransform(), RTransition(), Custom()]
 
 # 界面左侧程序列表的功能分组 (每个程序恰好出现一次)
 STEP_GROUPS = [
     ("核与组态", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit"]),
     ("自洽场与 CI", ["rangular", "rwfnestimate", "rmcdhf", "rsave", "rci"]),
     ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
-    ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "custom"]),
+    ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
 ]
 assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s in STEPS)
 
@@ -1137,6 +1202,13 @@ class Runner:
     def exec_cmd(self, argv, cfg, stdin="", log="", mpi=False):
         bindir, cwd = cfg["bindir"], cfg["cwd"]
         env = dict(os.environ, PATH=bindir + os.pathsep + os.environ.get("PATH", ""))
+        if getattr(sys, "frozen", False):
+            # PyInstaller 打包的程序把 LD_LIBRARY_PATH 指向自带的库；子进程 (GRASP、mpirun) 用回原来的值
+            orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
+            if orig is None:
+                env.pop("LD_LIBRARY_PATH", None)
+            else:
+                env["LD_LIBRARY_PATH"] = orig
         if mpi and cfg["np"] > 1:
             mpitmp = os.path.join(cwd, cfg["mpitmp"])
             os.makedirs(mpitmp, exist_ok=True)

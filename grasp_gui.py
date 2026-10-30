@@ -424,8 +424,7 @@ class MainWindow(QMainWindow):
         self.copy_btn = QPushButton()
         self.copy_btn.clicked.connect(self.copy_group)
         gb.addWidget(self.copy_btn)
-        note = hint_label("rcsfgenerate 至 ris4 的参数按态组分别保存；rnucleus、rlevels、rtablevels、rbiotransform、"
-                          "rtransition 和自定义页两组共用。")
+        note = hint_label("标签上带组名的程序页按态组分别保存参数，其余程序页两组共用。")
         note.setWordWrap(True)
         gb.addWidget(note, 1)
         lay.addLayout(gb)

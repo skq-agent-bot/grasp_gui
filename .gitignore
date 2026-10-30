@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 test/
+build/
+dist/
+*.spec
