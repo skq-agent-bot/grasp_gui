@@ -250,6 +250,45 @@ class SlurmDialog(QDialog):
 
 
 # ---------------------------------------------------------------------------
+#  程序页：上层按功能分组，下层是组内的程序 (每层都能一行放下，无需滚动)
+# ---------------------------------------------------------------------------
+
+class StepNav(QWidget):
+    def __init__(self, forms):
+        super().__init__()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.groups = QTabWidget()
+        self.groups.tabBar().setStyleSheet("QTabBar::tab { font-weight: bold; padding: 5px 18px; }")
+        by_key = {f.step.key: f for f in forms}
+        self.inner = {}                         # 程序 key -> 所在分组的下层标签页
+        for title, keys in core.STEP_GROUPS:
+            tabs = QTabWidget()
+            tabs.setDocumentMode(True)
+            for key in keys:
+                tabs.addTab(by_key[key], T(by_key[key].step.name))
+                self.inner[key] = tabs
+            self.groups.addTab(tabs, T(title).replace("&", "&&"))     # "&" 在标签里是快捷键标记
+        lay.addWidget(self.groups)
+
+    def currentWidget(self):
+        return self.groups.currentWidget().currentWidget()
+
+    def setCurrentWidget(self, form):
+        tabs = self.inner[form.step.key]
+        self.groups.setCurrentWidget(tabs)
+        tabs.setCurrentWidget(form)
+
+    def setText(self, form, text):
+        tabs = self.inner[form.step.key]
+        tabs.setTabText(tabs.indexOf(form), text)
+
+    def text(self, form):
+        tabs = self.inner[form.step.key]
+        return tabs.tabText(tabs.indexOf(form))
+
+
+# ---------------------------------------------------------------------------
 #  主窗口
 # ---------------------------------------------------------------------------
 
@@ -391,14 +430,12 @@ class MainWindow(QMainWindow):
         gb.addWidget(note, 1)
         lay.addLayout(gb)
 
-        self.tabs = QTabWidget()
         self.forms = [StepForm(step, self.bindir.text()) for step in core.STEPS]
-        for f in self.forms:
-            self.tabs.addTab(f, T(f.step.name))
+        self.nav = StepNav(self.forms)
         for f in self.group_forms():
             f.set_values(self.groups[self.group][f.step.key])
         self.update_group_labels()
-        lay.addWidget(self.tabs)
+        lay.addWidget(self.nav)
         bar = QHBoxLayout()
         bar.addWidget(button("预览输入", self.preview))
         bar.addWidget(button("▶ 运行当前程序", self.run_current))
@@ -492,9 +529,9 @@ class MainWindow(QMainWindow):
         for b in self.group_buttons.buttons():
             b.setChecked(b.text() == self.group)
         self.copy_btn.setText(T("复制到 {g}（替换名称）", g=self.other_group()))
-        for i, f in enumerate(self.forms):
+        for f in self.forms:
             name = T(f.step.name)
-            self.tabs.setTabText(i, f"{name} · {self.group}" if f.step.key in core.GROUP_STEPS else name)
+            self.nav.setText(f, f"{name} · {self.group}" if f.step.key in core.GROUP_STEPS else name)
 
     def switch_group(self, g):
         if g == self.group:
@@ -591,7 +628,7 @@ class MainWindow(QMainWindow):
     # ---- 动作 ----
     def current_job(self):
         try:
-            return self.tabs.currentWidget().job()
+            return self.nav.currentWidget().job()
         except (ValueError, KeyError) as e:
             QMessageBox.critical(self, T("参数错误"), T("参数格式有误：{e}", e=e))
             return None
@@ -737,7 +774,7 @@ class MainWindow(QMainWindow):
                     mpirun=self.mpirun.text(), mpitmp=self.mpitmp.text(), nice=self.nice.isChecked(),
                     slurm=self.slurm, steps={f.step.key: f.values() for f in self.forms},
                     groups=self.groups, group=self.group,
-                    pipeline=self.pipeline, tab=self.tabs.currentWidget().step.key)
+                    pipeline=self.pipeline, tab=self.nav.currentWidget().step.key)
 
     def apply(self, data):
         for key, edit in [("workdir", self.workdir), ("bindir", self.bindir),
@@ -771,11 +808,12 @@ class MainWindow(QMainWindow):
         self.refresh_list()
         tab = data.get("tab")
         if isinstance(tab, int):                # 旧版本按序号保存
-            self.tabs.setCurrentIndex(tab)
+            if 0 <= tab < len(self.forms):
+                self.nav.setCurrentWidget(self.forms[tab])
         elif tab:
             for f in self.forms:
                 if f.step.key == tab:
-                    self.tabs.setCurrentWidget(f)
+                    self.nav.setCurrentWidget(f)
 
     def save_params(self):
         path, _ = QFileDialog.getSaveFileName(self, T("保存参数"), self.workdir.text(), "JSON (*.json)")

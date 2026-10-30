@@ -274,6 +274,11 @@ EN = {
     "每行一条，如 --account=xxx": "one per line, e.g. --account=xxx",
     "导出…": "Export…",
     "取消": "Cancel",
+    # 程序列表分组
+    "核与组态": "Nucleus & CSFs",
+    "自洽场与 CI": "SCF & CI",
+    "性质与跃迁": "Properties & transitions",
+    "结果与工具": "Results & tools",
     # 态组 / 工作目录记录
     "态组": "State group",
     "复制到 {g}（替换名称）": "Copy to {g} (rename files)",
@@ -904,6 +909,15 @@ class Custom(Step):
 
 STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
          RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RBioTransform(), RTransition(), Custom()]
+
+# 界面左侧程序列表的功能分组 (每个程序恰好出现一次)
+STEP_GROUPS = [
+    ("核与组态", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit"]),
+    ("自洽场与 CI", ["rangular", "rwfnestimate", "rmcdhf", "rsave", "rci"]),
+    ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
+    ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "custom"]),
+]
+assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s in STEPS)
 
 
 # ---------------------------------------------------------------------------

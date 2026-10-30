@@ -11,7 +11,8 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 
 - One tab per program: `rnucleus`, `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`, `rangular`, `rwfnestimate`,
   `rmcdhf`, `rsave`, `rci`, `jj2lsj`, `rhfs` (optionally followed by `rhfs_lsj`), `ris4`, `rlevels`,
-  `rtablevels`, `rbiotransform`, `rtransition`, plus a *Custom* tab for any other program with hand-written input. Inputs follow the
+  `rtablevels`, `rbiotransform`, `rtransition`, plus a *Custom* tab (grouped as *Nucleus & CSFs*, *SCF & CI*,
+  *Properties & transitions*, *Results & tools*) for any other program with hand-written input. Inputs follow the
   default-settings question order of each program; they reproduce the inputs of the test cases in
   `grasptest/` (case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs, which need the *Custom* tab.
 - Common file steps are built in: save `rcsf.out` as `name.c`, copy a `.c` file to `rcsf.inp` before
