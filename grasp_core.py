@@ -277,10 +277,25 @@ EN = {
     # 态组 / 工作目录记录
     "态组": "State group",
     "复制到 {g}（替换名称）": "Copy to {g} (rename files)",
-    "rcsfgenerate、rcsfsplit、rangular、rwfnestimate、rmcdhf、rsave、rci、jj2lsj 的参数按态组分别保存；"
-    "其余程序页两组共用。":
-        "rcsfgenerate, rcsfsplit, rangular, rwfnestimate, rmcdhf, rsave, rci and jj2lsj keep separate parameters "
-        "per group; the other tabs are shared.",
+    "rcsfgenerate 至 ris4 的参数按态组分别保存；rnucleus、rlevels、rbiotransform、rtransition 和自定义页两组共用。":
+        "rcsfgenerate to ris4 keep separate parameters per group; rnucleus, rlevels, rbiotransform, rtransition "
+        "and the custom tab are shared.",
+    # rhfs / ris4
+    "计算超精细结构常数 A、B 和朗德 g 因子。读取 isodata (核自旋 I、磁偶极矩、电四极矩在 rnucleus 中设置)、"
+    "name.c、name.w、name.(c)m；输出 name.(c)h、name.(c)hoffd。":
+        "Compute hyperfine constants A, B and Landé g factors. Reads isodata (nuclear spin I, dipole and "
+        "quadrupole moments are set in rnucleus), name.c, name.w, name.(c)m; writes name.(c)h, name.(c)hoffd.",
+    "结束后运行 rhfs_lsj，用 LSJ 标记输出结果": "Then run rhfs_lsj to print the results with LSJ labels",
+    "需先运行 jj2lsj；输出 name.(c)hlsj": "needs jj2lsj first; writes name.(c)hlsj",
+    "  按能量排序": "  Sort by energy",
+    "计算同位素移位：正常 / 特殊质量移位参数和场移电子因子。读取 isodata、name.c、name.w、name.(c)m；"
+    "输出 name.(c)i。":
+        "Compute isotope shifts: normal / specific mass shift parameters and field shift electronic factors. "
+        "Reads isodata, name.c, name.w, name.(c)m; writes name.(c)i.",
+    "计算高阶场移电子因子": "Compute higher-order field shift electronic factors",
+    "保存角系数 (name.IOB / name.ITB)，以后重复计算时直接读取":
+        "Save angular coefficients (name.IOB / name.ITB) for later runs",
+    "这两个文件已存在时程序不询问": "not asked when these files already exist",
     "当前态组：{g}": "Current group: {g}",
     "已把 {a} 组的参数复制到 {b} 组 (名称中的 {a} 已替换为 {b})；请检查 {b} 的参考组态、2J 范围和能级。":
         "Copied the {a} parameters to {b} ({a} replaced by {b} in names); check the reference configurations, "
@@ -695,6 +710,51 @@ class Jj2lsj(Step):
         return f"jj2lsj {v['state']}"
 
 
+class RHfs(Step):
+    key = name = prog = "rhfs"
+    fields = [
+        Note("计算超精细结构常数 A、B 和朗德 g 因子。读取 isodata (核自旋 I、磁偶极矩、电四极矩在 rnucleus 中设置)、"
+             "name.c、name.w、name.(c)m；输出 name.(c)h、name.(c)hoffd。"),
+        Entry("state", "态名称", "oddCI6"),
+        Check("ci", "混合系数来自 CI 计算", True, "否则读 .m"),
+        Check("lsj", "结束后运行 rhfs_lsj，用 LSJ 标记输出结果", False, "需先运行 jj2lsj；输出 name.(c)hlsj"),
+        Check("sort", "  按能量排序", True),
+        Entry("log", "输出日志文件", ""),
+    ]
+
+    def stdin(self, v):
+        return answers(["y", v["state"].strip(), yn(v["ci"])])
+
+    def post(self, v):
+        if not v["lsj"]:
+            return []
+        return [("run", ["rhfs_lsj"], answers([v["state"].strip(), yn(v["ci"]), yn(v["sort"])]))]
+
+    def title(self, v):
+        return f"rhfs {v['state']}"
+
+
+class RIs4(Step):
+    key = name = prog = "ris4"
+    fields = [
+        Note("计算同位素移位：正常 / 特殊质量移位参数和场移电子因子。读取 isodata、name.c、name.w、name.(c)m；"
+             "输出 name.(c)i。"),
+        Entry("state", "态名称", "oddCI6"),
+        Check("ci", "混合系数来自 CI 计算", True, "否则读 .m"),
+        Check("higher", "计算高阶场移电子因子", True),
+        Check("save", "保存角系数 (name.IOB / name.ITB)，以后重复计算时直接读取", True,
+              "这两个文件已存在时程序不询问"),
+        Entry("log", "输出日志文件", ""),
+    ]
+
+    def stdin(self, v):
+        # 最后一问只在角系数文件不存在时出现；多给的一行不会被读取
+        return answers(["y", v["state"].strip(), yn(v["ci"]), yn(v["higher"]), yn(v["save"])])
+
+    def title(self, v):
+        return f"ris4 {v['state']}"
+
+
 class RLevels(Step):
     key = name = prog = "rlevels"
     fields = [
@@ -775,7 +835,7 @@ class Custom(Step):
 
 
 STEPS = [RNucleus(), RcsfGenerate(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
-         RCi(), Jj2lsj(), RLevels(), RBioTransform(), RTransition(), Custom()]
+         RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RBioTransform(), RTransition(), Custom()]
 
 
 # ---------------------------------------------------------------------------
@@ -787,7 +847,8 @@ STEPS = [RNucleus(), RcsfGenerate(), RcsfSplit(), RAngular(), RWfnEstimate(), RM
 # ---------------------------------------------------------------------------
 
 GROUPS = ("odd", "even")
-GROUP_STEPS = ("rcsfgenerate", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci", "jj2lsj")
+GROUP_STEPS = ("rcsfgenerate", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci", "jj2lsj",
+               "rhfs", "ris4")
 
 # even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))
 EVEN_DEFAULTS = {
@@ -854,9 +915,13 @@ def save_session(workdir, data):
 # ---------------------------------------------------------------------------
 
 def action_sh(a):
+    """动作的 shell 写法：("cp", src, dst) 或 ("run", argv[, stdin])。"""
     if a[0] == "cp":
         return f"cp {shlex.quote(a[1])} {shlex.quote(a[2])}"
-    return " ".join(shlex.quote(x) for x in a[1])
+    cmd = " ".join(shlex.quote(x) for x in a[1])
+    if len(a) > 2 and a[2]:
+        return f"{cmd} <<'EOF'\n{a[2]}EOF"
+    return cmd
 
 
 def describe(job, mpi_prefix=""):
@@ -1057,7 +1122,7 @@ class Runner:
         if a[0] == "cp":
             shutil.copyfile(os.path.join(cfg["cwd"], a[1]), os.path.join(cfg["cwd"], a[2]))
         else:
-            rc = self.exec_cmd(a[1], cfg)
+            rc = self.exec_cmd(a[1], cfg, a[2] if len(a) > 2 else "")
             if rc != 0:
                 raise RuntimeError(T("{p} 退出码 {rc}", p=a[1][0], rc=rc))
 

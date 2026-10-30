@@ -10,9 +10,10 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 ## Features / 功能
 
 - One tab per program: `rnucleus`, `rcsfgenerate`, `rcsfsplit`, `rangular`, `rwfnestimate`, `rmcdhf`,
-  `rsave`, `rci`, `jj2lsj`, `rlevels`, `rbiotransform`, `rtransition`, plus a *Custom* tab for any other
-  program with hand-written input. Inputs follow the default-settings question order of each program and
-  match the here-documents in `grasptest/case1/script`.
+  `rsave`, `rci`, `jj2lsj`, `rhfs` (optionally followed by `rhfs_lsj`), `ris4`, `rlevels`, `rbiotransform`,
+  `rtransition`, plus a *Custom* tab for any other program with hand-written input. Inputs follow the
+  default-settings question order of each program; they reproduce the inputs of the test cases in
+  `grasptest/` (case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs, which need the *Custom* tab.
 - Common file steps are built in: save `rcsf.out` as `name.c`, copy a `.c` file to `rcsf.inp` before
   `rangular`, run `rsave` after `rmcdhf`, copy `.c/.w` before `rci`.
 - **Pipeline**: add several steps, run them in order (stops at the first error), preview the input, and
@@ -23,7 +24,7 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 - **Slurm**: export the pipeline as a job script for `sbatch` (partition, nodes, tasks, time, memory,
   modules, e-mail, extra `#SBATCH` options).
 - **State groups odd / even**: `rcsfgenerate`, `rcsfsplit`, `rangular`, `rwfnestimate`, `rmcdhf`, `rsave`,
-  `rci` and `jj2lsj` keep separate parameters for each group (file names such as `odd2.c` / `even2.c`,
+  `rci`, `jj2lsj`, `rhfs` and `ris4` keep separate parameters for each group (file names such as `odd2.c` / `even2.c`,
   `outodd_rci` / `outeven_rci` correspond automatically); the other tabs are shared. *Copy to …* copies
   the current group to the other one and renames the files.
 - **Per-directory session**: parameters, groups and the pipeline are saved automatically in
@@ -31,7 +32,7 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   opens the directory used last time.
 - Save / load all parameters and the pipeline as JSON.
 
-**态组 odd / even**：上述 8 个程序页按态组分别保存参数，文件名自动对应，其余程序页两组共用；
+**态组 odd / even**：上述 10 个程序页按态组分别保存参数，文件名自动对应，其余程序页两组共用；
 “复制到 …”把当前组的参数复制到另一组并替换名称。
 **工作目录记录**：参数、态组和流程自动保存在 `工作目录/.grasp_gui.json`，再次打开该目录时自动恢复；
 启动时打开上次使用的目录。

@@ -385,8 +385,8 @@ class MainWindow(QMainWindow):
         self.copy_btn = QPushButton()
         self.copy_btn.clicked.connect(self.copy_group)
         gb.addWidget(self.copy_btn)
-        note = hint_label("rcsfgenerate、rcsfsplit、rangular、rwfnestimate、rmcdhf、rsave、rci、jj2lsj 的参数按态组分别保存；"
-                          "其余程序页两组共用。")
+        note = hint_label("rcsfgenerate 至 ris4 的参数按态组分别保存；rnucleus、rlevels、rbiotransform、rtransition "
+                          "和自定义页两组共用。")
         note.setWordWrap(True)
         gb.addWidget(note, 1)
         lay.addLayout(gb)
@@ -737,7 +737,7 @@ class MainWindow(QMainWindow):
                     mpirun=self.mpirun.text(), mpitmp=self.mpitmp.text(), nice=self.nice.isChecked(),
                     slurm=self.slurm, steps={f.step.key: f.values() for f in self.forms},
                     groups=self.groups, group=self.group,
-                    pipeline=self.pipeline, tab=self.tabs.currentIndex())
+                    pipeline=self.pipeline, tab=self.tabs.currentWidget().step.key)
 
     def apply(self, data):
         for key, edit in [("workdir", self.workdir), ("bindir", self.bindir),
@@ -769,8 +769,13 @@ class MainWindow(QMainWindow):
         self.pipeline = [dict(j, pre=[tuple(a) for a in j["pre"]], post=[tuple(a) for a in j["post"]])
                          for j in data.get("pipeline", [])]
         self.refresh_list()
-        if "tab" in data:
-            self.tabs.setCurrentIndex(data["tab"])
+        tab = data.get("tab")
+        if isinstance(tab, int):                # 旧版本按序号保存
+            self.tabs.setCurrentIndex(tab)
+        elif tab:
+            for f in self.forms:
+                if f.step.key == tab:
+                    self.tabs.setCurrentWidget(f)
 
     def save_params(self):
         path, _ = QFileDialog.getSaveFileName(self, T("保存参数"), self.workdir.text(), "JSON (*.json)")
