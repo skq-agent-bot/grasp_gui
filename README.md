@@ -33,11 +33,28 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   `<working directory>/.grasp_gui.json` and restored when the directory is opened again. On start the GUI
   opens the directory used last time.
 - Save / load all parameters and the pipeline as JSON.
+- **Wave function viewer** (*Tools → Wave function viewer…* or the *Wave functions…* button): reads the `.w`
+  files of the working directory and plots P(r), Q(r) and P² + Q² on an r, log r or √r axis; several files can
+  be overlaid (e.g. `odd2.w` … `odd6.w`), each orbital in one colour and each file in one line style. A table
+  lists orbital energies, ⟨r⟩, peak position, nodes (vs. n − l − 1) and norms. Export as PNG or CSV.
+  Files are recognised by their content, not their name, so `rwfn.inp`, `rwfn.out` and renamed files are found too.
+- **Levels and compositions** (*Tools → Levels and compositions…* or the *Levels…* button): reads the mixing
+  coefficient files (`.m`, `.cm`) and draws an energy level diagram, one column per J^π (odd parity red, even
+  blue). Hover a level for details, click it (or a row of the level list) to see the composition of the ASF:
+  the jj-coupled CSF mixing coefficients with configurations from the `.c` file, and the LSJ composition from
+  `jj2lsj` (`.lsj.lbl`). Energies relative to the lowest level in eV (default), cm⁻¹ or atomic units; the choice is remembered.
+  The matching `.c` and `.lsj.lbl` files are found by content (number of orbitals, CSFs and J^π of each block;
+  energies of the levels), so they need not share the name of the mixing file.
 
 **态组 odd / even**：上述 11 个程序页按态组分别保存参数，文件名自动对应，其余程序页两组共用；
 “复制到 …”把当前组的参数复制到另一组并替换名称。
 **工作目录记录**：参数、态组和流程自动保存在 `工作目录/.grasp_gui.json`，再次打开该目录时自动恢复；
 启动时打开上次使用的目录。
+**波函数查看器**（“工具 → 波函数查看器…”或“波函数…”按钮）：读取工作目录中的 `.w` 文件，绘制 P(r)、Q(r)
+和径向密度 P² + Q²，可叠加多个文件比较；表格列出轨道能量、⟨r⟩、峰值位置、节点数和归一化；可导出 PNG 或 CSV。按文件内容识别波函数文件，与文件名无关 (`rwfn.inp`、`rwfn.out` 或改过名的文件也能找到)。
+**能级与组成查看器**（“工具 → 能级与组成查看器…”或“能级…”按钮）：读取混合系数文件 (`.m`、`.cm`) 画出能级图，
+每个 J^π 一列；鼠标停在能级上显示信息，点击能级 (或能级列表中的一行) 显示该原子态的组成：jj 耦合下的 CSF
+混合系数 (组态来自 `.c` 文件) 以及 jj2lsj 给出的 LSJ 组成 (`.lsj.lbl`)。能量相对于最低能级，默认用 eV，可切换为 cm⁻¹ 或原子单位，并记住选择。对应的 `.c` 和 `.lsj.lbl` 文件按内容匹配 (轨道数、各块的 CSF 数与 J^π，以及能级能量)，不要求与混合系数文件同名。
 
 ## Requirements / 依赖
 
@@ -108,6 +125,10 @@ Fonts are bundled, so the GUI also works on machines without (Chinese) fonts: No
 |---|---|
 | `grasp_core.py` | Toolkit-independent core: field definitions and input rules of each program, running (serial / MPI), shell and Slurm export, translations |
 | `grasp_gui.py` | Qt (PySide6) interface; forms are generated from the field definitions in `grasp_core.py` |
+| `grasp_wfn.py` | Reads GRASP radial wave function files (`.w`) and computes orbital properties (standard library only) |
+| `wfn_viewer.py` | Wave function viewer window (plots drawn with QPainter) |
+| `grasp_mix.py` | Reads mixing coefficient files (`.m`, `.cm`), CSF lists (`.c`) and `jj2lsj` labels (`.lsj.lbl`) (standard library only) |
+| `level_viewer.py` | Energy level diagram and ASF composition window |
 | `build.sh` | Builds a standalone executable with PyInstaller |
 
 ## License / 许可证

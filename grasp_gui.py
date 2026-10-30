@@ -392,6 +392,9 @@ class MainWindow(QMainWindow):
                 fm.addSeparator()
             else:
                 fm.addAction(T(item[0])).triggered.connect(item[1])
+        tm = mb.addMenu(T("工具"))
+        tm.addAction(T("波函数查看器…")).triggered.connect(self.open_viewer)
+        tm.addAction(T("能级与组成查看器…")).triggered.connect(self.open_levels)
         lm = mb.addMenu(T("语言") + " / Language" if core.LANG == "zh" else "Language / 语言")
         group = QActionGroup(self)
         for code, label in [("zh", "中文"), ("en", "English")]:
@@ -411,6 +414,8 @@ class MainWindow(QMainWindow):
         row.addWidget(self.workdir, 1)
         row.addWidget(button("浏览…", lambda: self.pick_dir(self.workdir)))
         row.addWidget(button("查看文件", self.list_files))
+        row.addWidget(button("波函数…", self.open_viewer))
+        row.addWidget(button("能级…", self.open_levels))
         self.settings_btn = QPushButton()
         self.settings_btn.setToolTip(T("展开或收起 GRASP bin 目录和 MPI 设置"))
         self.settings_btn.clicked.connect(lambda: self.show_settings(not self.settings_box.isVisible()))
@@ -818,6 +823,26 @@ class MainWindow(QMainWindow):
 
     def run_from_selected(self):
         self.start(self.pipeline[self.selected() or 0:])
+
+    def open_window(self, attr, cls):
+        """打开 (或切换到) 一个查看器窗口，显示当前工作目录。"""
+        win = getattr(self, attr, None)
+        if win is None or not win.isVisible():
+            win = cls(self.cur_workdir)
+            setattr(self, attr, win)
+        else:
+            win.set_dir(self.cur_workdir)
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    def open_viewer(self):
+        from wfn_viewer import WfnViewer
+        self.open_window("viewer", WfnViewer)
+
+    def open_levels(self):
+        from level_viewer import LevelViewer
+        self.open_window("levels", LevelViewer)
 
     def list_files(self):
         if not self.check_dirs():
