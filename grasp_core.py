@@ -396,9 +396,12 @@ def save_config(**kw):
 
 
 def default_bindir():
-    """GRASP 程序目录：$GRASP_BINDIR → 上次使用的目录 → PATH 中 rmcdhf 所在目录
+    """GRASP 程序目录：$GRASP_BINDIR → 用户在界面中设置的目录 (存在即采用) → PATH 中 rmcdhf 所在目录
     → 本程序上一级目录的 bin (放在 GRASP 源码树中时)。"""
-    candidates = [os.environ.get("GRASP_BINDIR", ""), load_config().get("bindir", "")]
+    saved = load_config().get("bindir", "")
+    if not os.environ.get("GRASP_BINDIR") and saved and os.path.isdir(saved):
+        return saved
+    candidates = [os.environ.get("GRASP_BINDIR", ""), saved]
     p = shutil.which("rmcdhf")
     if p:
         candidates.append(os.path.dirname(p))

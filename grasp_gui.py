@@ -48,9 +48,35 @@ from grasp_core import T                                            # noqa: E402
 
 CJK_FONTS = ["Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "WenQuanYi Micro Hei",
              "Droid Sans Fallback", "AR PL UMing CN"]
+LATIN_FONTS = ["Noto Sans", "DejaVu Sans", "Liberation Sans"]
+MONO_FONTS = ["DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Noto Sans Mono CJK SC"]
+
+
+def load_fonts():
+    """注册随程序打包的字体 (build.sh 放在 fonts/ 中)，使没有安装字体的机器也能正常显示。
+    系统已有的字体照常可用；查找位置为可执行文件内部和程序所在目录的 fonts/。"""
+    dirs = [os.path.join(getattr(sys, "_MEIPASS", ""), "fonts"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")]
+    for d in dirs:
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if name.lower().endswith((".ttf", ".otf", ".ttc")):
+                QFontDatabase.addApplicationFont(os.path.join(d, name))
+
+
+def first_family(candidates):
+    fams = set(QFontDatabase.families())
+    return next((f for f in candidates if f in fams), None)
 
 
 def fixed_font():
+    """等宽字体：优先用常见的等宽字体 (包括打包的 DejaVu Sans Mono)，都没有时用系统默认。"""
+    family = first_family(MONO_FONTS)
+    if family:
+        font = QFont(family)
+        font.setStyleHint(QFont.Monospace)
+        return font
     return QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
 
 
@@ -332,12 +358,12 @@ class MainWindow(QMainWindow):
     # ---- 布局 ----
     def build(self):
         """创建全部控件；切换语言时重新调用。"""
+        # 中文界面优先用中文字体，英文界面优先用西文字体；另一种文字由 Qt 自动换用其他字体显示
         app = QApplication.instance()
-        fams = set(QFontDatabase.families())
-        cjk = next((f for f in CJK_FONTS if f in fams), None)
-        if core.LANG == "zh" and cjk:
+        family = first_family(CJK_FONTS + LATIN_FONTS if core.LANG == "zh" else LATIN_FONTS + CJK_FONTS)
+        if family:
             font = app.font()
-            font.setFamily(cjk)
+            font.setFamily(family)
             app.setFont(font)
         self.setWindowTitle(T("GRASP 图形界面"))
         self.build_menu()
@@ -397,6 +423,7 @@ class MainWindow(QMainWindow):
         g = QGridLayout(self.settings_box)
         g.setContentsMargins(0, 0, 0, 0)
         self.bindir = QLineEdit(s["bindir"])
+        self.bindir.editingFinished.connect(self.save_settings)     # 改完立即保存，下次启动沿用
         g.addWidget(QLabel(T("GRASP bin 目录")), 0, 0)
         g.addWidget(self.bindir, 0, 1)
         g.addWidget(button("浏览…", lambda: self.pick_dir(self.bindir)), 0, 2)
@@ -421,10 +448,10 @@ class MainWindow(QMainWindow):
 
         self.bindir.textChanged.connect(self.update_settings_summary)
         self.np.valueChanged.connect(self.update_settings_summary)
-        # 默认收起；GRASP bin 目录还不可用时展开，方便首次设置
-        collapsed = core.load_config().get("settings_collapsed")
-        if collapsed is None:
-            collapsed = os.path.isfile(os.path.join(s["bindir"], "rmcdhf"))
+        # 按上次的收起状态显示；GRASP bin 目录中找不到 GRASP 时总是展开，提醒检查路径
+        collapsed = core.load_config().get("settings_collapsed", True)
+        if not os.path.isfile(os.path.join(s["bindir"], "rmcdhf")):
+            collapsed = False
         self.show_settings(not collapsed, save=False)
         return top
 
@@ -545,8 +572,14 @@ class MainWindow(QMainWindow):
                 return
             self.runner.kill()
         self.save_session()
+        self.save_settings()
         core.save_config(geometry=bytes(self.saveGeometry().toBase64()).decode(), split=self.split.sizes())
         event.accept()
+
+    def save_settings(self):
+        """GRASP bin 目录和 MPI 设置保存到 ~/.config/grasp_gui.json，作为下次启动的默认值。"""
+        core.save_config(bindir=self.bindir.text().strip(), np=self.np.value(), mpirun=self.mpirun.text(),
+                         mpitmp=self.mpitmp.text().strip() or "tmp_mpi", nice=self.nice.isChecked())
 
     def restore_layout(self):
         """恢复上次的窗口大小和参数区 / 输出区的分隔位置。"""
@@ -562,6 +595,8 @@ class MainWindow(QMainWindow):
             edit.setText(d)
             if edit is self.workdir:
                 self.workdir_changed()
+            else:
+                self.save_settings()
 
     # ---- 态组 ----
     def group_forms(self):
@@ -902,6 +937,7 @@ def main():
         core.set_lang(core.load_config().get("lang", "zh"))
     app = QApplication(sys.argv[:1])
     app.setApplicationName("GRASP GUI")
+    load_fonts()
     win = MainWindow(args[0] if args else None)     # 可选参数：要打开的工作目录
     win.show()
     rc = app.exec()

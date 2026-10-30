@@ -70,13 +70,20 @@ GRASP `bin` 目录的查找顺序：`$GRASP_BINDIR` → 上次使用的目录 �
 ```
 
 `build.sh` creates its own build environment (`build/venv`) with PyInstaller and the essential PySide6
-modules on first use. The executable (about 70 MB) needs a glibc at least as new as the build machine's
+modules on first use. The executable (about 90 MB) needs a glibc at least as new as the build machine's
 (e.g. built on Ubuntu 22.04: glibc ≥ 2.35); to use it on an older system, run `build.sh` there. GRASP
 itself is not included: point the GUI at a GRASP `bin` directory as usual.
 
-`build.sh` 首次运行时自动建立打包环境。生成的可执行文件约 70 MB，不需要 Python 或 PySide6；
+Fonts are bundled, so the GUI also works on machines without (Chinese) fonts: Noto Sans CJK
+(SIL Open Font License) and DejaVu Sans / DejaVu Sans Mono (free licence), with their licence files.
+`build.sh` takes them from the build machine via fontconfig (Debian/Ubuntu:
+`apt install fonts-noto-cjk fonts-dejavu-core`); missing fonts are reported and left out.
+
+`build.sh` 首次运行时自动建立打包环境。生成的可执行文件约 90 MB，不需要 Python 或 PySide6；
 要求系统的 glibc 不低于打包机器的版本（在 Ubuntu 22.04 上打包则需 glibc ≥ 2.35），
 在更老的系统上使用时，在那台机器上重新运行 `build.sh` 即可。GRASP 本身不包含在内。
+可执行文件内置了字体 (Noto Sans CJK、DejaVu Sans / Sans Mono 及其许可证)，没有安装中文字体的机器也能正常显示；
+打包时从本机取这些字体 (Ubuntu：`apt install fonts-noto-cjk fonts-dejavu-core`)。
 
 ### Submitting to a cluster / 提交到服务器
 
