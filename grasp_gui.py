@@ -79,7 +79,7 @@ fix_fontconfig()
 
 from PySide6.QtCore import QByteArray, Qt, QTimer                   # noqa: E402
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFont,    # noqa: E402
-                           QFontDatabase, QTextCharFormat, QTextCursor)
+                           QFontDatabase, QKeySequence, QTextCharFormat, QTextCursor)
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,  # noqa: E402
                                QDialog, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QListWidget, QMainWindow, QMenu, QMessageBox,
@@ -94,6 +94,7 @@ CJK_FONTS = ["Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "WenQu
              "Droid Sans Fallback", "AR PL UMing CN"]
 LATIN_FONTS = ["Noto Sans", "DejaVu Sans", "Liberation Sans"]
 MONO_FONTS = ["DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Noto Sans Mono CJK SC"]
+DEFAULT_PT = 10.0          # 系统默认字号 (main 中按 QApplication 的默认字体设置)；"视图"菜单可调整并保存
 
 
 def load_fonts():
@@ -120,8 +121,10 @@ def fixed_font():
     if family:
         font = QFont(family)
         font.setStyleHint(QFont.Monospace)
-        return font
-    return QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+    else:
+        font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+    font.setPointSizeF(QApplication.font().pointSizeF())       # 与界面字号一致
+    return font
 
 
 def hint_label(text):
@@ -405,10 +408,11 @@ class MainWindow(QMainWindow):
         # 中文界面优先用中文字体，英文界面优先用西文字体；另一种文字由 Qt 自动换用其他字体显示
         app = QApplication.instance()
         family = first_family(CJK_FONTS + LATIN_FONTS if core.LANG == "zh" else LATIN_FONTS + CJK_FONTS)
+        font = app.font()
         if family:
-            font = app.font()
             font.setFamily(family)
-            app.setFont(font)
+        font.setPointSizeF(core.load_config().get("font_size") or DEFAULT_PT)
+        app.setFont(font)
         self.setWindowTitle(T("GRASP 图形界面"))
         self.build_menu()
 
@@ -439,6 +443,12 @@ class MainWindow(QMainWindow):
         tm = mb.addMenu(T("工具"))
         tm.addAction(T("波函数查看器…")).triggered.connect(self.open_viewer)
         tm.addAction(T("能级与组成查看器…")).triggered.connect(self.open_levels)
+        vm = mb.addMenu(T("视图"))
+        for text, keys, step in [("放大字体", [QKeySequence.ZoomIn, "Ctrl+="], 1),
+                                 ("缩小字体", [QKeySequence.ZoomOut], -1), ("默认字体大小", ["Ctrl+0"], 0)]:
+            act = vm.addAction(T(text))
+            act.setShortcuts([QKeySequence(k) for k in keys])
+            act.triggered.connect(lambda _=False, d=step: self.change_font_size(d))
         lm = mb.addMenu(T("语言") + " / Language" if core.LANG == "zh" else "Language / 语言")
         group = QActionGroup(self)
         for code, label in [("zh", "中文"), ("en", "English")]:
@@ -721,11 +731,25 @@ class MainWindow(QMainWindow):
     def set_language(self, lang):
         if lang == core.LANG:
             return
+        core.set_lang(lang)
+        core.save_config(lang=lang)
+        self.rebuild()
+
+    def change_font_size(self, step):
+        """step = +1 / -1 磅，0 恢复系统默认；保存在配置中，下次启动沿用。"""
+        cur = QApplication.font().pointSizeF()
+        size = DEFAULT_PT if step == 0 else min(max(cur + step, 6.0), 30.0)
+        if size == cur:
+            return
+        core.save_config(font_size=None if step == 0 else size)
+        self.rebuild()
+        self.statusBar().showMessage(T("字体大小 {pt} 磅", pt=f"{size:g}"))
+
+    def rebuild(self):
+        """重新创建全部控件 (切换语言或字号后)，保留参数、流程和输出。"""
         data = self.collect()
         output = self.out.toPlainText()
         sizes = self.split.sizes()
-        core.set_lang(lang)
-        core.save_config(lang=lang)
         self.build()
         self.split.setSizes(sizes)
         self.apply(data)
@@ -1006,6 +1030,8 @@ def main():
         core.set_lang(core.load_config().get("lang", "zh"))
     app = QApplication(sys.argv[:1])
     app.setApplicationName("GRASP GUI")
+    global DEFAULT_PT
+    DEFAULT_PT = app.font().pointSizeF() if app.font().pointSizeF() > 0 else DEFAULT_PT
     load_fonts()
     win = MainWindow(args[0] if args else None)     # 可选参数：要打开的工作目录
     win.show()

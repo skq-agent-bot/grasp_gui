@@ -11,7 +11,7 @@ import math
 import os
 import struct
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMessageBox,
                                QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPushButton,
@@ -77,6 +77,11 @@ class PlotWidget(QWidget):
         self.cache = None          # 坐标轴、曲线和图例画好后缓存，悬停时只重画标记点
         self.setMouseTracking(True)
         self.setMinimumHeight(160)
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.FontChange:      # 主窗口调整了字号
+            self.invalidate()
+        super().changeEvent(event)
 
     def invalidate(self):
         """数据、范围或外观变化后重画缓存。"""
