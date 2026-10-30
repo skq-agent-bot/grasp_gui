@@ -33,12 +33,12 @@ def fix_wsl_display():
 
 fix_wsl_display()
 
-from PySide6.QtCore import Qt, QTimer                               # noqa: E402
+from PySide6.QtCore import QByteArray, Qt, QTimer                   # noqa: E402
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFont,    # noqa: E402
                            QFontDatabase, QTextCharFormat, QTextCursor)
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,  # noqa: E402
                                QDialog, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QListWidget, QMainWindow, QMessageBox,
+                               QLineEdit, QListWidget, QMainWindow, QMenu, QMessageBox,
                                QPlainTextEdit, QPushButton, QScrollArea, QSpinBox,
                                QSplitter, QTabWidget, QVBoxLayout, QWidget)
 
@@ -322,6 +322,7 @@ class MainWindow(QMainWindow):
                 fmt.setFontWeight(QFont.Bold)
             self.formats[tag] = fmt
         self.build()
+        self.restore_layout()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(100)
@@ -344,12 +345,13 @@ class MainWindow(QMainWindow):
         central = QWidget()
         lay = QVBoxLayout(central)
         lay.addLayout(self.build_top())
-        split = QSplitter(Qt.Vertical)
-        split.addWidget(self.build_steps())
-        split.addWidget(self.build_bottom())
-        split.setStretchFactor(0, 3)
-        split.setStretchFactor(1, 2)
-        lay.addWidget(split)
+        self.split = QSplitter(Qt.Vertical)
+        self.split.addWidget(self.build_steps())
+        self.split.addWidget(self.build_bottom())
+        self.split.setStretchFactor(0, 3)
+        self.split.setStretchFactor(1, 1)
+        self.split.setSizes([620, 240])         # 默认给参数区更多空间
+        lay.addWidget(self.split, 1)
         self.setCentralWidget(central)
         self.statusBar().showMessage(T("就绪"))
 
@@ -373,17 +375,31 @@ class MainWindow(QMainWindow):
             lm.addAction(act)
 
     def build_top(self):
+        """工作目录一行始终显示；GRASP bin 目录和 MPI 设置放在可收起的设置区。"""
         s = self.settings
-        g = QGridLayout()
+        top = QVBoxLayout()
+        row = QHBoxLayout()
         self.workdir = QLineEdit(s["workdir"])
-        self.bindir = QLineEdit(s["bindir"])
         self.workdir.editingFinished.connect(self.workdir_changed)
-        for r, (label, edit) in enumerate([("工作目录", self.workdir), ("GRASP bin 目录", self.bindir)]):
-            g.addWidget(QLabel(T(label)), r, 0)
-            g.addWidget(edit, r, 1)
-            g.addWidget(button("浏览…", lambda _=False, e=edit: self.pick_dir(e)), r, 2)
-        g.addWidget(button("查看文件", self.list_files), 0, 3)
+        row.addWidget(QLabel(T("工作目录")))
+        row.addWidget(self.workdir, 1)
+        row.addWidget(button("浏览…", lambda: self.pick_dir(self.workdir)))
+        row.addWidget(button("查看文件", self.list_files))
+        self.settings_btn = QPushButton()
+        self.settings_btn.setToolTip(T("展开或收起 GRASP bin 目录和 MPI 设置"))
+        self.settings_btn.clicked.connect(lambda: self.show_settings(not self.settings_box.isVisible()))
+        row.addWidget(self.settings_btn)
+        top.addLayout(row)
+        self.settings_summary = hint_label("")
+        top.addWidget(self.settings_summary)
 
+        self.settings_box = QWidget()
+        g = QGridLayout(self.settings_box)
+        g.setContentsMargins(0, 0, 0, 0)
+        self.bindir = QLineEdit(s["bindir"])
+        g.addWidget(QLabel(T("GRASP bin 目录")), 0, 0)
+        g.addWidget(self.bindir, 0, 1)
+        g.addWidget(button("浏览…", lambda: self.pick_dir(self.bindir)), 0, 2)
         mp = QHBoxLayout()
         self.np = QSpinBox()
         self.np.setRange(1, max(os.cpu_count() or 1, 1))
@@ -392,31 +408,59 @@ class MainWindow(QMainWindow):
         self.mpitmp = QLineEdit(s["mpitmp"])
         self.nice = QCheckBox(T("降低计算进程优先级 (nice)"))
         self.nice.setChecked(s["nice"])
+        mpi_hint = T("进程数 > 1 时 rangular / rmcdhf / rci / rbiotransform / rtransition 改用 *_mpi 版本；"
+                     "rangular 与 rmcdhf 须使用相同的进程数和 MPI_TMP。")
         for w in [QLabel(T("MPI 进程数")), self.np, QLabel(T("mpirun 命令")), self.mpirun,
                   QLabel("MPI_TMP"), self.mpitmp, self.nice]:
+            w.setToolTip(mpi_hint)
             mp.addWidget(w)
         mp.addStretch()
-        g.addLayout(mp, 2, 0, 1, 4)
-        hint = hint_label("进程数 > 1 时 rangular / rmcdhf / rci / rbiotransform / rtransition 改用 *_mpi 版本；"
-                          "rangular 与 rmcdhf 须使用相同的进程数和 MPI_TMP。")
-        hint.setWordWrap(True)
-        g.addWidget(hint, 3, 0, 1, 4)
+        g.addLayout(mp, 1, 0, 1, 3)
         g.setColumnStretch(1, 1)
-        return g
+        top.addWidget(self.settings_box)
+
+        self.bindir.textChanged.connect(self.update_settings_summary)
+        self.np.valueChanged.connect(self.update_settings_summary)
+        # 默认收起；GRASP bin 目录还不可用时展开，方便首次设置
+        collapsed = core.load_config().get("settings_collapsed")
+        if collapsed is None:
+            collapsed = os.path.isfile(os.path.join(s["bindir"], "rmcdhf"))
+        self.show_settings(not collapsed, save=False)
+        return top
+
+    def show_settings(self, visible, save=True):
+        self.settings_box.setVisible(visible)
+        self.settings_summary.setVisible(not visible)
+        self.settings_btn.setText(("▾ " if visible else "▸ ") + T("设置"))
+        self.update_settings_summary()
+        if save:
+            core.save_config(settings_collapsed=not visible)
+
+    def update_settings_summary(self):
+        n = self.np.value()
+        mpi = T("MPI {n} 进程", n=n) if n > 1 else T("串行")
+        self.settings_summary.setText(T("GRASP bin：{b}　·　{m}", b=self.bindir.text(), m=mpi))
 
     def build_steps(self):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        gb = QHBoxLayout()
-        gb.addWidget(QLabel(T("态组")))
+        # 态组切换放在分组标签栏右侧的空白处，不单独占一行
+        corner = QWidget()
+        gb = QHBoxLayout(corner)
+        gb.setContentsMargins(0, 0, 4, 2)
+        group_hint = T("标签上带组名的程序页按态组分别保存参数，其余程序页两组共用。")
+        label = QLabel(T("态组"))
+        label.setToolTip(group_hint)
+        gb.addWidget(label)
         self.group_buttons = QButtonGroup(w)
         for g in core.GROUPS:
             b = QPushButton(g)
             b.setCheckable(True)
             b.setChecked(g == self.group)
-            b.setStyleSheet("QPushButton { padding: 3px 18px; } "
+            b.setToolTip(group_hint)
+            b.setStyleSheet("QPushButton { padding: 2px 16px; } "
                             "QPushButton:checked { background: #2d6cdf; color: white; font-weight: bold; }")
             b.clicked.connect(lambda _=False, g=g: self.switch_group(g))
             self.group_buttons.addButton(b)
@@ -424,13 +468,10 @@ class MainWindow(QMainWindow):
         self.copy_btn = QPushButton()
         self.copy_btn.clicked.connect(self.copy_group)
         gb.addWidget(self.copy_btn)
-        note = hint_label("标签上带组名的程序页按态组分别保存参数，其余程序页两组共用。")
-        note.setWordWrap(True)
-        gb.addWidget(note, 1)
-        lay.addLayout(gb)
 
         self.forms = [StepForm(step, self.bindir.text()) for step in core.STEPS]
         self.nav = StepNav(self.forms)
+        self.nav.groups.setCornerWidget(corner, Qt.TopRightCorner)
         for f in self.group_forms():
             f.set_values(self.groups[self.group][f.step.key])
         self.update_group_labels()
@@ -453,13 +494,19 @@ class MainWindow(QMainWindow):
         self.plist = QListWidget()
         self.plist.itemDoubleClicked.connect(self.show_job)
         pl.addWidget(self.plist)
-        btns = QVBoxLayout()
-        for text, slot in [("▶ 运行全部", self.run_pipeline), ("▶ 从选中开始", self.run_from_selected),
-                           ("查看", self.show_job), ("上移", lambda: self.move(-1)), ("下移", lambda: self.move(1)),
-                           ("删除", self.remove_job), ("清空", self.clear_pipeline),
-                           ("导出脚本…", self.export_script), ("导出 Slurm 作业脚本…", self.export_slurm)]:
-            btns.addWidget(button(text, slot))
-        btns.addStretch()
+        # 按钮排成两列，面板不会因为按钮多而被撑高
+        btns = QGridLayout()
+        export = QPushButton(T("导出"))         # 带菜单的按钮会自动显示下拉箭头
+        menu = QMenu(export)
+        menu.addAction(T("导出脚本…")).triggered.connect(self.export_script)
+        menu.addAction(T("导出 Slurm 作业脚本…")).triggered.connect(self.export_slurm)
+        export.setMenu(menu)
+        for i, b in enumerate([button("▶ 运行全部", self.run_pipeline), button("▶ 从选中开始", self.run_from_selected),
+                               button("上移", lambda: self.move(-1)), button("下移", lambda: self.move(1)),
+                               button("查看", self.show_job), button("删除", self.remove_job),
+                               button("清空", self.clear_pipeline), export]):
+            btns.addWidget(b, i // 2, i % 2)
+        btns.setRowStretch(4, 1)
         pl.addLayout(btns)
         self.btabs.addTab(pw, T("流程"))
 
@@ -498,7 +545,16 @@ class MainWindow(QMainWindow):
                 return
             self.runner.kill()
         self.save_session()
+        core.save_config(geometry=bytes(self.saveGeometry().toBase64()).decode(), split=self.split.sizes())
         event.accept()
+
+    def restore_layout(self):
+        """恢复上次的窗口大小和参数区 / 输出区的分隔位置。"""
+        cfg = core.load_config()
+        if cfg.get("geometry"):
+            self.restoreGeometry(QByteArray.fromBase64(cfg["geometry"].encode()))
+        if cfg.get("split"):
+            self.split.setSizes(cfg["split"])
 
     def pick_dir(self, edit):
         d = QFileDialog.getExistingDirectory(self, "", edit.text() or os.getcwd())
@@ -583,9 +639,11 @@ class MainWindow(QMainWindow):
             return
         data = self.collect()
         output = self.out.toPlainText()
+        sizes = self.split.sizes()
         core.set_lang(lang)
         core.save_config(lang=lang)
         self.build()
+        self.split.setSizes(sizes)
         self.apply(data)
         self.append(output, "")
 
