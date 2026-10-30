@@ -10,6 +10,7 @@ GRASP 图形界面的核心逻辑（与界面库无关）：
 import codecs
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -207,6 +208,13 @@ EN = {
     "跃迁计算前的双正交变换。": "Biorthogonal transformation before transition calculations.",
     "计算跃迁参数 (需先运行 rbiotransform)。": "Compute transition parameters (run rbiotransform first).",
     "跃迁类型": "Transition type",
+    "M1 跃迁只计算不同 J 的能级之间": "M1 transitions only between levels with different J",
+    "E2 跃迁只计算不同 J 的能级之间": "E2 transitions only between levels with different J",
+    "跃迁类型含 M1 时询问": "asked when the types include M1",
+    "跃迁类型含 E2 时询问": "asked when the types include E2",
+    "屏蔽类氢，关联轨道增加 Z (custom Z)": "Screened Hydrogenic, increased Z for correlation orbitals (custom Z)",
+    "  关联轨道的 Z 增加量": "  Increase in Z for correlation orbitals",
+    "仅方法 4": "method 4 only",
     "如 E1  或 E1,M2": "e.g. E1  or E1,M2",
     # 自定义
     "自定义": "Custom",
@@ -453,6 +461,14 @@ class Step:
                     log=self.log(v), pre=self.pre(v), post=self.post(v), mpi=self.mpi)
 
 
+def fortran_zero(s):
+    """Fortran 表控读入的数是否为 0 (支持 9.6D1 这类写法；无法解析时视为非零)。"""
+    try:
+        return float(s.strip().lower().replace("d", "e") or "0") == 0
+    except ValueError:
+        return False
+
+
 def answers(lines):
     return "\n".join(lines) + "\n"
 
@@ -474,7 +490,7 @@ class RNucleus(Step):
 
     def stdin(self, v):
         lines = [v["z"], v["a"]]
-        if float(v["a"] or 0) != 0:
+        if not fortran_zero(v["a"]):        # 点核 (A = 0) 时不询问核半径
             lines.append(yn(v["revise"]))
             if v["revise"]:
                 lines += [v["rms"], v["skin"]]
@@ -558,15 +574,20 @@ class RWfnEstimate(Step):
         Check("use_file", "先从已有波函数文件读取 (GRASP92 File)", False),
         Entry("wfile", "  波函数文件", "odd2.w", "如 odd2.w，空则为 rwfn.out"),
         Entry("forbs", "  读取的轨道", "*", "* = 全部"),
-        Choice("method", "其余轨道的估计方法", [("3", "屏蔽类氢 (Screened Hydrogenic)"), ("2", "Thomas-Fermi")]),
+        Choice("method", "其余轨道的估计方法", [("3", "屏蔽类氢 (Screened Hydrogenic)"), ("2", "Thomas-Fermi"),
+                                               ("4", "屏蔽类氢，关联轨道增加 Z (custom Z)")]),
         Entry("orbs", "  轨道", "*"),
+        Entry("delz", "  关联轨道的 Z 增加量", "0", "仅方法 4"),
     ]
 
     def stdin(self, v):
         lines = ["y"]
         if v["use_file"]:
             lines += ["1", v["wfile"].strip(), v["forbs"]]
-        return answers(lines + [v["method"], v["orbs"]])
+        lines += [v["method"], v["orbs"]]
+        if v["method"] == "4":              # 方法 4 在轨道列表之后询问 Z 的增加量
+            lines.append(v["delz"])
+        return answers(lines)
 
 
 class RMcdhf(Step):
@@ -710,11 +731,22 @@ class RTransition(Step):
         Entry("init", "初态名称", "oddCI6"),
         Entry("final", "末态名称", "evenCI6"),
         Entry("kind", "跃迁类型", "E1", "如 E1  或 E1,M2"),
+        Check("m1_diffj", "M1 跃迁只计算不同 J 的能级之间", False, "跃迁类型含 M1 时询问"),
+        Check("e2_diffj", "E2 跃迁只计算不同 J 的能级之间", False, "跃迁类型含 E2 时询问"),
         Entry("log", "输出日志文件", "out_transition"),
     ]
 
     def stdin(self, v):
-        return answers(["y", yn(v["ci"]), v["init"], v["final"], v["kind"]])
+        kind = v["kind"].strip().upper()        # rtransition 只认大写的 E / M
+        kinds = [k for k in re.split(r"[\s,;]+", kind) if k]
+        lines = ["y", yn(v["ci"]), v["init"], v["final"], kind]
+        # 按书写顺序，每个 M1 / E2 各追问一次 (rtransition 的 getrmp)
+        for k in kinds:
+            if k == "M1":
+                lines.append(yn(v["m1_diffj"]))
+            elif k == "E2":
+                lines.append(yn(v["e2_diffj"]))
+        return answers(lines)
 
 
 class Custom(Step):
