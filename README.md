@@ -22,7 +22,19 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   `rmcdhf_mem` / `rmcdhf_mem_mpi`.
 - **Slurm**: export the pipeline as a job script for `sbatch` (partition, nodes, tasks, time, memory,
   modules, e-mail, extra `#SBATCH` options).
+- **State groups odd / even**: `rcsfgenerate`, `rcsfsplit`, `rangular`, `rwfnestimate`, `rmcdhf`, `rsave`,
+  `rci` and `jj2lsj` keep separate parameters for each group (file names such as `odd2.c` / `even2.c`,
+  `outodd_rci` / `outeven_rci` correspond automatically); the other tabs are shared. *Copy to …* copies
+  the current group to the other one and renames the files.
+- **Per-directory session**: parameters, groups and the pipeline are saved automatically in
+  `<working directory>/.grasp_gui.json` and restored when the directory is opened again. On start the GUI
+  opens the directory used last time.
 - Save / load all parameters and the pipeline as JSON.
+
+**态组 odd / even**：上述 8 个程序页按态组分别保存参数，文件名自动对应，其余程序页两组共用；
+“复制到 …”把当前组的参数复制到另一组并替换名称。
+**工作目录记录**：参数、态组和流程自动保存在 `工作目录/.grasp_gui.json`，再次打开该目录时自动恢复；
+启动时打开上次使用的目录。
 
 ## Requirements / 依赖
 
@@ -32,8 +44,9 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 ## Usage / 用法
 
 ```bash
-python3 grasp_gui.py            # 中文界面 (default)
-python3 grasp_gui.py --lang en  # English interface
+python3 grasp_gui.py                  # 中文界面，打开上次的工作目录
+python3 grasp_gui.py path/to/workdir  # 打开指定的工作目录 / open this working directory
+python3 grasp_gui.py --lang en        # English interface
 ```
 
 The language can also be switched in the *Language / 语言* menu; the choice is remembered in

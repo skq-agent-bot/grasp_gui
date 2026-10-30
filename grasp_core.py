@@ -266,6 +266,20 @@ EN = {
     "每行一条，如 --account=xxx": "one per line, e.g. --account=xxx",
     "导出…": "Export…",
     "取消": "Cancel",
+    # 态组 / 工作目录记录
+    "态组": "State group",
+    "复制到 {g}（替换名称）": "Copy to {g} (rename files)",
+    "rcsfgenerate、rcsfsplit、rangular、rwfnestimate、rmcdhf、rsave、rci、jj2lsj 的参数按态组分别保存；"
+    "其余程序页两组共用。":
+        "rcsfgenerate, rcsfsplit, rangular, rwfnestimate, rmcdhf, rsave, rci and jj2lsj keep separate parameters "
+        "per group; the other tabs are shared.",
+    "当前态组：{g}": "Current group: {g}",
+    "已把 {a} 组的参数复制到 {b} 组 (名称中的 {a} 已替换为 {b})；请检查 {b} 的参考组态、2J 范围和能级。":
+        "Copied the {a} parameters to {b} ({a} replaced by {b} in names); check the reference configurations, "
+        "2J range and levels of {b}.",
+    "确定用 {a} 组的参数覆盖 {b} 组吗？": "Overwrite the {b} parameters with those of {a}?",
+    "已载入此目录上次的记录": "Loaded the last session of this directory",
+    "此目录还没有记录，沿用当前参数": "No session in this directory yet; keeping the current parameters",
 }
 
 
@@ -730,6 +744,77 @@ class Custom(Step):
 
 STEPS = [RNucleus(), RcsfGenerate(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
          RCi(), Jj2lsj(), RLevels(), RBioTransform(), RTransition(), Custom()]
+
+
+# ---------------------------------------------------------------------------
+#  态组 (宇称)
+#
+#  odd 与 even 各有一套参数的程序页；其余程序页 (rnucleus, rlevels, rbiotransform,
+#  rtransition, 自定义) 两组共用。文件名中的组名 (odd2.c, outodd_rci, oddCI6 …)
+#  在两组之间按名称替换对应。
+# ---------------------------------------------------------------------------
+
+GROUPS = ("odd", "even")
+GROUP_STEPS = ("rcsfgenerate", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci", "jj2lsj")
+
+# even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))
+EVEN_DEFAULTS = {
+    "rcsfgenerate": dict(lists=[dict(configs="1s(2,i)2s(1,i)2p(2,i)", active="2s,2p",
+                                     jmin="1", jmax="5", nexc="0")]),
+    "rmcdhf": dict(levels="1,2,3\n1,2,3\n1,2"),
+    "rci": dict(levels="1,2,3\n1,2,3\n1,2"),
+}
+
+
+def rename_group(value, src, dst):
+    """把参数值 (字符串 / dict / list) 中的组名 src 替换为 dst，如 odd2.c -> even2.c。"""
+    if isinstance(value, str):
+        return value.replace(src, dst)
+    if isinstance(value, dict):
+        return {k: rename_group(v, src, dst) for k, v in value.items()}
+    if isinstance(value, list):
+        return [rename_group(v, src, dst) for v in value]
+    return value
+
+
+def group_defaults(group):
+    """某个态组各程序页的默认参数 {step key: vals}。"""
+    steps = {s.key: s for s in STEPS}
+    out = {}
+    for key in GROUP_STEPS:
+        vals = rename_group(steps[key].defaults(), GROUPS[0], group)
+        if group == "even":
+            vals.update(EVEN_DEFAULTS.get(key, {}))
+        out[key] = vals
+    return out
+
+
+# ---------------------------------------------------------------------------
+#  工作目录中的记录：打开目录时恢复上次的参数和流程
+# ---------------------------------------------------------------------------
+
+SESSION_FILE = ".grasp_gui.json"
+
+
+def load_session(workdir):
+    try:
+        with open(os.path.join(workdir, SESSION_FILE)) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def save_session(workdir, data):
+    if not os.path.isdir(workdir):
+        return False
+    path = os.path.join(workdir, SESSION_FILE)
+    try:
+        with open(path + ".tmp", "w") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        os.replace(path + ".tmp", path)     # 先写临时文件，避免中断时留下不完整的记录
+        return True
+    except OSError:
+        return False
 
 
 # ---------------------------------------------------------------------------

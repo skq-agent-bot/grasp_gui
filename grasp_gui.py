@@ -36,7 +36,7 @@ fix_wsl_display()
 from PySide6.QtCore import Qt, QTimer                               # noqa: E402
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFont,    # noqa: E402
                            QFontDatabase, QTextCharFormat, QTextCursor)
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,  # noqa: E402
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,  # noqa: E402
                                QDialog, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QListWidget, QMainWindow, QMessageBox,
                                QPlainTextEdit, QPushButton, QScrollArea, QSpinBox,
@@ -257,15 +257,21 @@ TAG_COLORS = {"": QColor("#dcdcdc"), "head": QColor("#6cb6ff"), "info": QColor("
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, workdir=None):
         super().__init__()
         self.resize(1150, 880)
         self.q = queue.Queue()
         self.runner = core.Runner(lambda s, tag: self.q.put((s, tag)))
         self.pipeline = []
         self.busy = False
+        self.group = core.GROUPS[0]
+        self.groups = {g: core.group_defaults(g) for g in core.GROUPS}
         cfg = core.load_config()
-        self.settings = dict(workdir=os.getcwd(), bindir=core.default_bindir(), np=int(cfg.get("np", 1)),
+        if not workdir:
+            last = cfg.get("workdir", "")
+            workdir = last if last and os.path.isdir(last) else os.getcwd()
+        self.cur_workdir = os.path.abspath(workdir)
+        self.settings = dict(workdir=self.cur_workdir, bindir=core.default_bindir(), np=int(cfg.get("np", 1)),
                              mpirun=cfg.get("mpirun", "mpirun"), mpitmp=cfg.get("mpitmp", "tmp_mpi"),
                              nice=cfg.get("nice", True))
         self.slurm = dict(core.SLURM_DEFAULTS, **cfg.get("slurm", {}))
@@ -280,6 +286,8 @@ class MainWindow(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(100)
+        core.save_config(workdir=self.cur_workdir)
+        self.open_workdir(self.cur_workdir)
 
     # ---- 布局 ----
     def build(self):
@@ -330,6 +338,7 @@ class MainWindow(QMainWindow):
         g = QGridLayout()
         self.workdir = QLineEdit(s["workdir"])
         self.bindir = QLineEdit(s["bindir"])
+        self.workdir.editingFinished.connect(self.workdir_changed)
         for r, (label, edit) in enumerate([("工作目录", self.workdir), ("GRASP bin 目录", self.bindir)]):
             g.addWidget(QLabel(T(label)), r, 0)
             g.addWidget(edit, r, 1)
@@ -360,10 +369,35 @@ class MainWindow(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(0, 0, 0, 0)
+
+        gb = QHBoxLayout()
+        gb.addWidget(QLabel(T("态组")))
+        self.group_buttons = QButtonGroup(w)
+        for g in core.GROUPS:
+            b = QPushButton(g)
+            b.setCheckable(True)
+            b.setChecked(g == self.group)
+            b.setStyleSheet("QPushButton { padding: 3px 18px; } "
+                            "QPushButton:checked { background: #2d6cdf; color: white; font-weight: bold; }")
+            b.clicked.connect(lambda _=False, g=g: self.switch_group(g))
+            self.group_buttons.addButton(b)
+            gb.addWidget(b)
+        self.copy_btn = QPushButton()
+        self.copy_btn.clicked.connect(self.copy_group)
+        gb.addWidget(self.copy_btn)
+        note = hint_label("rcsfgenerate、rcsfsplit、rangular、rwfnestimate、rmcdhf、rsave、rci、jj2lsj 的参数按态组分别保存；"
+                          "其余程序页两组共用。")
+        note.setWordWrap(True)
+        gb.addWidget(note, 1)
+        lay.addLayout(gb)
+
         self.tabs = QTabWidget()
         self.forms = [StepForm(step, self.bindir.text()) for step in core.STEPS]
         for f in self.forms:
             self.tabs.addTab(f, T(f.step.name))
+        for f in self.group_forms():
+            f.set_values(self.groups[self.group][f.step.key])
+        self.update_group_labels()
         lay.addWidget(self.tabs)
         bar = QHBoxLayout()
         bar.addWidget(button("预览输入", self.preview))
@@ -427,12 +461,86 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self.runner.kill()
+        self.save_session()
         event.accept()
 
     def pick_dir(self, edit):
         d = QFileDialog.getExistingDirectory(self, "", edit.text() or os.getcwd())
         if d:
             edit.setText(d)
+            if edit is self.workdir:
+                self.workdir_changed()
+
+    # ---- 态组 ----
+    def group_forms(self):
+        return [f for f in self.forms if f.step.key in core.GROUP_STEPS]
+
+    def other_group(self):
+        return next(g for g in core.GROUPS if g != self.group)
+
+    def flush_group(self):
+        """把表单中当前态组的参数存回 self.groups。"""
+        for f in self.group_forms():
+            self.groups[self.group][f.step.key] = f.values()
+
+    def load_group(self):
+        for f in self.group_forms():
+            f.set_values(self.groups[self.group][f.step.key])
+        self.update_group_labels()
+
+    def update_group_labels(self):
+        for b in self.group_buttons.buttons():
+            b.setChecked(b.text() == self.group)
+        self.copy_btn.setText(T("复制到 {g}（替换名称）", g=self.other_group()))
+        for i, f in enumerate(self.forms):
+            name = T(f.step.name)
+            self.tabs.setTabText(i, f"{name} · {self.group}" if f.step.key in core.GROUP_STEPS else name)
+
+    def switch_group(self, g):
+        if g == self.group:
+            return
+        self.flush_group()
+        self.group = g
+        self.load_group()
+        self.statusBar().showMessage(T("当前态组：{g}", g=g))
+        self.save_session()
+
+    def copy_group(self):
+        a, b = self.group, self.other_group()
+        if QMessageBox.question(self, T("态组"), T("确定用 {a} 组的参数覆盖 {b} 组吗？", a=a, b=b)) != QMessageBox.Yes:
+            return
+        self.flush_group()
+        self.groups[b] = core.rename_group(self.groups[a], a, b)
+        self.statusBar().showMessage(
+            T("已把 {a} 组的参数复制到 {b} 组 (名称中的 {a} 已替换为 {b})；请检查 {b} 的参考组态、2J 范围和能级。", a=a, b=b))
+        self.save_session()
+
+    # ---- 工作目录中的记录 ----
+    def workdir_changed(self):
+        new = os.path.abspath(self.workdir.text().strip() or ".")
+        if new == self.cur_workdir:
+            return
+        self.save_session()                 # 先保存旧目录的记录
+        self.cur_workdir = new
+        self.workdir.setText(new)
+        core.save_config(workdir=new)
+        self.open_workdir(new)
+
+    def open_workdir(self, d):
+        if not os.path.isdir(d):
+            return
+        data = core.load_session(d)
+        if data:
+            self.apply(data)
+            self.statusBar().showMessage(T("已载入此目录上次的记录") + f"  ({os.path.join(d, core.SESSION_FILE)})")
+        else:
+            self.statusBar().showMessage(T("此目录还没有记录，沿用当前参数"))
+
+    def save_session(self):
+        data = self.collect()
+        for key in ("workdir", "bindir"):     # 与目录无关的设置不放进目录记录
+            data.pop(key)
+        core.save_session(self.cur_workdir, data)
 
     def set_language(self, lang):
         if lang == core.LANG:
@@ -516,6 +624,7 @@ class MainWindow(QMainWindow):
                    nice=self.nice.isChecked())
         core.save_config(np=cfg["np"], mpirun=cfg["mpirun"], mpitmp=cfg["mpitmp"], nice=cfg["nice"],
                          bindir=cfg["bindir"])
+        self.save_session()
         self.busy = True
         self.statusBar().showMessage(T("运行中：{n} 个步骤 …", n=len(jobs)))
         threading.Thread(target=self.runner.run_all, daemon=True,
@@ -537,6 +646,7 @@ class MainWindow(QMainWindow):
             self.pipeline.append(job)
             self.refresh_list()
             self.btabs.setCurrentIndex(0)
+            self.save_session()
 
     def refresh_list(self):
         self.plist.clear()
@@ -560,16 +670,19 @@ class MainWindow(QMainWindow):
         p[i], p[i + d] = p[i + d], p[i]
         self.refresh_list()
         self.plist.setCurrentRow(i + d)
+        self.save_session()
 
     def remove_job(self):
         i = self.selected()
         if i is not None:
             del self.pipeline[i]
             self.refresh_list()
+            self.save_session()
 
     def clear_pipeline(self):
         self.pipeline.clear()
         self.refresh_list()
+        self.save_session()
 
     def run_pipeline(self):
         self.start(list(self.pipeline))
@@ -619,9 +732,11 @@ class MainWindow(QMainWindow):
 
     # ---- 参数保存 / 载入 ----
     def collect(self):
+        self.flush_group()
         return dict(workdir=self.workdir.text(), bindir=self.bindir.text(), np=self.np.value(),
                     mpirun=self.mpirun.text(), mpitmp=self.mpitmp.text(), nice=self.nice.isChecked(),
                     slurm=self.slurm, steps={f.step.key: f.values() for f in self.forms},
+                    groups=self.groups, group=self.group,
                     pipeline=self.pipeline, tab=self.tabs.currentIndex())
 
     def apply(self, data):
@@ -629,6 +744,9 @@ class MainWindow(QMainWindow):
                           ("mpirun", self.mpirun), ("mpitmp", self.mpitmp)]:
             if key in data:
                 edit.setText(str(data[key]))
+        if "workdir" in data:
+            self.cur_workdir = os.path.abspath(str(data["workdir"]))
+            core.save_config(workdir=self.cur_workdir)
         if "np" in data:
             self.np.setValue(int(data["np"]))
         if "nice" in data:
@@ -638,8 +756,16 @@ class MainWindow(QMainWindow):
         for f in self.forms:
             # 兼容旧版本以中文标签页名保存的"自定义"参数
             d = steps.get(f.step.key) or steps.get(f.step.name)
-            if d:
+            if d and f.step.key not in core.GROUP_STEPS:
                 f.set_values(d)
+        saved = data.get("groups")
+        if saved is None:
+            # 旧版本的参数没有态组：作为 odd 组的参数，even 组用默认值
+            saved = {core.GROUPS[0]: {k: steps[k] for k in core.GROUP_STEPS if k in steps}}
+        self.groups = {g: {k: dict(v, **saved.get(g, {}).get(k, {})) for k, v in core.group_defaults(g).items()}
+                       for g in core.GROUPS}
+        self.group = data.get("group") if data.get("group") in core.GROUPS else core.GROUPS[0]
+        self.load_group()
         self.pipeline = [dict(j, pre=[tuple(a) for a in j["pre"]], post=[tuple(a) for a in j["post"]])
                          for j in data.get("pipeline", [])]
         self.refresh_list()
@@ -668,13 +794,15 @@ class MainWindow(QMainWindow):
 def main():
     args = sys.argv[1:]
     if "--lang" in args and args.index("--lang") + 1 < len(args):
-        core.set_lang(args[args.index("--lang") + 1])
+        i = args.index("--lang")
+        core.set_lang(args[i + 1])
         core.save_config(lang=core.LANG)
+        del args[i:i + 2]
     else:
         core.set_lang(core.load_config().get("lang", "zh"))
     app = QApplication(sys.argv[:1])
     app.setApplicationName("GRASP GUI")
-    win = MainWindow()
+    win = MainWindow(args[0] if args else None)     # 可选参数：要打开的工作目录
     win.show()
     rc = app.exec()
     # 在 WSLg 的 Wayland 下，进程退出时 Qt 的收尾清理会卡住几十秒以上；
