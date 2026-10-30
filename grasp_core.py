@@ -277,8 +277,10 @@ EN = {
     # 态组 / 工作目录记录
     "态组": "State group",
     "复制到 {g}（替换名称）": "Copy to {g} (rename files)",
-    "rcsfgenerate 至 ris4 的参数按态组分别保存；rnucleus、rlevels、rbiotransform、rtransition 和自定义页两组共用。":
-        "rcsfgenerate to ris4 keep separate parameters per group; rnucleus, rlevels, rbiotransform, rtransition "
+    "rcsfgenerate 至 ris4 的参数按态组分别保存；rnucleus、rlevels、rtablevels、rbiotransform、rtransition "
+    "和自定义页两组共用。":
+        "rcsfgenerate to ris4 keep separate parameters per group; rnucleus, rlevels, rtablevels, rbiotransform, "
+        "rtransition "
         "and the custom tab are shared.",
     # rhfs / ris4
     "计算超精细结构常数 A、B 和朗德 g 因子。读取 isodata (核自旋 I、磁偶极矩、电四极矩在 rnucleus 中设置)、"
@@ -296,6 +298,27 @@ EN = {
     "保存角系数 (name.IOB / name.ITB)，以后重复计算时直接读取":
         "Save angular coefficients (name.IOB / name.ITB) for later runs",
     "这两个文件已存在时程序不询问": "not asked when these files already exist",
+    # rcsfinteract / rtablevels
+    "从完整 CSF 列表中只保留与多参考组态有相互作用的 CSF。读取 rcsfmr.inp (多参考) 和 rcsf.inp (完整列表)，"
+    "输出 rcsf.out。":
+        "Keep only the CSFs of the full list that interact with the multireference. Reads rcsfmr.inp "
+        "(multireference) and rcsf.inp (full list); writes rcsf.out.",
+    "多参考 CSF 文件 → rcsfmr.inp": "Multireference CSF file → rcsfmr.inp",
+    "留空则直接用现有 rcsfmr.inp": "leave empty to use existing rcsfmr.inp",
+    "完整 CSF 文件 → rcsf.inp": "Full CSF file → rcsf.inp",
+    "按哪种哈密顿量判断相互作用": "Interaction through",
+    "结果 rcsf.out 保存为": "Save the result rcsf.out as",
+    "如 odd.c；与完整列表同名时覆盖原列表；留空则不复制":
+        "e.g. odd.c; the same name as the full list overwrites it; empty = no copy",
+    "把 rlevels 生成的能级文件整理成 LaTeX 和 ASCII 能级表 (energytablelatex.tex、energytableascii.txt)。"
+    "每个文件占表中一列，能级标记和顺序以最后一个文件为准。":
+        "Make LaTeX and ASCII energy tables (energytablelatex.tex, energytableascii.txt) from energy files "
+        "written by rlevels. Each file fills one column; labels and order follow the last file.",
+    "标签开头跳过的字符数": "Characters to skip at the start of labels",
+    "如标签以闭壳芯 1s(2). 开头，跳过 6 个字符": "e.g. skip 6 when labels start with the core 1s(2).",
+    "能级文件": "Energy files",
+    "每行一个，按活跃集从小到大；在 rlevels 页用“输出日志文件”生成":
+        "one per line, smallest active set first; write them with the output log file of the rlevels tab",
     "当前态组：{g}": "Current group: {g}",
     "已把 {a} 组的参数复制到 {b} 组 (名称中的 {a} 已替换为 {b})；请检查 {b} 的参考组态、2J 范围和能级。":
         "Copied the {a} parameters to {b} ({a} replaced by {b} in names); check the reference configurations, "
@@ -542,6 +565,37 @@ class RcsfGenerate(Step):
         return f"rcsfgenerate -> {s}" if s else "rcsfgenerate"
 
 
+class RcsfInteract(Step):
+    key = name = prog = "rcsfinteract"
+    fields = [
+        Note("从完整 CSF 列表中只保留与多参考组态有相互作用的 CSF。读取 rcsfmr.inp (多参考) 和 rcsf.inp (完整列表)，"
+             "输出 rcsf.out。"),
+        Entry("mr", "多参考 CSF 文件 → rcsfmr.inp", "odd2.c", "留空则直接用现有 rcsfmr.inp"),
+        Entry("full", "完整 CSF 文件 → rcsf.inp", "odd.c", "留空则直接用现有 rcsf.inp"),
+        Choice("ham", "按哪种哈密顿量判断相互作用", [("1", "Dirac-Coulomb"), ("2", "Dirac-Coulomb-Breit")]),
+        Entry("saveas", "结果 rcsf.out 保存为", "", "如 odd.c；与完整列表同名时覆盖原列表；留空则不复制"),
+    ]
+
+    def stdin(self, v):
+        return answers([v["ham"]])
+
+    def pre(self, v):
+        acts = []
+        if v["mr"].strip():
+            acts.append(("cp", v["mr"].strip(), "rcsfmr.inp"))
+        if v["full"].strip():
+            acts.append(("cp", v["full"].strip(), "rcsf.inp"))
+        return acts
+
+    def post(self, v):
+        s = v["saveas"].strip()
+        return [("cp", "rcsf.out", s)] if s else []
+
+    def title(self, v):
+        s = v["saveas"].strip()
+        return f"rcsfinteract -> {s}" if s else "rcsfinteract"
+
+
 class RcsfSplit(Step):
     key = name = prog = "rcsfsplit"
     fields = [
@@ -767,6 +821,20 @@ class RLevels(Step):
         return shlex.split(v["files"])
 
 
+class RTableLevels(Step):
+    key = name = prog = "rtablevels"
+    fields = [
+        Note("把 rlevels 生成的能级文件整理成 LaTeX 和 ASCII 能级表 (energytablelatex.tex、energytableascii.txt)。"
+             "每个文件占表中一列，能级标记和顺序以最后一个文件为准。"),
+        Entry("nskip", "标签开头跳过的字符数", "0", "如标签以闭壳芯 1s(2). 开头，跳过 6 个字符"),
+        Text("files", "能级文件", "energy3", "每行一个，按活跃集从小到大；在 rlevels 页用“输出日志文件”生成", lines=4),
+    ]
+
+    def stdin(self, v):
+        files = nonblank_lines(v["files"])
+        return answers([v["nskip"], str(len(files))] + files)
+
+
 class RBioTransform(Step):
     key = name = prog = "rbiotransform"
     mpi = True
@@ -834,21 +902,21 @@ class Custom(Step):
         return s if s.endswith("\n") or not s else s + "\n"
 
 
-STEPS = [RNucleus(), RcsfGenerate(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
-         RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RBioTransform(), RTransition(), Custom()]
+STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
+         RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RBioTransform(), RTransition(), Custom()]
 
 
 # ---------------------------------------------------------------------------
 #  态组 (宇称)
 #
-#  odd 与 even 各有一套参数的程序页；其余程序页 (rnucleus, rlevels, rbiotransform,
-#  rtransition, 自定义) 两组共用。文件名中的组名 (odd2.c, outodd_rci, oddCI6 …)
-#  在两组之间按名称替换对应。
+#  odd 与 even 各有一套参数的程序页；其余程序页 (rnucleus, rlevels, rtablevels,
+#  rbiotransform, rtransition, 自定义) 两组共用。文件名中的组名 (odd2.c, outodd_rci,
+#  oddCI6 …) 在两组之间按名称替换对应。
 # ---------------------------------------------------------------------------
 
 GROUPS = ("odd", "even")
-GROUP_STEPS = ("rcsfgenerate", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci", "jj2lsj",
-               "rhfs", "ris4")
+GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci",
+               "jj2lsj", "rhfs", "ris4")
 
 # even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))
 EVEN_DEFAULTS = {
@@ -1120,7 +1188,9 @@ class Runner:
     def do_action(self, a, cfg):
         self.emit(f"$ {action_sh(a)}\n", "info")
         if a[0] == "cp":
-            shutil.copyfile(os.path.join(cfg["cwd"], a[1]), os.path.join(cfg["cwd"], a[2]))
+            src, dst = os.path.join(cfg["cwd"], a[1]), os.path.join(cfg["cwd"], a[2])
+            if os.path.abspath(src) != os.path.abspath(dst):     # 如 CSF 文件直接填成 rcsf.inp
+                shutil.copyfile(src, dst)
         else:
             rc = self.exec_cmd(a[1], cfg, a[2] if len(a) > 2 else "")
             if rc != 0:
