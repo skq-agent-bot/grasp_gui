@@ -2,20 +2,26 @@
 能级与组成查看器：读取混合系数文件 (name.m / name.cm)，按 J^π 分列画出能级图；
 鼠标停在能级上显示信息，点击后在右侧列出该原子态 (ASF) 的组成：
 jj 耦合下的 CSF 混合系数 (配合 name.c)，以及 jj2lsj 给出的 LSJ 组成 (name.lsj.lbl)。
+把一个能级连到另一个能级即可计算两者之间的跃迁 (自动运行 rbiotransform 和 rtransition，见 grasp_trans.py)。
 """
 
+import math
 import os
+import queue
 import struct
+import threading
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QPolygonF, QTextCursor
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel,
-                               QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QSplitter,
+                               QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPlainTextEdit,
+                               QPushButton, QSplitter,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QTabWidget, QToolTip,
                                QVBoxLayout, QWidget)
 
 import grasp_core as core
 import grasp_mix as mix
+import grasp_trans as tr
 from grasp_core import T
 from wfn_viewer import fmt, nice_ticks
 
@@ -36,11 +42,15 @@ class NumItem(QTableWidgetItem):
         return self.value < getattr(other, "value", 0)
 PARITY_COLORS = {1: QColor("#1f5fbf"), -1: QColor("#c0392b")}     # 偶宇称蓝色，奇宇称红色
 SELECTED = QColor("#f39c12")
+ARROW = QColor("#d35400")          # 选中的一对能级之间的跃迁
+LINK = QColor("#6c3483")           # 选中能级的其他已算跃迁
 
 
 class LevelDiagram(QWidget):
-    """能级图：每个 (文件, J^π) 一列，横线为能级；滚轮缩放、拖动平移、双击复位，点击选中能级。"""
+    """能级图：每个 (文件, J^π) 一列，横线为能级；滚轮缩放、拖动平移、双击复位，点击选中能级。
+    从一个能级拖到另一个能级 (或按住 Shift 点击第二个能级) 选中一对能级，用于计算跃迁。"""
     levelClicked = Signal(object)
+    pairSelected = Signal(object, object)
 
     MARGIN = (78, 12, 46, 30)      # 左、右、上 (列标题)、下
 
@@ -51,6 +61,11 @@ class LevelDiagram(QWidget):
         self.yr = None
         self.hover = self.selected = None
         self.drag = None
+        self.press = None          # (能级, 按下位置)：拖动超过几个像素即开始连线
+        self.linking = None        # 连线时鼠标的位置
+        self.pair = None           # (上能级, 下能级)：画一条箭头
+        self.links = []            # [(能级, 能级, 强度 0..1)]：选中能级的已算跃迁
+        self.centers = {}          # 能级 -> (x, y)，绘制时更新
         self.setMouseTracking(True)
         self.setMinimumHeight(240)
 
@@ -111,6 +126,17 @@ class LevelDiagram(QWidget):
 
         geo = self.geometry_of(rect)
         self.draw_headers(p, rect, geo)
+        self.centers = {lv["key"]: (x0 + w / 2, self.to_py(lv["y"], rect, yr))
+                        for (x0, w), col in zip(geo, self.columns) for lv in col["levels"]}
+        p.save()
+        p.setClipRect(rect)
+        for k1, k2, strength in self.links:          # 选中能级的已算跃迁，越强越粗越深
+            if k1 in self.centers and k2 in self.centers:
+                c = QColor(LINK)
+                c.setAlphaF(0.25 + 0.6 * strength)
+                p.setPen(QPen(c, 0.8 + 2.4 * strength))
+                p.drawLine(QPointF(*self.centers[k1]), QPointF(*self.centers[k2]))
+        p.restore()
         for (x0, w), col in zip(geo, self.columns):
             p.save()
             p.setClipRect(rect)
@@ -119,11 +145,37 @@ class LevelDiagram(QWidget):
             for lv in col["levels"]:
                 py = self.to_py(lv["y"], rect, yr)
                 key = lv["key"]
-                color = SELECTED if key == self.selected else lv["color"]
-                width = 3.2 if key in (self.selected, self.hover) else 1.6
+                in_pair = self.pair and key in self.pair
+                color = SELECTED if key == self.selected or in_pair else lv["color"]
+                width = 3.2 if key in (self.selected, self.hover) or in_pair else 1.6
                 p.setPen(QPen(color, width))
                 p.drawLine(QPointF(lx0, py), QPointF(lx1, py))
             p.restore()
+        p.save()
+        p.setClipRect(rect)
+        if self.pair and all(k in self.centers for k in self.pair):
+            self.draw_arrow(p, QPointF(*self.centers[self.pair[0]]), QPointF(*self.centers[self.pair[1]]))
+        if self.linking and self.press and self.press[0] in self.centers:
+            p.setPen(QPen(SELECTED, 2, Qt.DashLine))
+            p.drawLine(QPointF(*self.centers[self.press[0]]), self.linking)
+        p.restore()
+
+    @staticmethod
+    def draw_arrow(p, a, b):
+        """从上能级 a 指向下能级 b 的箭头。"""
+        p.setPen(QPen(ARROW, 2.4))
+        p.drawLine(a, b)
+        d = b - a
+        length = (d.x() ** 2 + d.y() ** 2) ** 0.5
+        if length < 1:
+            return
+        ux, uy = d.x() / length, d.y() / length
+        size = 11
+        left = QPointF(b.x() - size * (ux * 0.87 - uy * 0.5), b.y() - size * (uy * 0.87 + ux * 0.5))
+        right = QPointF(b.x() - size * (ux * 0.87 + uy * 0.5), b.y() - size * (uy * 0.87 - ux * 0.5))
+        p.setBrush(ARROW)
+        p.drawPolygon(QPolygonF([b, left, right]))
+        p.setBrush(Qt.NoBrush)
 
     def draw_headers(self, p, rect, geo):
         """列标题：每个文件的名称居中写在它的几列上方 (放不下时截短)，各列下方写 J^π
@@ -174,6 +226,13 @@ class LevelDiagram(QWidget):
         return None
 
     def mouseMoveEvent(self, event):
+        if self.press and not self.drag:
+            if self.linking or (event.position() - self.press[1]).manhattanLength() > 6:
+                self.linking = event.position()
+                lv = self.level_at(event.position())
+                self.hover = lv["key"] if lv else None
+                self.update()
+                return
         if self.drag:
             start, yr = self.drag
             rect = self.plot_rect()
@@ -198,12 +257,25 @@ class LevelDiagram(QWidget):
             return
         lv = self.level_at(event.position())
         if lv:
-            self.levelClicked.emit(lv["key"])
+            if event.modifiers() & Qt.ShiftModifier and self.selected and lv["key"] != self.selected:
+                self.pairSelected.emit(self.selected, lv["key"])
+            else:
+                self.press = (lv["key"], event.position())
         else:
             self.drag = (event.position(), self.y_range())
 
-    def mouseReleaseEvent(self, _event):
+    def mouseReleaseEvent(self, event):
         self.drag = None
+        if self.press:
+            key = self.press[0]
+            if self.linking:
+                lv = self.level_at(event.position())
+                if lv and lv["key"] != key:
+                    self.pairSelected.emit(key, lv["key"])
+            else:
+                self.levelClicked.emit(key)
+        self.press = self.linking = None
+        self.update()
 
     def mouseDoubleClickEvent(self, _event):
         self.yr = None
@@ -254,16 +326,35 @@ def item(value, color=None, align=None):
     return it
 
 
+def saved_settings():
+    """单独打开查看器时的运行设置：主窗口保存的 GRASP bin 目录和 MPI 设置。"""
+    cfg = core.load_config()
+    return dict(bindir=core.default_bindir(), np=int(cfg.get("np", 1)), mpirun=cfg.get("mpirun", "mpirun"),
+                mpitmp=cfg.get("mpitmp", "tmp_mpi"), nice=cfg.get("nice", True))
+
+
 class LevelViewer(QMainWindow):
     MAX_ROWS = 500
 
-    def __init__(self, workdir):
+    def __init__(self, workdir, settings=saved_settings):
         super().__init__()
         self.setWindowTitle(T("能级与组成查看器"))
         self.resize(1400, 880)
+        self.settings = settings   # 返回运行设置 (bindir, np, mpirun, mpitmp, nice) 的函数
         self.cache = {}            # 路径 -> (mtime, 数据)
         self.levels = {}           # key -> (文件标签, 路径, Level)
+        self.key_by_id = {}        # (绝对路径, 2J, 宇称, 序号) -> key
         self.current = None
+        self.pair = None           # (上能级, 下能级)
+        self.plan = None           # (Workspace, 要算的跃迁类型)
+        self.tr_by_pair = {}       # frozenset(能级, 能级) -> [Transition]
+        self.tr_by_level = {}      # 能级 -> [(另一能级, Transition, 本能级是否为上能级)]
+        self.runner = core.Runner(lambda text, tag: self.q.put((text, tag)))
+        self.q = queue.Queue()
+        self.running = None        # (Workspace, 跃迁类型)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.poll)
+        self.timer.start(100)
 
         central = QWidget()
         lay = QVBoxLayout(central)
@@ -304,16 +395,20 @@ class LevelViewer(QMainWindow):
         dw = QWidget()
         dl = QVBoxLayout(dw)
         dl.setContentsMargins(0, 0, 0, 0)
-        hint = QLabel(T("鼠标停在能级上显示信息，点击查看组成；滚轮缩放，拖动平移，双击复位。"))
+        hint = QLabel(T("鼠标停在能级上显示信息，点击查看组成；从一个能级拖到另一个能级计算跃迁 (或按住 Shift 点击)；"
+                        "滚轮缩放，拖动空白处平移，双击复位。"))
+        hint.setWordWrap(True)
         hint.setStyleSheet("color: gray;")
         dl.addWidget(hint)
         self.diagram = LevelDiagram()
         self.diagram.levelClicked.connect(self.select)
+        self.diagram.pairSelected.connect(self.select_pair)
         dl.addWidget(self.diagram, 1)
         middle.addWidget(dw)
         self.level_table = table([T("文件"), "J^π", T("序号"), T("能量"), T("总能量 (a.u.)"), T("纯度"),
                                   T("主要组成")])
         self.level_table.setSortingEnabled(True)
+        self.level_table.setSelectionMode(QTableWidget.SingleSelection)
         self.level_table.cellClicked.connect(lambda row, _c: self.select(self.level_table.item(row, 0).data(Qt.UserRole)))
         middle.addWidget(self.level_table)
         middle.setSizes([560, 260])
@@ -344,6 +439,8 @@ class LevelViewer(QMainWindow):
         self.lsj_table.setItemDelegateForColumn(1, WeightBar(self.lsj_table))
         self.comp_tabs.addTab(self.jj_table, T("jj 耦合 CSF"))
         self.comp_tabs.addTab(self.lsj_table, T("LSJ 组成"))
+        self.tr_tab = self.build_transition_tab()
+        self.comp_tabs.addTab(self.tr_tab, T("跃迁"))
         rl.addWidget(self.comp_tabs, 1)
         self.summary = QLabel()
         self.summary.setStyleSheet("color: gray;")
@@ -446,6 +543,8 @@ class LevelViewer(QMainWindow):
         e0 = min(energies) if energies else 0.0
 
         self.levels = {}
+        self.key_by_id = {}
+        self.workspaces = {}
         columns, rows = [], []
         for fname, path, blocks, csfs, csf_path, lsj, lsj_path in data:
             for b in blocks:
@@ -453,6 +552,7 @@ class LevelViewer(QMainWindow):
                 for lv in b.levels:
                     key = (path, b.nb, lv.pos)
                     self.levels[key] = (fname, path, lv, csfs, lsj.get((b.nb, lv.pos)), csf_path, lsj_path)
+                    self.key_by_id[(os.path.abspath(path), tr.two_j(b), b.parity, lv.pos)] = key
                     label, purity = self.leading(lv, csfs, lsj.get((b.nb, lv.pos)))
                     rel = (lv.energy - e0) * factor
                     info = (f"{fname}   J^π = {self.jp(b)}   #{lv.pos}\n"
@@ -466,7 +566,11 @@ class LevelViewer(QMainWindow):
         self.fill_levels(rows, unit_label, efmt)
         if self.current not in self.levels:
             self.current = None
+        if self.pair and not all(k in self.levels for k in self.pair):
+            self.pair = None
         self.diagram.selected = self.current
+        self.diagram.pair = self.pair
+        self.load_transitions()
         self.show_composition()
 
     @staticmethod
@@ -503,6 +607,7 @@ class LevelViewer(QMainWindow):
     def select(self, key):
         self.current = key
         self.diagram.selected = key
+        self.diagram.links = self.links_of(key)
         self.diagram.update()
         for r in range(self.level_table.rowCount()):
             if self.level_table.item(r, 0).data(Qt.UserRole) == key:
@@ -555,3 +660,267 @@ class LevelViewer(QMainWindow):
         self.comp_tabs.setTabEnabled(1, bool(lsj))
         self.comp_tabs.setTabToolTip(1, T("LSJ 组成取自 {f}", f=os.path.basename(lsj_path)) if lsj
                                      else T("没有对应的 jj2lsj 结果 (.lsj.lbl)"))
+        self.show_transitions()
+
+    # ---- 跃迁 ----
+    def build_transition_tab(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        self.tr_title = QLabel()
+        self.tr_title.setWordWrap(True)
+        self.tr_title.setTextFormat(Qt.RichText)
+        lay.addWidget(self.tr_title)
+        self.tr_plan = QLabel()
+        self.tr_plan.setWordWrap(True)
+        lay.addWidget(self.tr_plan)
+        row = QHBoxLayout()
+        self.tr_run = QPushButton(T("计算跃迁"))
+        self.tr_run.clicked.connect(self.compute)
+        self.tr_stop = QPushButton(T("停止"))
+        self.tr_stop.clicked.connect(self.runner.stop)
+        row.addWidget(self.tr_run)
+        row.addWidget(self.tr_stop)
+        row.addStretch()
+        lay.addLayout(row)
+        self.pair_table = table([T("类型"), T("规范"), "A (s⁻¹)", "gf", "S (a.u.)"])
+        lay.addWidget(self.pair_table, 1)
+        self.level_tr_label = QLabel()
+        self.level_tr_label.setWordWrap(True)
+        lay.addWidget(self.level_tr_label)
+        self.level_tr_table = table([T("另一能级"), "", T("类型"), "λ (Å)", "A (s⁻¹)", "gf", T("分支比")])
+        self.level_tr_table.cellClicked.connect(self.level_tr_clicked)
+        lay.addWidget(self.level_tr_table, 2)
+        self.tr_log = QPlainTextEdit()
+        self.tr_log.setReadOnly(True)
+        self.tr_log.setMaximumBlockCount(3000)
+        mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        mono.setPointSizeF(self.font().pointSizeF())
+        self.tr_log.setFont(mono)
+        self.tr_log.setPlaceholderText(T("GRASP 程序的输出"))
+        lay.addWidget(self.tr_log, 1)
+        return w
+
+    def level_name(self, key):
+        fname, _, lv, *_ = self.levels[key]
+        return f"{fname}  {self.jp(lv.block)}  #{lv.pos}"
+
+    def select_pair(self, k1, k2):
+        """连上两个能级：能量高者为上能级。"""
+        e1, e2 = self.levels[k1][2].energy, self.levels[k2][2].energy
+        self.pair = (k1, k2) if e1 >= e2 else (k2, k1)
+        self.diagram.pair = self.pair
+        self.comp_tabs.setCurrentWidget(self.tr_tab)
+        self.select(self.pair[0])          # 组成页和已算跃迁列表显示上能级
+
+    def workspace(self, path1, path2):
+        k = tuple(sorted((os.path.abspath(path1), os.path.abspath(path2))))
+        if k not in self.workspaces:
+            self.workspaces[k] = tr.Workspace(self.dir.text(), *k)
+        return self.workspaces[k]
+
+    def load_transitions(self):
+        """读取工作目录中已算好的跃迁，按能级建立索引。"""
+        self.tr_by_pair, self.tr_by_level = {}, {}
+        for roles, transitions in tr.computed(self.dir.text()):
+            for t in transitions:
+                ku = self.key_by_id.get((roles.get(t.upper[0]),) + t.upper[1:])
+                kl = self.key_by_id.get((roles.get(t.lower[0]),) + t.lower[1:])
+                if ku is None or kl is None:          # 文件没有勾选
+                    continue
+                self.tr_by_pair.setdefault(frozenset((ku, kl)), []).append(t)
+                self.tr_by_level.setdefault(ku, []).append((kl, t, True))
+                self.tr_by_level.setdefault(kl, []).append((ku, t, False))
+        self.diagram.links = self.links_of(self.current)
+        self.diagram.update()
+
+    def links_of(self, key):
+        """能级图上要画的已算跃迁：线的粗细按 A 的对数 (最强的为 1，弱 6 个量级以上的为 0)。"""
+        items = self.tr_by_level.get(key, [])
+        best = {}
+        for other, t, _ in items:
+            a = abs(t.main()[0])
+            best[other] = max(best.get(other, 0.0), a)
+        top = max(best.values(), default=0.0)
+        if top <= 0:
+            return []
+        return [(key, other, min(max((math.log10(a) - math.log10(top) + 6) / 6, 0.0), 1.0) if a > 0 else 0.0)
+                for other, a in best.items()]
+
+    def show_transitions(self):
+        self.show_pair()
+        self.show_level_transitions()
+
+    def show_pair(self):
+        busy = self.running is not None
+        self.tr_stop.setEnabled(busy)
+        self.pair_table.setRowCount(0)
+        self.plan = None
+        if not self.pair:
+            self.tr_title.setText(T("从一个能级拖到另一个能级 (或选中一个能级后按住 Shift 点击另一个)，计算两者之间的跃迁。"))
+            self.tr_plan.setText("")
+            self.tr_run.setEnabled(False)
+            return
+        up, low = self.pair
+        lu, ll = self.levels[up][2], self.levels[low][2]
+        unit_label, factor, efmt = self.unit_info()
+        de = lu.energy - ll.energy
+        lam = 1e8 / (de * mix.HARTREE_CM) if de > 0 else float("inf")
+        self.tr_title.setText(f"<b>{self.level_name(up)}</b> → <b>{self.level_name(low)}</b><br>"
+                              f"ΔE = {efmt.format(de * factor)} {unit_label} &nbsp; λ = {lam:.3f} Å")
+        kinds = tr.multipoles(tr.two_j(lu.block), lu.parity, tr.two_j(ll.block), ll.parity)
+        rows = sorted(self.tr_by_pair.get(frozenset(self.pair), []), key=lambda t: tr.KINDS.index(t.kind)
+                      if t.kind in tr.KINDS else 99)
+        self.fill_pair(rows)
+        self.tr_run.setEnabled(False)
+        if not kinds:
+            self.tr_plan.setText(T("J = 0 → J = 0：单光子跃迁严格禁戒。"))
+            return
+        ws = self.workspace(self.levels[up][1], self.levels[low][1])
+        done = ws.done_kinds()
+        missing = [k for k in kinds if k not in done]
+        if not missing:
+            self.tr_plan.setText(T("已算出 {k}。结果保存在 {d}", k=", ".join(kinds), d=ws.dir))
+            return
+        problems = ws.problems()
+        if problems:
+            text = []
+            for what, where in problems:
+                if what == "isodata":
+                    text.append(T("工作目录中没有 isodata：{d}", d=where))
+                elif what == "w?":
+                    text.append(T("无法确定与 {f} 对应的波函数文件，候选：{c}。请把对应的 .w 文件命名为与混合系数文件同名 "
+                                  "(如 {s}.w)。", f=os.path.basename(where[0]),
+                                  c=", ".join(os.path.basename(c) for c in where[1]),
+                                  s=os.path.splitext(os.path.basename(where[0]))[0]))
+                else:
+                    text.append(T("找不到与 {f} 对应的 {what} 文件", f=os.path.basename(where),
+                                  what=".c" if what == "CSF" else ".w"))
+            self.tr_plan.setText("\n".join(text))
+            return
+        progs = "rtransition" if ws.manifest().get("bio") or ws.same else "rbiotransform → rtransition"
+        note = T("两个能级来自同一个文件，轨道相同，不需要双正交变换。") if ws.same else \
+            T("两个能级来自不同的计算，先用 rbiotransform 做双正交变换。")
+        files = "; ".join(f"{os.path.basename(s.mix)}: {os.path.basename(s.csf)}, {os.path.basename(s.w)}"
+                          for s in ws.sides.values())
+        self.tr_plan.setText(T("需要计算 {k} ({p})。", k=", ".join(missing), p=progs) + " " + note + "\n" +
+                             T("使用的文件：{f}", f=files) + "\n" +
+                             T("rtransition 一次算出这两个文件中所有能级之间的 {k} 跃迁，之后点其他能级对可直接显示。",
+                               k=", ".join(missing)))
+        self.plan = (ws, missing)
+        self.tr_run.setEnabled(not busy)
+
+    def fill_pair(self, rows):
+        t = self.pair_table
+        out = []
+        for x in rows:
+            for g in ("B", "C", "M"):
+                if g in x.values:
+                    a, gf, s = x.values[g]
+                    gauge = {"B": T("Babushkin (长度)"), "C": T("Coulomb (速度)"), "M": ""}[g]
+                    out.append((x.kind, gauge, a, gf, s))
+        t.setRowCount(len(out))
+        for r, (kind, gauge, a, gf, s) in enumerate(out):
+            for c, it in enumerate([item(kind), item(gauge), NumItem(f"{a:.5e}", a), NumItem(f"{gf:.5e}", gf),
+                                    NumItem(f"{s:.5e}", s)]):
+                t.setItem(r, c, it)
+        t.resizeColumnsToContents()
+        ratios = [f"{x.kind}: A_C / A_B = {x.gauge_ratio():.4f}" for x in rows if x.gauge_ratio() is not None]
+        if ratios:
+            t.setToolTip(T("两种规范之比接近 1 说明计算较可靠。") + "\n" + "\n".join(ratios))
+
+    def show_level_transitions(self):
+        t = self.level_tr_table
+        t.setRowCount(0)
+        key = self.current
+        items = self.tr_by_level.get(key, []) if key else []
+        if not key:
+            self.level_tr_label.setText("")
+            return
+        if not items:
+            self.level_tr_label.setText(T("能级 {l} 还没有算出的跃迁。", l=self.level_name(key)))
+            return
+        decay = sum(abs(x.main()[0]) for _, x, is_up in items if is_up)
+        rows = sorted(items, key=lambda i: -abs(i[1].main()[0]))
+        t.setSortingEnabled(False)
+        t.setRowCount(len(rows))
+        for r, (other, x, is_up) in enumerate(rows):
+            a, gf, _ = x.main()
+            br = abs(a) / decay if is_up and decay else None
+            first = item(self.level_name(other))
+            first.setData(Qt.UserRole, other)
+            vals = [first, item("↓" if is_up else "↑"), item(x.kind), NumItem(f"{x.wavelength:.3f}", x.wavelength),
+                    NumItem(f"{a:.4e}", a), NumItem(f"{gf:.4e}", gf),
+                    NumItem(f"{100 * br:.2f} %" if br is not None else "", br or 0.0)]
+            for c, it in enumerate(vals):
+                t.setItem(r, c, it)
+        t.setSortingEnabled(True)
+        t.resizeColumnsToContents()
+        msg = T("能级 {l} 的已算跃迁 ({n} 条；↓ 衰变到更低能级，↑ 从更低能级激发)。", l=self.level_name(key), n=len(rows))
+        if decay:
+            msg += " " + T("已算衰变的总速率 {a:.4e} s⁻¹，对应寿命 {tau:.4e} s (只计入已算的跃迁)。", a=decay, tau=1 / decay)
+        self.level_tr_label.setText(msg)
+
+    def level_tr_clicked(self, row, _col):
+        other = self.level_tr_table.item(row, 0).data(Qt.UserRole)
+        if self.current and other in self.levels:
+            self.select_pair(self.current, other)
+
+    def compute(self):
+        if not self.plan or self.running:
+            return
+        ws, kinds = self.plan
+        cfg = dict(self.settings())
+        try:
+            ws.prepare()
+        except OSError as e:
+            self.tr_log.appendPlainText(T("\n*** 错误: {e}\n", e=e))
+            return
+        cfg["cwd"] = ws.dir
+        self.tr_log.clear()
+        if cfg["np"] > 1 and not ws.mpi_ok(cfg["mpitmp"]):
+            cfg["np"] = 1
+            self.tr_log.appendPlainText(T("计算目录的路径超过 {n} 个字符，GRASP 的 MPI 版本无法处理，改用串行版本。",
+                                          n=tr.MPI_PATH_MAX))
+        jobs = ws.jobs(kinds, {s.key: s for s in core.STEPS})
+        self.running = (ws, kinds)
+        self.statusBar().showMessage(T("正在计算 {k} 跃迁 …", k=", ".join(kinds)))
+        self.show_pair()
+        threading.Thread(target=self.runner.run_all, daemon=True,
+                         args=(jobs, cfg, lambda ok: self.q.put((ok, "done")))).start()
+
+    def poll(self):
+        text = []
+        try:
+            while True:
+                s, tag = self.q.get_nowait()
+                if tag == "done":
+                    if text:
+                        self.tr_log.insertPlainText("".join(text))
+                        text = []
+                    self.finished(s)
+                else:
+                    text.append(s)
+        except queue.Empty:
+            pass
+        if text:
+            self.tr_log.moveCursor(QTextCursor.End)
+            self.tr_log.insertPlainText("".join(text))
+            self.tr_log.ensureCursorVisible()
+
+    def finished(self, ok):
+        ws, kinds = self.running
+        self.running = None
+        if ok:
+            try:
+                ws.finish(kinds)
+            except (OSError, RuntimeError) as e:
+                ok = False
+                self.tr_log.appendPlainText(T("\n*** 错误: {e}\n", e=e))
+        self.statusBar().showMessage(T("跃迁计算完成") if ok else T("跃迁计算失败，见下方的程序输出"))
+        self.load_transitions()
+        self.show_transitions()
+
+    def closeEvent(self, event):
+        if self.running:
+            self.runner.kill()
+        super().closeEvent(event)

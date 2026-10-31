@@ -91,6 +91,53 @@ EN = {
     "缩小字体": "Smaller font",
     "默认字体大小": "Default font size",
     "字体大小 {pt} 磅": "Font size {pt} pt",
+    # 能级查看器中的跃迁计算
+    "跃迁": "Transitions",
+    "计算跃迁": "Compute transitions",
+    "停止": "Stop",
+    "类型": "Type",
+    "规范": "Gauge",
+    "另一能级": "Other level",
+    "分支比": "Branching ratio",
+    "Babushkin (长度)": "Babushkin (length)",
+    "Coulomb (速度)": "Coulomb (velocity)",
+    "GRASP 程序的输出": "Output of the GRASP programs",
+    "鼠标停在能级上显示信息，点击查看组成；从一个能级拖到另一个能级计算跃迁 (或按住 Shift 点击)；滚轮缩放，拖动空白处平移，双击复位。":
+        "Hover a level for details, click it to see its composition; drag from one level to another (or "
+        "Shift-click) to compute the transition between them; wheel zooms, drag empty space to pan, "
+        "double-click resets.",
+    "从一个能级拖到另一个能级 (或选中一个能级后按住 Shift 点击另一个)，计算两者之间的跃迁。":
+        "Drag from one level to another (or select a level and Shift-click another) to compute the transition "
+        "between them.",
+    "J = 0 → J = 0：单光子跃迁严格禁戒。": "J = 0 → J = 0: single-photon transitions are strictly forbidden.",
+    "已算出 {k}。结果保存在 {d}": "{k} computed. Results are kept in {d}",
+    "工作目录中没有 isodata：{d}": "No isodata in the working directory: {d}",
+    "无法确定与 {f} 对应的波函数文件，候选：{c}。请把对应的 .w 文件命名为与混合系数文件同名 (如 {s}.w)。":
+        "Cannot tell which wave function file belongs to {f} (candidates: {c}). Name the matching .w file "
+        "like the mixing coefficient file (e.g. {s}.w).",
+    "找不到与 {f} 对应的 {what} 文件": "No {what} file matching {f} found",
+    "两个能级来自同一个文件，轨道相同，不需要双正交变换。":
+        "Both levels come from the same file and share the orbitals: no biorthogonal transformation needed.",
+    "两个能级来自不同的计算，先用 rbiotransform 做双正交变换。":
+        "The levels come from different calculations: rbiotransform first performs the biorthogonal "
+        "transformation.",
+    "需要计算 {k} ({p})。": "{k} to be computed ({p}).",
+    "使用的文件：{f}": "Files used: {f}",
+    "rtransition 一次算出这两个文件中所有能级之间的 {k} 跃迁，之后点其他能级对可直接显示。":
+        "rtransition computes the {k} transitions between all levels of these files at once; other pairs are "
+        "then shown immediately.",
+    "两种规范之比接近 1 说明计算较可靠。": "A ratio of the two gauges close to 1 indicates a reliable calculation.",
+    "能级 {l} 还没有算出的跃迁。": "No transitions computed yet for level {l}.",
+    "能级 {l} 的已算跃迁 ({n} 条；↓ 衰变到更低能级，↑ 从更低能级激发)。":
+        "Computed transitions of level {l} ({n}; ↓ decay to a lower level, ↑ excitation from a lower level).",
+    "已算衰变的总速率 {a:.4e} s⁻¹，对应寿命 {tau:.4e} s (只计入已算的跃迁)。":
+        "Total computed decay rate {a:.4e} s⁻¹, lifetime {tau:.4e} s (computed transitions only).",
+    "计算目录的路径超过 {n} 个字符，GRASP 的 MPI 版本无法处理，改用串行版本。":
+        "The path of the calculation directory exceeds {n} characters, which GRASP's MPI programs cannot "
+        "handle; using the serial programs.",
+    "正在计算 {k} 跃迁 …": "Computing {k} transitions …",
+    "跃迁计算完成": "Transition calculation finished",
+    "跃迁计算失败，见下方的程序输出": "Transition calculation failed; see the program output below",
     "轨道": "Orbitals",
     "全选": "All",
     "全不选": "None",
@@ -122,8 +169,6 @@ EN = {
     "文件按内容识别，与文件名无关：组态取自 CSF 数和 J^π 都对应的 CSF 文件，LSJ 组成取自能量对应的 jj2lsj 结果。":
         "Files are recognised by their content, not their names: configurations come from the CSF file whose "
         "block sizes and J^π match, LSJ compositions from the jj2lsj result with matching energies.",
-    "鼠标停在能级上显示信息，点击查看组成；滚轮缩放，拖动平移，双击复位。":
-        "Hover a level for details, click it for its composition; wheel to zoom, drag to pan, double-click to reset.",
     "序号": "Pos",
     "能量": "Energy",
     "总能量 (a.u.)": "Total energy (a.u.)",

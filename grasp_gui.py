@@ -892,11 +892,11 @@ class MainWindow(QMainWindow):
     def run_from_selected(self):
         self.start(self.pipeline[self.selected() or 0:])
 
-    def open_window(self, attr, cls):
+    def open_window(self, attr, cls, **kw):
         """打开 (或切换到) 一个查看器窗口，显示当前工作目录。"""
         win = getattr(self, attr, None)
         if win is None or not win.isVisible():
-            win = cls(self.cur_workdir)
+            win = cls(self.cur_workdir, **kw)
             setattr(self, attr, win)
         else:
             win.set_dir(self.cur_workdir)
@@ -910,7 +910,12 @@ class MainWindow(QMainWindow):
 
     def open_levels(self):
         from level_viewer import LevelViewer
-        self.open_window("levels", LevelViewer)
+        self.open_window("levels", LevelViewer, settings=self.run_settings)
+
+    def run_settings(self):
+        """查看器中计算跃迁时使用的 GRASP bin 目录和 MPI 设置 (与主窗口一致)。"""
+        return dict(bindir=self.bindir.text(), np=self.np.value(), mpirun=self.mpirun.text(),
+                    mpitmp=self.mpitmp.text().strip() or "tmp_mpi", nice=self.nice.isChecked())
 
     def list_files(self):
         if not self.check_dirs():

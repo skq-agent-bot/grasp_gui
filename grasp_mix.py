@@ -226,6 +226,14 @@ def _csf_signature(path):
     return nw, tuple(blocks)
 
 
+def csf_orbitals(path):
+    """CSF 文件用到的全部轨道 (核心和外层)，如 ["1s", "2s", "2p-", "2p"]。"""
+    with open(path) as f:
+        lines = f.read().splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("CSF(s):"))
+    return [t for ln in lines[:start] if not ln.rstrip().endswith(":") for t in ln.split()]
+
+
 def mix_signature(path):
     return _cached(path, _mix_signature)
 

@@ -131,6 +131,34 @@ def read_w(path):
     return sorted(orbitals, key=lambda o: o.sort_key)
 
 
+def orbital_names(path):
+    """文件中各轨道的名称 (如 2p-)，只读每个轨道的头记录，不解析 P、Q 数组。"""
+    names = []
+    with open(path, "rb") as f:
+        def record(keep):
+            head = f.read(4)
+            if len(head) < 4:
+                return None
+            size, = struct.unpack("<i", head)
+            if size < 0:
+                raise ValueError("not a Fortran unformatted file")
+            body = f.read(size) if keep else f.seek(size, 1)
+            f.read(4)
+            return body
+        if (record(True) or b"")[:6] != b"G92RWF":
+            raise ValueError("not a GRASP radial wave function file (G92RWF)")
+        while True:
+            head = record(True)
+            if not head:
+                break
+            n, kappa = struct.unpack_from("<ii", head)
+            l = kappa if kappa > 0 else -kappa - 1
+            names.append(f"{n}{L_LETTERS[l]}{'-' if kappa > 0 else ''}")
+            record(False)
+            record(False)
+    return names
+
+
 def natural_key(name):
     """odd2.w < odd10.w"""
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", name)]
