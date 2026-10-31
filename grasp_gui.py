@@ -74,11 +74,16 @@ def fix_fontconfig():
 
 fix_wsl_display()
 fix_fontconfig()
+# 打包的 libxkbcommon 可能比系统的 Compose 文件旧，读到新的按键名 (如 dead_hamza) 时会打印大量 ERROR；
+# 这些行被跳过，不影响使用，因此只显示严重错误
+os.environ.setdefault("XKB_LOG_LEVEL", "critical")
 
-from PySide6.QtCore import QByteArray, QEvent, QObject, Qt          # noqa: E402
-from PySide6.QtGui import QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPalette  # noqa: E402
+from PySide6.QtCore import QByteArray, QEvent, QObject, QPointF, Qt  # noqa: E402
+from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPainter,  # noqa: E402
+                           QPalette)
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit,  # noqa: E402
-                               QMainWindow, QMessageBox, QTabWidget, QToolButton, QVBoxLayout, QWidget)
+                               QMainWindow, QMessageBox, QSplitter, QSplitterHandle, QTabWidget, QToolButton,
+                               QVBoxLayout, QWidget)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import grasp_core as core                                           # noqa: E402
@@ -412,29 +417,62 @@ def start_window(args):
     return path, tab, None
 
 
-class WindowFrames(QObject):
-    """在 Wayland 下 (如 WSLg) 窗口的标题栏和边框由 Qt 自己绘制 (bradient 装饰)，颜色取自程序调色板的
-    窗口背景色，与窗口内容相同，又没有窗口阴影，对话框叠在主窗口上时分不清边界。因此把程序调色板的
-    窗口背景色换成 FRAME_COLOR (只有标题栏和边框直接使用程序调色板)，各窗口在显示前恢复原来的调色板。"""
-    FRAME_COLOR = QColor("#c3cede")
+class SplitterGrip(QObject):
+    """画分隔条：比 Qt 默认的三个浅色小点更明显，鼠标停在上面时加亮。"""
+    DOTS, SPACING, RADIUS = 5, 7, 2.0
 
-    def __init__(self, app):
+    def eventFilter(self, handle, event):
+        if event.type() != QEvent.Paint:
+            return False
+        p = QPainter(handle)
+        p.setRenderHint(QPainter.Antialiasing)
+        hover = handle.underMouse()
+        p.fillRect(handle.rect(), QColor("#c3cede") if hover else QColor("#e2e6ec"))
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor("#2f4566") if hover else QColor("#6f7b8e"))
+        c = QPointF(handle.rect().center()) + QPointF(0.5, 0.5)
+        along = QPointF(0, 1) if handle.orientation() == Qt.Horizontal else QPointF(1, 0)
+        for i in range(self.DOTS):
+            p.drawEllipse(c + along * ((i - (self.DOTS - 1) / 2) * self.SPACING), self.RADIUS, self.RADIUS)
+        p.end()
+        return True
+
+
+class WindowStyle(QObject):
+    """界面上不容易看清的部分：
+    - 分隔条加宽，由 SplitterGrip 绘制；
+    - frames 为真时 (Wayland，如 WSLg) 窗口的标题栏和边框由 Qt 自己绘制 (bradient 装饰)，颜色取自程序调色板的
+      窗口背景色，与窗口内容相同，又没有窗口阴影，对话框叠在主窗口上时分不清边界。因此把程序调色板的
+      窗口背景色换成 FRAME_COLOR (只有标题栏和边框直接使用程序调色板)，各窗口在显示前恢复原来的调色板。"""
+    FRAME_COLOR = QColor("#c3cede")
+    HANDLE_WIDTH = 9
+
+    def __init__(self, app, frames):
         super().__init__(app)
-        framed = app.palette()
-        # 每种颜色都显式设置：复制来的调色板不带“已设置”标记，设给窗口后仍会沿用程序调色板
-        self.normal = QPalette()
-        for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
-            for role in range(QPalette.NColorRoles.value):
-                role = QPalette.ColorRole(role)
-                self.normal.setBrush(group, role, framed.brush(group, role))
-        for group in (QPalette.Active, QPalette.Inactive):
-            framed.setColor(group, QPalette.Window, self.FRAME_COLOR)
-        app.setPalette(framed)
+        self.grip = SplitterGrip(self)
+        self.normal = None
+        if frames:
+            framed = app.palette()
+            # 每种颜色都显式设置：复制来的调色板不带“已设置”标记，设给窗口后仍会沿用程序调色板
+            self.normal = QPalette()
+            for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+                for role in range(QPalette.NColorRoles.value):
+                    role = QPalette.ColorRole(role)
+                    self.normal.setBrush(group, role, framed.brush(group, role))
+            for group in (QPalette.Active, QPalette.Inactive):
+                framed.setColor(group, QPalette.Window, self.FRAME_COLOR)
+            app.setPalette(framed)
         app.installEventFilter(self)
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Polish and obj.isWidgetType() and obj.isWindow():
-            obj.setPalette(self.normal)
+        if event.type() == QEvent.Polish and obj.isWidgetType():
+            if isinstance(obj, QSplitter):
+                obj.setHandleWidth(self.HANDLE_WIDTH)
+            elif isinstance(obj, QSplitterHandle):
+                obj.setAttribute(Qt.WA_Hover)           # 鼠标进出时重画
+                obj.installEventFilter(self.grip)
+            if self.normal is not None and obj.isWindow():
+                obj.setPalette(self.normal)
         return False
 
 
@@ -459,8 +497,7 @@ def main():
     global DEFAULT_PT
     DEFAULT_PT = app.font().pointSizeF() if app.font().pointSizeF() > 0 else DEFAULT_PT
     load_fonts()
-    if app.platformName().startswith("wayland"):
-        app.frames = WindowFrames(app)
+    app.window_style = WindowStyle(app, frames=app.platformName().startswith("wayland"))
     win = MainWindow(workdir, tab)
     win.show()
     if path:
