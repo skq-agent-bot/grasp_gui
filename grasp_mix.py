@@ -69,15 +69,26 @@ def _records(data):
         pos = end + 4
 
 
+class Blocks(list):
+    """read_mix 的结果：[Block]；partial 为真时文件尚未写完 (只含完整的块)。"""
+    partial = False
+
+
 def read_mix(path):
-    """读取混合系数文件，返回 [Block]；各 Block.levels 为 [Level]。"""
+    """读取混合系数文件，返回 [Block]；各 Block.levels 为 [Level]。
+
+    逐块写出、尚未写完的文件 (如 GRASPG 的 rci_block_csfg 正在计算时；rlevels_csfg 也能读) 只取完整的块，
+    并把结果的 partial 设为真；文件头不完整时抛出 ValueError。"""
     with open(path, "rb") as f:
         recs = _records(f.read())
         try:
             if next(recs)[:6] != b"G92MIX":
                 raise ValueError("not a GRASP mixing coefficient file (G92MIX)")
             nelec, ncftot, nw, nvectot, nvecsiz, nblock = struct.unpack("<6i", next(recs)[:24])
-            blocks = []
+        except StopIteration:
+            raise ValueError("truncated mixing coefficient file") from None
+        blocks = Blocks()
+        try:
             for _ in range(nblock):
                 nb, ncf, nev, twoj1, parity = struct.unpack("<5i", next(recs)[:20])
                 block = Block(nb, ncf, twoj1, parity)
@@ -89,8 +100,8 @@ def read_mix(path):
                     for k in range(nev):
                         block.levels.append(Level(block, ivec[k], e[0] + e[k + 1], vec[k * ncf:(k + 1) * ncf]))
                 blocks.append(block)
-        except StopIteration:
-            raise ValueError("truncated mixing coefficient file") from None
+        except (StopIteration, ValueError, struct.error):
+            blocks.partial = True
     return blocks
 
 

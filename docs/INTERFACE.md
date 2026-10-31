@@ -88,14 +88,19 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   tabs are shown and is saved per working directory; importing a GRASPG configuration switches to it. With GRASPG
   the tabs are:
   * *Nucleus & CSFs*: `rnucleus`, `rcsfggenerate_csfg`, `rcsfginteract_csfg`, `rcsfgsplit_csfg`
-  * *SCF & CI*: `rangular_csfg`, `rwfnestimate_csfg`, `rmcdhf_csfg`, `rsave_csfg`, `rci_csfg`
+  * *SCF & CI*: `rangular_csfg`, `rwfnestimate_csfg`, `rmcdhf_csfg`, `rsave_csfg`, `rci_csfg`, `rci_block_csfg`
+    (block-by-block CI of one block file such as `oddCI6_odd1`: *Mode* one step / only build and save the H matrix /
+    restart from the saved H matrix; *First copy this wave function file to name.w*; the `rci_csfg` options;
+    *Lower the eigenvalue accuracy* (restart only); before a restart the GUI checks that
+    `MPI_TMP/<rank>/rci<rank>.res` exist for exactly the current number of MPI processes)
   * *Properties & transitions*: as GRASP2018 (they read the expanded `name.c` written by `rsave_csfg` / `rci_csfg`)
   * *Results & tools*: `jj2lsj_csfg`, `rlevels_csfg`, `rtablevels`, `rtabtrans1`, `rtabtrans2`, *Custom*
   * *CSFG tools (CSFG 工具)*, a fifth group only for GRASPG: `rcsfgexpand_csfg` (CSFG list → CSF list `rcsf.out`,
     *Save rcsf.out as*), `rcsfgextend_csfg` (larger orbital sets, lines `orbital set  label` like the split),
     `rcsfgblocksplit_csfg` (one file per J/parity block, answers the "same orbital set" question with y),
     `rmixaccumulate_csfg` (condense by accumulated weight; optional new orbital set → `rcsfg.nmax`; *Save the result
-    as* writes `name.g` and copies `state.l`)
+    as* writes `name.g` and copies `state.l`), `rdistHmatrix_csfg` (redistribute a saved H matrix to another number
+    of processes: renames the MPI temporary directory to the source directory, creates it again and fills it)
 
   GRASPG forms work on CSFG lists `name.g` + labelling-orbital files `name.l` (names given without extension; the
   GUI copies them to `rcsfg.inp` / `rlabel.inp`, or `rcsfgmr.inp` / `rcsfgmr.l` for the multireference of
@@ -110,7 +115,7 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   on errors; the GUI recognises their error messages (`Stop Error`, `Error!`, `… is not found`, `not exists`,
   `Problems with opening`, `STOP …error…`) and stops the pipeline.
   Choosing GRASPG when the bin directory has no `rcsfggenerate_csfg` shows a warning in the status bar.
-  Other GRASPG programs (`rci_block_csfg_mpi`, `rcsfgzerofirst_csfg`, `rdistHmatrix_csfg`) can be run from *Custom*.
+  `rcsfgzerofirst_csfg` can be run from *Custom*.
 * **Forms**: one per program, generated from the field definitions in `grasp_core.py` (description line, fields
   with hints at the right). Inputs follow each program's default-settings question order; they reproduce the inputs
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use
@@ -185,7 +190,9 @@ Refresh  Energy unit [eV▾]  Export▾  ☐ Show all computed transitions of th
 
 * **Files**: *Mixing coefficient files (混合系数文件)* checklist (`.m`, `.cm`, by content), *?* explains how the
   matching `.c` (configurations) and `.lsj.lbl` (LSJ composition) files are found by content: number of orbitals,
-  CSFs and J^π of each block, level energies — they need not share the mixing file's name.
+  CSFs and J^π of each block, level energies — they need not share the mixing file's name. A file that is still
+  being written block by block (GRASPG `rci_block_csfg`) shows its complete blocks; its tooltip says *The file is not
+  complete yet; only the finished blocks are shown*. Unreadable files are red with the error as tooltip.
 * **Toolbar**: *Refresh*, *Energy unit (能量单位)* eV / cm⁻¹ / a.u. (relative to the lowest level; remembered),
   *Export ▾ (导出)*: *Level diagram (PNG / SVG / PDF)… (能级图)*, *Level data (CSV)… (能级数据)*, *Configuration
   abbreviations… (组态缩写…)*; *Show all computed transitions of the selected level (显示选中能级的全部已算跃迁)*

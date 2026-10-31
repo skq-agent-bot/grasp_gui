@@ -693,6 +693,27 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
     "  新的轨道集": "  New orbital set",
     "各 l 的最高 n": "highest n per l",
     "写出 name.g，并复制 state.l 为 name.l；留空则不复制": "writes name.g and copies state.l to name.l; empty = no copy",
+    "逐块的 CI：每个 J/宇称块单独计算 (先用 rcsfgblocksplit_csfg 拆分，如 oddCI6 → oddCI6_odd1 …)，大规模计算时节省内存。可以一次完成，也可以先只构造并保存 H 矩阵 (在 MPI 临时目录中)，再“重启”求能级；两步之间可用 rdistHmatrix_csfg 改变进程数。输出 name.cm、name.c 等。": "Block-by-block CI: each J/parity block is computed on its own (split first with rcsfgblocksplit_csfg, e.g. oddCI6 → oddCI6_odd1 …), which saves memory in large calculations. It can run in one step, or first only build and save the H matrix (in the MPI temporary directory) and then restart to compute the levels; in between, rdistHmatrix_csfg can change the number of processes. Writes name.cm, name.c etc.",
+    "运行方式": "Mode",
+    "一次完成：构造 H 矩阵并求能级": "one step: build the H matrix and compute the levels",
+    "只构造并保存 H 矩阵": "only build and save the H matrix",
+    "重启：读入保存的 H 矩阵求能级": "restart: read the saved H matrix and compute the levels",
+    "态名称 (一个块)": "State name (one block)",
+    "先复制此波函数文件为 name.w": "First copy this wave function file to name.w",
+    "降低本征值精度以加快计算": "Lower the eigenvalue accuracy to speed up",
+    "仅重启；如只为 rmixaccumulate_csfg 计算时": "restart only; e.g. when computing only for rmixaccumulate_csfg",
+    "计算的能级": "Levels",
+    "如 1-3；只构造 H 矩阵时不用": "e.g. 1-3; not used when only building the H matrix",
+    "把 rci_block_csfg 保存的 H 矩阵重新分配给另一个 MPI 进程数 (例如用多个进程构造、用较少的进程求能级以节省内存)。先把 MPI 临时目录改名为来源目录，再写出新的 MPI 临时目录；之后把运行设置中的进程数改为目标进程数再“重启”。": "Redistributes the H matrix saved by rci_block_csfg to another number of MPI processes (e.g. build it with many processes and compute the levels with fewer to save memory). The MPI temporary directory is first renamed to the source directory, then a new MPI temporary directory is written; afterwards set the processes in the run settings to the target number and restart.",
+    "来源目录 (原 MPI 临时目录改名为)": "Source directory (the MPI temporary directory is renamed to)",
+    "此目录必须不存在或为空": "must not exist or be empty",
+    "MPI 临时目录": "MPI temporary directory",
+    "与运行设置中的一致": "as in the run settings",
+    "原进程数": "Source processes",
+    "目标进程数": "Target processes",
+    "找不到保存的 H 矩阵 (在 {d} 中)：请先用“只构造并保存 H 矩阵”运行 rci_block_csfg。": "No saved H matrix (in {d}): run rci_block_csfg with \"only build and save the H matrix\" first.",
+    "保存的 H 矩阵是 {k} 个 MPI 进程的 (在 {d} 中)，重启必须使用相同的进程数：请把 MPI 进程数设为 {k}，或先用 rdistHmatrix_csfg 重新分配给 {np} 个进程。": "The saved H matrix is for {k} MPI processes (in {d}); a restart must use the same number: set the MPI processes to {k}, or first redistribute it to {np} processes with rdistHmatrix_csfg.",
+    "文件尚未写完，只显示已完成的块": "The file is not complete yet; only the finished blocks are shown",
 }
 
 
@@ -1524,6 +1545,68 @@ class RCiCsfg(RCi):
         return f"{self.key} {v['state']}"
 
 
+class RCiBlockCsfg(RCiCsfg):
+    key = name = "rci_block_csfg"
+    prog = "rci_block_csfg_mpi"
+    fields = [
+        Note("逐块的 CI：每个 J/宇称块单独计算 (先用 rcsfgblocksplit_csfg 拆分，如 oddCI6 → oddCI6_odd1 …)，大规模计算时节省内存。"
+             "可以一次完成，也可以先只构造并保存 H 矩阵 (在 MPI 临时目录中)，再“重启”求能级；两步之间可用 rdistHmatrix_csfg "
+             "改变进程数。输出 name.cm、name.c 等。"),
+        Choice("mode", "运行方式", [("1", "一次完成：构造 H 矩阵并求能级"), ("2", "只构造并保存 H 矩阵"),
+                                    ("3", "重启：读入保存的 H 矩阵求能级")]),
+        Entry("state", "态名称 (一个块)", "oddCI6_odd1"),
+        Entry("wfrom", "先复制此波函数文件为 name.w", "oddCI6.w", "空 = 不复制"),
+    ] + RCiCsfg.fields[3:15] + [         # 横向相互作用 … NQEDMAX
+        Check("crite", "降低本征值精度以加快计算", False, "仅重启；如只为 rmixaccumulate_csfg 计算时"),
+        RCiCsfg.fields[15],                 # 内存上限
+        Text("levels", "计算的能级", "1", "如 1-3；只构造 H 矩阵时不用", lines=2),
+        Entry("log", "输出日志文件", "out_rci_oddCI6_odd1"),
+    ]
+
+    def stdin(self, v):
+        state, levels = v["state"].strip(), nonblank_lines(v["levels"])
+        if v["mode"] == "3":
+            return answers(["n", state, "y", yn(v["se"]), yn(v["crite"]), v["mem"]] + levels)
+        lines = RCiCsfg.stdin(self, dict(v, levels=""))
+        return lines + answers(levels if v["mode"] == "1" else [" "])    # 空的能级行：只构造 H 矩阵
+
+    def pre(self, v):
+        src, dst = v["wfrom"].strip(), v["state"].strip()
+        return [("cp", src, f"{dst}.w")] if src and v["mode"] != "3" else []
+
+    def job(self, v):
+        job = super().job(v)
+        if v["mode"] == "3":
+            job["check"] = "hmatrix"        # 运行前检查保存的 H 矩阵与进程数 (check_hmatrix)
+        return job
+
+    def title(self, v):
+        mode = {"1": "", "2": " (H)", "3": " (restart)"}[v["mode"]]
+        return f"{self.key} {v['state']}{mode}"
+
+
+class RDistHMatrixCsfg(Step):
+    key = name = prog = "rdistHmatrix_csfg"
+    fields = [
+        Note("把 rci_block_csfg 保存的 H 矩阵重新分配给另一个 MPI 进程数 (例如用多个进程构造、用较少的进程求能级以节省内存)。"
+             "先把 MPI 临时目录改名为来源目录，再写出新的 MPI 临时目录；之后把运行设置中的进程数改为目标进程数再“重启”。"),
+        Entry("src", "来源目录 (原 MPI 临时目录改名为)", "HMatrix_save", "此目录必须不存在或为空"),
+        Entry("tmp", "MPI 临时目录", "tmp_mpi", "与运行设置中的一致"),
+        Entry("nsrc", "原进程数", "4"),
+        Entry("ntgt", "目标进程数", "1"),
+    ]
+
+    def stdin(self, v):
+        return answers([v["src"].strip(), v["tmp"].strip(), v["nsrc"].strip(), v["ntgt"].strip()])
+
+    def pre(self, v):
+        tmp = v["tmp"].strip()
+        return [("run", ["mv", "-T", tmp, v["src"].strip()]), ("run", ["mkdir", "-p", tmp])]
+
+    def title(self, v):
+        return f"{self.prog} {v['nsrc'].strip()} -> {v['ntgt'].strip()}"
+
+
 class Jj2lsjCsfg(Jj2lsj):
     key = name = prog = "jj2lsj_csfg"
 
@@ -1623,7 +1706,7 @@ STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RAngular(), RW
          RBioTransform(), RTransition(), Custom(),
          RcsfgGenerate(), RcsfgInteract(), RcsfgSplit(), RAngularCsfg(), RWfnEstimateCsfg(), RMcdhfCsfg(), RSaveCsfg(),
          RCiCsfg(), Jj2lsjCsfg(), RLevelsCsfg(), RcsfgExpand(), RcsfgExtend(), RcsfgBlockSplit(),
-         RMixAccumulateCsfg()]
+         RMixAccumulateCsfg(), RCiBlockCsfg(), RDistHMatrixCsfg()]
 
 # 程序包 (计算页右上角选择)：GRASPG 的程序装在 GRASP2018 的 bin 目录中，以此程序判断是否已安装
 PACKAGES = ("GRASP2018", "GRASPG")
@@ -1639,10 +1722,11 @@ STEP_GROUPS = {
     ],
     "GRASPG": [
         ("核与组态", ["rnucleus", "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg"]),
-        ("自洽场与 CI", ["rangular_csfg", "rwfnestimate_csfg", "rmcdhf_csfg", "rsave_csfg", "rci_csfg"]),
+        ("自洽场与 CI", ["rangular_csfg", "rwfnestimate_csfg", "rmcdhf_csfg", "rsave_csfg", "rci_csfg", "rci_block_csfg"]),
         ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
         ("结果与工具", ["jj2lsj_csfg", "rlevels_csfg", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
-        ("CSFG 工具", ["rcsfgexpand_csfg", "rcsfgextend_csfg", "rcsfgblocksplit_csfg", "rmixaccumulate_csfg"]),
+        ("CSFG 工具", ["rcsfgexpand_csfg", "rcsfgextend_csfg", "rcsfgblocksplit_csfg", "rmixaccumulate_csfg",
+                       "rdistHmatrix_csfg"]),
     ],
 }
 
@@ -1681,7 +1765,7 @@ GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rangular", "rwfnest
                "jj2lsj", "rhfs", "ris4",
                "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg", "rangular_csfg", "rwfnestimate_csfg",
                "rmcdhf_csfg", "rsave_csfg", "rci_csfg", "jj2lsj_csfg", "rcsfgexpand_csfg", "rcsfgextend_csfg",
-               "rcsfgblocksplit_csfg", "rmixaccumulate_csfg")
+               "rcsfgblocksplit_csfg", "rmixaccumulate_csfg", "rci_block_csfg")
 
 # even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))
 EVEN_DEFAULTS = {
@@ -1895,6 +1979,21 @@ def check_mcp_csfg(cwd, np, mpitmp):
     return None
 
 
+def check_hmatrix(cwd, np, mpitmp):
+    """rci_block_csfg 重启前：MPI 临时目录中保存的 H 矩阵 (<rank>/rci<rank>.res) 必须与进程数相同。"""
+    tmp = os.path.join(cwd, mpitmp)
+    np = max(np, 1)
+    k = 0
+    while os.path.isfile(os.path.join(tmp, f"{k:03d}", f"rci{k:03d}.res")):
+        k += 1
+    if not k:
+        return T("找不到保存的 H 矩阵 (在 {d} 中)：请先用“只构造并保存 H 矩阵”运行 rci_block_csfg。", d=tmp)
+    if k != np:
+        return T("保存的 H 矩阵是 {k} 个 MPI 进程的 (在 {d} 中)，重启必须使用相同的进程数：请把 MPI 进程数设为 {k}，"
+                 "或先用 rdistHmatrix_csfg 重新分配给 {np} 个进程。", k=k, d=tmp, np=np)
+    return None
+
+
 def csfg_failed(tail):
     """GRASPG 的程序出错时也以退出码 0 结束，只在输出中报告 (如 "rlabel.inp not exists, Stop Error!"、
     "Error!name.l is not found ..."、"Problems with opening the file name.g"，或 Fortran 的 STOP 'Error! …')。"""
@@ -1992,7 +2091,8 @@ class Runner:
         self.emit(f"\n===== {job['title']} =====\n", "head")
         for a in job["pre"]:
             self.do_action(a, cfg)
-        check = {"rmcdhf": check_mcp, "rmcdhf_mem": check_mcp, "rmcdhf_csfg_mpi": check_mcp_csfg}.get(job["prog"])
+        check = ({"hmatrix": check_hmatrix}.get(job.get("check")) or
+                 {"rmcdhf": check_mcp, "rmcdhf_mem": check_mcp, "rmcdhf_csfg_mpi": check_mcp_csfg}.get(job["prog"]))
         if check:
             err = check(cfg["cwd"], cfg["np"], cfg["mpitmp"])
             if err:

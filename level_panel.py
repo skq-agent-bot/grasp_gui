@@ -837,7 +837,8 @@ class LevelPanel(Panel):
                 it.setToolTip(T("无法读取：{e}", e=res))
                 continue
             it.setForeground(QColor("black"))
-            it.setToolTip(path)
+            # 逐块写出、尚未写完的文件 (GRASPG 的 rci_block_csfg)：只显示完整的块
+            it.setToolTip(path + ("\n" + T("文件尚未写完，只显示已完成的块") if getattr(res[0], "partial", False) else ""))
             data.append((os.path.basename(path), path, *res))
         energies = [lv.energy for _, _, blocks, *_ in data for b in blocks for lv in b.levels]
         e0 = min(energies) if energies else 0.0

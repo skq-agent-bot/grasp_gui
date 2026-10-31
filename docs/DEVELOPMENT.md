@@ -231,8 +231,16 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
   rsave_csfg 的 .c 逐字节相同)、`rcsfgextend_csfg` (提问同 rcsfgsplit_csfg，读 name.g/name.l)、`rcsfgblocksplit_csfg`
   (名称 + “各块同一组轨道?” 回答 y；输出 name_odd1.g …)、`rmixaccumulate_csfg` (名称、CI?、比例、排序?、换轨道集? [+ 轨道集]；
   输出 rcsfg.out 或 rcsfg.nmax)。错误识别补充了 “Error!… is not found”“Problems with opening the file” 等写法。
-- 尚未做成程序页 (可用“自定义”运行)：`rci_block_csfg_mpi` (逐块 CI)、`rcsfgzerofirst_csfg` (零阶 / 一阶空间划分，要配合
-  rangular_csfg 和 rci_csfg 的非默认提问：一阶微扰、icut)、`rdistHmatrix_csfg` (改变进程数时重新分配 H 矩阵)。
+- **逐块 CI** (`rci_block_csfg`，一个程序页三种方式)：默认设置时提问与 rci_csfg 相同，能级行为空 (一个空格) 时
+  “No state is selected, just build H-matrix”：只构造 H 矩阵，存在 `MPI_TMP/<rank>/rci<rank>.res`、`ncols<rank>.txt`，
+  并写出没有能级的 name.cm。重启用非默认设置：`n`、名称、`y` (Restarting RCI90?)、自能 y/n、降低 CRITE y/n、内存、能级
+  (光速等不再询问)。重启必须与保存时进程数相同，否则先用 `rdistHmatrix_csfg` (源目录、目标目录、源进程数、目标进程数；
+  目标目录必须已存在) 重新分配；程序页先把 MPI 临时目录 `mv -T` 为源目录再 `mkdir`。实测 (graspg1 的 oddCI6/evenCI6 拆块，
+  2 进程构造、重新分配后 1 进程重启) 能量与 rci_csfg 相同 (1e-8 Hartree 以内)。
+- **未写完的混合系数文件**：`grasp_mix.read_mix` 读到不完整的记录时保留已完整的块，结果的 `partial` 为真 (能级图在文件的
+  提示中说明)；只有文件头不完整时才报错。
+- 尚未做成程序页 (可用“自定义”运行)：`rcsfgzerofirst_csfg` (零阶 / 一阶空间划分，要配合 rangular_csfg 和 rci_csfg 的
+  非默认提问：一阶微扰、icut，见 `graspgtest/script3_ZF`)。
 
 ## 测试方法
 
@@ -263,9 +271,8 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
 - **V3** (分支 `v3`)：支持 GRASP 的扩展和再开发版本。基础工作：把各程序的输入规则（`grasp_core.py` 中的字段和提问顺序）按
   “程序包 / 版本”区分 (共享配置的 `package` 字段已为此预留)，按 bin 目录中的程序识别可用的扩展，并识别它们特有的程序和文件格式。
   - **GRASPG** (优先)：不能无缝替换 GRASP2018 (见第 14 节)。已完成：程序包选择、CSFG 流程的程序页 (`.g`/`.l` 文件、
-    `rcsfggenerate_csfg` 等的提问)、示例 graspg1、CSFG 工具 (expand、extend、blocksplit、mixaccumulate)。待做：零阶 / 一阶
-    划分 (rcsfgzerofirst_csfg 及 rangular/rci 的非默认提问)，逐块 CI (`rci_block_csfg_mpi`) 的程序页，查看器容忍逐块写出的
-    混合系数文件。
+    `rcsfggenerate_csfg` 等的提问)、示例 graspg1、CSFG 工具 (expand、extend、blocksplit、mixaccumulate)。逐块 CI (rci_block_csfg、
+    rdistHmatrix_csfg)，查看器读未写完的混合系数文件。待做：零阶 / 一阶划分 (rcsfgzerofirst_csfg 及 rangular/rci 的非默认提问)。
   - **QED** (暂缓，先做 GRASPG)：[compas/grasp-rci-qed](https://github.com/compas/grasp-rci-qed) 的 `rci-qed` (改写的 `rci_mpi`，单独安装到
     `$GRASP/bin`；自能可选不同模型，包括 Shabaev 等的模型算符 QEDMOD、Flambaum–Ginges、Pyykkö–Zhao 和原来的氢样估计；设置另存为
     TOML 文件)。`rci-qed.pt <state>` (命令行参数，不是交互输入) 把各能级的能量按项列出：动能 + 核势、Coulomb、Breit、正常 / 特殊质量
