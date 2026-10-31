@@ -2,7 +2,7 @@
 """
 GRASP 图形界面 (Qt / PySide6)。主窗口上方是工作目录和运行设置，下面三个标签页：
   计算    calc_panel.py   填写各程序的参数，自动生成交互输入并在工作目录中运行 (可组成流程、导出脚本)
-  波函数  wfn_panel.py    径向波函数的图和轨道性质
+  径向波函数  wfn_panel.py    径向波函数的图和轨道性质
   能级图  level_panel.py  能级图、组成和跃迁
 共用的控件在 gui_common.py 中，与界面无关的部分在 grasp_*.py 中。界面支持中文 / English。
 
@@ -114,11 +114,11 @@ def level_panel(workdir, settings=gc.saved_settings):
 
 
 # ---------------------------------------------------------------------------
-#  主窗口：工作目录和运行设置，下面是计算、波函数、能级图三个标签页
+#  主窗口：工作目录和运行设置，下面是计算、径向波函数、能级图三个标签页
 # ---------------------------------------------------------------------------
 
 class MainWindow(QMainWindow):
-    TABS = [("calc", "计算"), ("wfn", "波函数"), ("levels", "能级图")]
+    TABS = [("calc", "计算"), ("wfn", "径向波函数"), ("levels", "能级图")]
 
     def __init__(self, workdir=None, tab=None):
         super().__init__()
@@ -380,9 +380,9 @@ class MainWindow(QMainWindow):
 USAGE = """用法：
   grasp_gui [目录]           打开主界面 (默认为上次的工作目录)
   grasp_gui levels [目录]    打开主界面的能级图页 (默认为当前目录)
-  grasp_gui wfn [目录]       打开主界面的波函数页 (默认为当前目录)
+  grasp_gui wfn [目录]       打开主界面的径向波函数页 (默认为当前目录)
   grasp_gui 文件             按文件内容打开对应的页并只勾选这个文件：
-                             混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 波函数
+                             混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 径向波函数
   选项 --lang zh|en          界面语言
 
 以 grasp_levels 或 grasp_wfn 为名的符号链接直接打开对应的页，例如：

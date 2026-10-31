@@ -80,12 +80,9 @@ EN = {
     "设置": "Settings",
     # 波函数查看器
     "工具": "Tools",
-    "波函数查看器…": "Wave function viewer…",
-    "波函数…": "Wave functions…",
-    "波函数查看器": "Wave function viewer",
     "目录": "Directory",
     "刷新": "Refresh",
-    "波函数文件 (勾选要比较的文件)": "Wave function files (check those to compare)",
+    "径向波函数文件 (勾选要比较的文件)": "Radial wave function files (check those to compare)",
     "添加其他文件…": "Add other file…",
     "视图": "View",
     "放大字体": "Larger font",
@@ -153,7 +150,7 @@ EN = {
     "J = 0 → J = 0：单光子跃迁严格禁戒。": "J = 0 → J = 0: single-photon transitions are strictly forbidden.",
     "已算出 {k}。结果保存在 {d}": "{k} computed. Results are kept in {d}",
     "工作目录中没有 isodata：{d}": "No isodata in the working directory: {d}",
-    "无法确定与 {f} 对应的波函数文件，候选：{c}。请把对应的 .w 文件命名为与混合系数文件同名 (如 {s}.w)。":
+    "无法确定与 {f} 对应的径向波函数文件，候选：{c}。请把对应的 .w 文件命名为与混合系数文件同名 (如 {s}.w)。":
         "Cannot tell which wave function file belongs to {f} (candidates: {c}). Name the matching .w file "
         "like the mixing coefficient file (e.g. {s}.w).",
     "找不到与 {f} 对应的 {what} 文件": "No {what} file matching {f} found",
@@ -216,15 +213,12 @@ EN = {
     "网格点数": "Grid points",
     "GRASP 中束缚态的轨道能量记为正值": "GRASP stores orbital energies of bound states as positive numbers",
     "大分量 P(r) 的节点数；谱学轨道应为 n − l − 1": "Nodes of the large component P(r); n − l − 1 for spectroscopic orbitals",
-    "{n} 个波函数文件": "{n} wave function file(s)",
-    "此目录中没有波函数文件": "No wave function files in this directory",
+    "{n} 个径向波函数文件": "{n} radial wave function file(s)",
+    "此目录中没有径向波函数文件": "No radial wave function files in this directory",
     "{f} 不是 GRASP 径向波函数文件": "{f} is not a GRASP radial wave function file",
     "无法读取：{e}": "Cannot read: {e}",
     "… 另有 {n} 条": "… {n} more",
     # 能级与组成查看器
-    "能级与组成查看器…": "Levels and compositions…",
-    "能级与组成查看器": "Levels and compositions",
-    "能级…": "Levels…",
     "原子单位 (Hartree)": "atomic units (Hartree)",
     "相对能量 ({u})": "Relative energy ({u})",
     "能量单位": "Energy unit",
@@ -561,10 +555,10 @@ EN = {
     "目录不是空的：{p}": "The directory is not empty: {p}",
     # 主窗口的三个标签页、单独的窗口
     "计算": "Calculation",
-    "波函数": "Wave functions",
+    "径向波函数": "Radial wave functions",
     "能级图": "Levels",
     "在新窗口中打开": "Open in new window",
-    "在新窗口中打开{t}": "Open {t} in new window",
+    "在新窗口中打开{t}": "Open in new window: {t}",
     "在单独的窗口中打开当前的查看器，可以查看其他目录或与计算页并排":
         "Open the current viewer in a separate window, e.g. for another directory or next to the calculation",
     "最近": "Recent",
@@ -581,9 +575,9 @@ EN = {
     """用法：
   grasp_gui [目录]           打开主界面 (默认为上次的工作目录)
   grasp_gui levels [目录]    打开主界面的能级图页 (默认为当前目录)
-  grasp_gui wfn [目录]       打开主界面的波函数页 (默认为当前目录)
+  grasp_gui wfn [目录]       打开主界面的径向波函数页 (默认为当前目录)
   grasp_gui 文件             按文件内容打开对应的页并只勾选这个文件：
-                             混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 波函数
+                             混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 径向波函数
   选项 --lang zh|en          界面语言
 
 以 grasp_levels 或 grasp_wfn 为名的符号链接直接打开对应的页，例如：
@@ -591,7 +585,7 @@ EN = {
   ln -s /路径/grasp_gui ~/.local/bin/grasp_wfn""": """Usage:
   grasp_gui [DIR]            open the main window (default: the last working directory)
   grasp_gui levels [DIR]     open the main window on the level diagram (default: current directory)
-  grasp_gui wfn [DIR]        open the main window on the wave functions (default: current directory)
+  grasp_gui wfn [DIR]        open the main window on the radial wave functions (default: current directory)
   grasp_gui FILE             open the page for the file's contents with only this file checked:
                              mixing coefficient file (.m, .cm) -> levels, radial wave functions (.w) -> wfn
   option --lang zh|en        interface language

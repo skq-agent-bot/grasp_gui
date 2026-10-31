@@ -10,7 +10,7 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 ## Features / 功能
 
 - **Main window**: the working directory and the run settings (GRASP `bin`, MPI) at the top, below three tabs:
-  *Calculation*, *Wave functions* and *Levels*. The viewers show the working directory and are refreshed when
+  *Calculation*, *Radial wave functions* and *Levels*. The viewers show the working directory and are refreshed when
   a run finishes; *Open in new window* shows a viewer in a separate window with its own directory (e.g. to
   compare with another calculation). Directories and files can be dropped onto the viewers, and
   `grasp_gui levels`, `grasp_gui wfn` or `grasp_gui FILE` open the GUI directly on a viewer (see *Usage*).
@@ -44,7 +44,7 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   `<working directory>/.grasp_gui.json` and restored when the directory is opened again. On start the GUI
   opens the directory used last time.
 - Save / load all parameters and the pipeline as JSON.
-- **Wave functions** (tab): reads the `.w`
+- **Radial wave functions** (tab): reads the `.w`
   files of the working directory and plots P(r), Q(r) and P² + Q² on an r, log r or √r axis; several files can
   be overlaid (e.g. `odd2.w` … `odd6.w`), each orbital in one colour and each file in one line style. A table
   lists orbital energies, ⟨r⟩, peak position, nodes (vs. n − l − 1) and norms. Export as PNG or CSV.
@@ -75,7 +75,7 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   computed transitions as a GRASP file (`even4.odd4.ct`) for `rtabtrans1` / `rtabtrans2`. Configuration
   abbreviations (default: noble-gas cores [He] … [Rn]) can be edited; core orbitals of the CSF file are included.
 
-**主窗口**：上方是工作目录和运行设置 (GRASP `bin`、MPI)，下面三个标签页：计算、波函数、能级图。查看器显示工作目录中的结果，
+**主窗口**：上方是工作目录和运行设置 (GRASP `bin`、MPI)，下面三个标签页：计算、径向波函数、能级图。查看器显示工作目录中的结果，
 计算完成后自动刷新；“在新窗口中打开”在单独的窗口中显示查看器，可以看另一个目录 (例如与另一次计算对照)。可以把目录或文件拖到查看器上；
 `grasp_gui levels`、`grasp_gui wfn` 或 `grasp_gui 文件` 直接打开对应的页 (见“用法”)。
 **示例**（“文件 → 导入示例…”）：GRASP2018 手册中的算例 (example1–5、8、9，case1、case4) 做成现成的流程，
@@ -85,7 +85,7 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 “复制到 …”把当前组的参数复制到另一组并替换名称。
 **工作目录记录**：参数、态组和流程自动保存在 `工作目录/.grasp_gui.json`，再次打开该目录时自动恢复；
 启动时打开上次使用的目录。
-**波函数**（标签页）：读取工作目录中的 `.w` 文件，绘制 P(r)、Q(r)
+**径向波函数**（标签页）：读取工作目录中的 `.w` 文件，绘制 P(r)、Q(r)
 和径向密度 P² + Q²，可叠加多个文件比较；表格列出轨道能量、⟨r⟩、峰值位置、节点数和归一化；可导出 PNG 或 CSV。按文件内容识别波函数文件，与文件名无关 (`rwfn.inp`、`rwfn.out` 或改过名的文件也能找到)。
 **能级与组成**（“能级图”标签页）：读取混合系数文件 (`.m`、`.cm`) 画出能级图，
 每个 J^π 一列；鼠标停在能级上显示信息，点击能级 (或能级列表中的一行) 显示该原子态的组成：jj 耦合下的 CSF
@@ -112,7 +112,7 @@ python3 grasp_gui.py                  # 中文界面，打开上次的工作目�
 python3 grasp_gui.py path/to/workdir  # 打开指定的工作目录 / open this working directory
 python3 grasp_gui.py --lang en        # English interface
 python3 grasp_gui.py levels [dir]     # 直接打开能级图页 (默认为当前目录) / open on the Levels tab
-python3 grasp_gui.py wfn [dir]        # 直接打开波函数页 / open on the Wave functions tab
+python3 grasp_gui.py wfn [dir]        # 直接打开径向波函数页 / open on the Radial wave functions tab
 python3 grasp_gui.py even4.cm         # 按文件内容打开对应的页，只勾选这个文件 / open the page for this file
 python3 grasp_gui.py --help
 ```
@@ -186,7 +186,7 @@ Fonts are bundled, so the GUI also works on machines without (Chinese) fonts: No
 | `gui_common.py` | Widgets shared by the tabs: run settings, recent directories, base class of the viewer panels and their separate window |
 | `calc_panel.py` | *Calculation* tab: forms generated from the field definitions in `grasp_core.py`, pipeline, runs and output |
 | `grasp_wfn.py` | Reads GRASP radial wave function files (`.w`) and computes orbital properties (standard library only) |
-| `wfn_panel.py` | *Wave functions* tab (plots drawn with QPainter) |
+| `wfn_panel.py` | *Radial wave functions* tab (plots drawn with QPainter) |
 | `grasp_mix.py` | Reads mixing coefficient files (`.m`, `.cm`), CSF lists (`.c`) and `jj2lsj` labels (`.lsj.lbl`) (standard library only) |
 | `level_panel.py` | *Levels* tab: energy level diagram, ASF composition and transitions |
 | `grasp_trans.py` | Transitions between two levels: prepares and runs `rbiotransform` / `rtransition` in a private directory, reads the results (standard library only) |

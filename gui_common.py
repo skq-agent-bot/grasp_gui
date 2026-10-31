@@ -2,7 +2,7 @@
 界面各部分共用的控件：字体与小控件、GRASP bin 目录和 MPI 设置、最近的目录，以及查看器面板的基类
 (Panel) 和单独显示一个面板的窗口 (PanelWindow)。
 
-主窗口 (grasp_gui.py) 有三个标签页：计算 (calc_panel.py)、波函数 (wfn_panel.py)、能级图 (level_panel.py)。
+主窗口 (grasp_gui.py) 有三个标签页：计算 (calc_panel.py)、径向波函数 (wfn_panel.py)、能级图 (level_panel.py)。
 """
 
 import os
@@ -247,7 +247,7 @@ def saved_settings():
 # ---------------------------------------------------------------------------
 
 class Panel(QWidget):
-    """波函数和能级图面板的基类。
+    """径向波函数和能级图面板的基类。
 
     在主窗口的标签页中，面板显示主窗口的工作目录 (由主窗口调用 set_dir)；在单独的窗口 (PanelWindow)
     中有自己的目录栏。子类设置 KIND / TITLE，在界面中加入 dir_bar()，并实现 scan() (重新列出目录中的

@@ -1,5 +1,5 @@
 """
-波函数查看器：读取工作目录中的 GRASP 径向波函数文件 (*.w)，列出轨道性质，并绘制
+径向波函数查看器：读取工作目录中的 GRASP 径向波函数文件 (*.w)，列出轨道性质，并绘制
 P(r)、Q(r) 和径向密度 P² + Q²；可叠加多个文件比较 (如 odd2.w … odd6.w)。
 
 绘图用 Qt 自绘 (QPainter)，不依赖 matplotlib。
@@ -320,7 +320,7 @@ class PlotWidget(QWidget):
 
 
 class WfnPanel(Panel):
-    KIND, TITLE = "wfn", "波函数"
+    KIND, TITLE = "wfn", "径向波函数"
 
     def __init__(self, workdir):
         super().__init__()
@@ -335,7 +335,7 @@ class WfnPanel(Panel):
         left = QWidget()
         ll = QVBoxLayout(left)
         ll.setContentsMargins(0, 0, 0, 0)
-        ll.addWidget(QLabel(T("波函数文件 (勾选要比较的文件)")))
+        ll.addWidget(QLabel(T("径向波函数文件 (勾选要比较的文件)")))
         self.files = QListWidget()
         self.files.itemChanged.connect(self.files_changed)
         ll.addWidget(self.files, 2)
@@ -418,7 +418,7 @@ class WfnPanel(Panel):
         self.add_item(path, True, True)
 
     def scan(self):
-        """列出目录中的波函数文件；默认勾选最新的一个 (保留已勾选的)。"""
+        """列出目录中的径向波函数文件；默认勾选最新的一个 (保留已勾选的)。"""
         d = self.dir.text()
         checked = {self.files.item(i).data(Qt.UserRole) for i in range(self.files.count())
                    if self.files.item(i).checkState() == Qt.Checked}
@@ -433,7 +433,7 @@ class WfnPanel(Panel):
             self.add_item(path, path in checked, path in extra)
         self.files.blockSignals(False)
         self.files_changed()
-        self.status(T("{n} 个波函数文件", n=len(paths)) if paths else T("此目录中没有波函数文件"))
+        self.status(T("{n} 个径向波函数文件", n=len(paths)) if paths else T("此目录中没有径向波函数文件"))
 
     def add_item(self, path, checked, extra=False):
         item = QListWidgetItem(os.path.basename(path) if not extra else path)
