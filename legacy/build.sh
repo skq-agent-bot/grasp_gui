@@ -5,7 +5,7 @@
 #
 # Needs Docker (DOCKER=... selects the client, e.g. docker.exe of Docker Desktop from WSL). The program is the same
 # as the normal build (build.sh), but runs on Qt 5.15 (PySide2) through the stand-in package legacy/PySide6.
-set -e
+set -e -o pipefail
 cd "$(dirname "$0")/.."
 DOCKER=${DOCKER:-docker}
 
@@ -27,10 +27,17 @@ for doc in fonts-noto-cjk fonts-dejavu-core; do
     [ -f "/usr/share/doc/$doc/copyright" ] && cp "/usr/share/doc/$doc/copyright" "$FONTS/LICENSE-$doc"
 done
 
-# Build context: the source files (tracked or new, not ignored, as they are in the working tree) and the fonts;
-# the result comes back as a tar stream.
+# Build context: the source files (in a git checkout: tracked or new, not ignored, as they are in the working tree;
+# otherwise, e.g. from git archive, everything except build/ and dist/) and the fonts; the result comes back as a tar stream.
+sources() {
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git ls-files -z --cached --others --exclude-standard
+    else
+        find . -path ./build -prune -o -path ./dist -prune -o -type f -printf '%P\0'
+    fi
+}
 mkdir -p dist
-{ git ls-files -z --cached --others --exclude-standard; find "$FONTS" -type f -print0; } \
+{ sources; find "$FONTS" -type f -print0; } \
     | tar --null -T - -c \
     | "$DOCKER" build -f legacy/Dockerfile -o - - \
     | tar -x -O grasp_gui > dist/grasp_gui-legacy
