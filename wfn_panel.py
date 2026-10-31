@@ -14,11 +14,12 @@ import struct
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMessageBox,
-                               QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPushButton,
-                               QSplitter, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget)
+                               QListWidget, QListWidgetItem, QPushButton, QSplitter, QTableWidget,
+                               QTableWidgetItem, QToolTip, QVBoxLayout, QWidget)
 
 import grasp_wfn as wfn
 from grasp_core import T
+from gui_common import Panel
 
 # 轨道配色 (同一轨道在各图中颜色相同)，文件用线型区分
 COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd", "#8c564b", "#e377c2", "#17becf",
@@ -318,24 +319,16 @@ class PlotWidget(QWidget):
         self.update()
 
 
-class WfnViewer(QMainWindow):
+class WfnPanel(Panel):
+    KIND, TITLE = "wfn", "波函数"
+
     def __init__(self, workdir):
         super().__init__()
-        self.setWindowTitle(T("波函数查看器"))
-        self.resize(1250, 860)
         self.cache = {}            # 路径 -> (mtime, 轨道列表 或 错误信息)
 
-        central = QWidget()
-        lay = QVBoxLayout(central)
-        top = QHBoxLayout()
-        top.addWidget(QLabel(T("目录")))
-        self.dir = QLineEdit(workdir)
-        self.dir.editingFinished.connect(self.scan)
-        top.addWidget(self.dir, 1)
-        for text, slot in [("浏览…", self.pick_dir), ("刷新", self.scan)]:
-            b = QPushButton(T(text))
-            b.clicked.connect(slot)
-            top.addWidget(b)
+        lay = QVBoxLayout(self)
+        top = self.dir_bar(workdir)
+        top.addStretch()
         lay.addLayout(top)
 
         split = QSplitter(Qt.Horizontal)
@@ -416,21 +409,15 @@ class WfnViewer(QMainWindow):
         split.addWidget(right)
         split.setSizes([260, 990])
         lay.addWidget(split, 1)
-        self.setCentralWidget(central)
         self.layout_plots()
         self.scan()
 
     # ---- 文件 ----
-    def pick_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "", self.dir.text())
-        if d:
-            self.dir.setText(d)
-            self.scan()
+    def files_checked(self):
+        self.files_changed()
 
-    def set_dir(self, d):
-        if os.path.abspath(d) != os.path.abspath(self.dir.text()):
-            self.dir.setText(d)
-            self.scan()
+    def add_extra_file(self, path):
+        self.add_item(path, True, True)
 
     def scan(self):
         """列出目录中的波函数文件；默认勾选最新的一个 (保留已勾选的)。"""
@@ -448,7 +435,7 @@ class WfnViewer(QMainWindow):
             self.add_item(path, path in checked, path in extra)
         self.files.blockSignals(False)
         self.files_changed()
-        self.statusBar().showMessage(T("{n} 个波函数文件", n=len(paths)) if paths else T("此目录中没有波函数文件"))
+        self.status(T("{n} 个波函数文件", n=len(paths)) if paths else T("此目录中没有波函数文件"))
 
     def add_item(self, path, checked, extra=False):
         item = QListWidgetItem(os.path.basename(path) if not extra else path)
@@ -632,7 +619,7 @@ class WfnViewer(QMainWindow):
                                               "PNG (*.png)")
         if path:
             self.canvas.grab().save(path)
-            self.statusBar().showMessage(T("已导出 {p}", p=path))
+            self.status(T("已导出 {p}", p=path))
 
     def export_csv(self):
         sel, _ = self.selected()
@@ -648,4 +635,4 @@ class WfnViewer(QMainWindow):
             for label, o, _, _ in sel:
                 for r, p, q in zip(o.r, o.P, o.Q):
                     w.writerow([label, o.name, o.kappa, repr(r), repr(p), repr(q)])
-        self.statusBar().showMessage(T("已导出 {p}", p=path))
+        self.status(T("已导出 {p}", p=path))

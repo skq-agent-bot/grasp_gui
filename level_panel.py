@@ -19,8 +19,7 @@ from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetricsF, QImage, 
                            QTextCursor)
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
                                QFormLayout, QHBoxLayout, QLabel, QMenu, QMessageBox, QSpinBox,
-                               QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPlainTextEdit,
-                               QPushButton, QSplitter,
+                               QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QSplitter,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QTabWidget, QToolTip,
                                QVBoxLayout, QWidget)
 
@@ -28,7 +27,8 @@ import grasp_core as core
 import grasp_mix as mix
 import grasp_trans as tr
 from grasp_core import T
-from wfn_viewer import fmt, nice_ticks
+from gui_common import Panel, saved_settings
+from wfn_panel import fmt, nice_ticks
 
 # (下拉框中的名称 (用时再翻译), 表头和坐标轴中的简写, 1 a.u. 折合多少, 显示格式)；第一个为默认单位
 UNITS = [("eV", "eV", mix.HARTREE_EV, "{:.5f}"), ("cm⁻¹", "cm⁻¹", mix.HARTREE_CM, "{:.2f}"),
@@ -638,20 +638,12 @@ class DiagramExportDialog(QDialog):
         form.addRow(buttons)
 
 
-def saved_settings():
-    """单独打开查看器时的运行设置：主窗口保存的 GRASP bin 目录和 MPI 设置。"""
-    cfg = core.load_config()
-    return dict(bindir=core.default_bindir(), np=int(cfg.get("np", 1)), mpirun=cfg.get("mpirun", "mpirun"),
-                mpitmp=cfg.get("mpitmp", "tmp_mpi"), nice=cfg.get("nice", True))
-
-
-class LevelViewer(QMainWindow):
+class LevelPanel(Panel):
+    KIND, TITLE = "levels", "能级图"
     MAX_ROWS = 500
 
     def __init__(self, workdir, settings=saved_settings):
         super().__init__()
-        self.setWindowTitle(T("能级与组成查看器"))
-        self.resize(1400, 880)
         self.settings = settings   # 返回运行设置 (bindir, np, mpirun, mpitmp, nice) 的函数
         self.cache = {}            # 路径 -> (mtime, 数据)
         self.levels = {}           # key -> (文件标签, 路径, Level)
@@ -669,17 +661,8 @@ class LevelViewer(QMainWindow):
         self.timer.timeout.connect(self.poll)
         self.timer.start(100)
 
-        central = QWidget()
-        lay = QVBoxLayout(central)
-        top = QHBoxLayout()
-        top.addWidget(QLabel(T("目录")))
-        self.dir = QLineEdit(workdir)
-        self.dir.editingFinished.connect(self.scan)
-        top.addWidget(self.dir, 1)
-        for text, slot in [("浏览…", self.pick_dir), ("刷新", self.scan)]:
-            b = QPushButton(T(text))
-            b.clicked.connect(slot)
-            top.addWidget(b)
+        lay = QVBoxLayout(self)
+        top = self.dir_bar(workdir)
         top.addSpacing(12)
         top.addWidget(QLabel(T("能量单位")))
         self.unit = QComboBox()
@@ -696,6 +679,7 @@ class LevelViewer(QMainWindow):
         menu.addAction(T("组态缩写…")).triggered.connect(lambda: AbbrevDialog.edit(self, self.preview_desc()))
         export.setMenu(menu)
         top.addWidget(export)
+        top.addStretch()
         lay.addLayout(top)
 
         split = QSplitter(Qt.Horizontal)
@@ -776,20 +760,11 @@ class LevelViewer(QMainWindow):
         split.addWidget(right)
         split.setSizes([220, 660, 520])
         lay.addWidget(split, 1)
-        self.setCentralWidget(central)
         self.scan()
 
     # ---- 文件 ----
-    def pick_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "", self.dir.text())
-        if d:
-            self.dir.setText(d)
-            self.scan()
-
-    def set_dir(self, d):
-        if os.path.abspath(d) != os.path.abspath(self.dir.text()):
-            self.dir.setText(d)
-            self.scan()
+    def files_checked(self):
+        self.redraw()
 
     def scan(self):
         """列出混合系数文件；默认勾选 CI 结果 (.cm)，没有时勾选最新的 .m (保留已勾选的)。"""
@@ -810,7 +785,7 @@ class LevelViewer(QMainWindow):
             self.files.addItem(it)
         self.files.blockSignals(False)
         self.redraw()
-        self.statusBar().showMessage(T("{n} 个混合系数文件", n=len(paths)) if paths
+        self.status(T("{n} 个混合系数文件", n=len(paths)) if paths
                                      else T("此目录中没有混合系数文件"))
 
     def cached(self, path, reader):
@@ -1183,7 +1158,7 @@ class LevelViewer(QMainWindow):
         except OSError as e:
             QMessageBox.critical(self, T("错误"), T("无法写入 {p}", p=e))
             return
-        self.statusBar().showMessage(T("已导出 {p}", p=path))
+        self.status(T("已导出 {p}", p=path))
 
     LEVEL_HEADER = ["file", "J", "2J", "parity", "index", "configuration", "configuration_full", "term", "E_total_au", "E_rel_au",
                     "E_rel_cm-1", "E_rel_eV", "purity_percent", "leading_component", "lsj_label", "leading_csf_jj"]
@@ -1212,7 +1187,7 @@ class LevelViewer(QMainWindow):
         except OSError as e:
             QMessageBox.critical(self, T("错误"), T("无法写入 {p}", p=e))
             return
-        self.statusBar().showMessage(T("已导出 {p} ({n} 行)", p=path, n=len(rows)))
+        self.status(T("已导出 {p} ({n} 行)", p=path, n=len(rows)))
 
     TRANSITION_HEADER = (["type"] + [f"{s}_{c}" for s in ("upper", "lower") for c in
                                      ("file", "J", "parity", "index", "configuration", "term", "E_total_au")] +
@@ -1287,7 +1262,7 @@ class LevelViewer(QMainWindow):
         except OSError as e:
             QMessageBox.critical(self, T("错误"), T("无法写入 {p}", p=e))
             return
-        self.statusBar().showMessage(T("已导出 {p} ({n} 条跃迁)", p=path, n=len(transitions)))
+        self.status(T("已导出 {p} ({n} 条跃迁)", p=path, n=len(transitions)))
 
     def level_name(self, key):
         fname, _, lv, *_ = self.levels[key]
@@ -1356,7 +1331,7 @@ class LevelViewer(QMainWindow):
             self.marked.remove((ku, kl))
             self.save_marked()
             self.update_arrows()
-            self.statusBar().showMessage(T("已从图上移除 {u} → {l}", u=self.level_name(ku), l=self.level_name(kl)))
+            self.status(T("已从图上移除 {u} → {l}", u=self.level_name(ku), l=self.level_name(kl)))
 
     def unmark_selected(self):
         it = self.marked_list.currentItem()
@@ -1589,7 +1564,7 @@ class LevelViewer(QMainWindow):
         jobs = ws.jobs(rid, kinds, {x.key: x for x in core.STEPS})
         self.running = (ws, rid, kinds)
         what = T("全部 J") if subset is None else T("所选 J")
-        self.statusBar().showMessage(T("正在计算 {k} 跃迁 ({w}，{n} 个进程) …", k=", ".join(kinds), w=what, n=cfg["np"]))
+        self.status(T("正在计算 {k} 跃迁 ({w}，{n} 个进程) …", k=", ".join(kinds), w=what, n=cfg["np"]))
         self.show_pair()
         threading.Thread(target=self.runner.run_all, daemon=True,
                          args=(jobs, cfg, lambda ok: self.q.put((ok, "done")))).start()
@@ -1622,13 +1597,15 @@ class LevelViewer(QMainWindow):
             except (OSError, RuntimeError) as e:
                 ok = False
                 self.tr_log.appendPlainText(T("\n*** 错误: {e}\n", e=e))
-        self.statusBar().showMessage(T("跃迁计算完成") if ok else T("跃迁计算失败，见下方的程序输出"))
+        self.status(T("跃迁计算完成") if ok else T("跃迁计算失败，见下方的程序输出"))
         self.load_transitions()
         if ok and self.pair and self.tr_by_pair.get(frozenset(self.pair)):
             self.mark(*self.pair)               # 算好后在图上画出这条跃迁
         self.show_transitions()
 
-    def closeEvent(self, event):
+    def busy(self):
+        return bool(self.running)
+
+    def shutdown(self):
         if self.running:
             self.runner.kill()
-        super().closeEvent(event)

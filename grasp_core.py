@@ -559,6 +559,46 @@ EN = {
     "已导入示例“{t}”到 {p}；点“▶ 运行全部”开始计算":
         "Imported the example “{t}” into {p}; press “▶ Run all” to start",
     "目录不是空的：{p}": "The directory is not empty: {p}",
+    # 主窗口的三个标签页、单独的窗口
+    "计算": "Calculation",
+    "波函数": "Wave functions",
+    "能级图": "Levels",
+    "在新窗口中打开": "Open in new window",
+    "在新窗口中打开{t}": "Open {t} in new window",
+    "在单独的窗口中打开当前的查看器，可以查看其他目录或与计算页并排":
+        "Open the current viewer in a separate window, e.g. for another directory or next to the calculation",
+    "最近": "Recent",
+    "最近打开的目录": "Recently opened directories",
+    "最近的目录": "Recent directories",
+    "最近的工作目录": "Recent working directories",
+    "打开目录…": "Open directory…",
+    "关闭": "Close",
+    "窗口": "Window",
+    "(无)": "(none)",
+    "找不到目录 {p}": "Directory not found: {p}",
+    "无法识别 {p}：不是 GRASP 的混合系数文件或径向波函数文件":
+        "Cannot open {p}: not a GRASP mixing coefficient file or radial wave function file",
+    """用法：
+  grasp_gui [目录]           打开主界面 (默认为上次的工作目录)
+  grasp_gui levels [目录]    打开主界面的能级图页 (默认为当前目录)
+  grasp_gui wfn [目录]       打开主界面的波函数页 (默认为当前目录)
+  grasp_gui 文件             按文件内容打开对应的页并只勾选这个文件：
+                             混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 波函数
+  选项 --lang zh|en          界面语言
+
+以 grasp_levels 或 grasp_wfn 为名的符号链接直接打开对应的页，例如：
+  ln -s /路径/grasp_gui ~/.local/bin/grasp_levels
+  ln -s /路径/grasp_gui ~/.local/bin/grasp_wfn""": """Usage:
+  grasp_gui [DIR]            open the main window (default: the last working directory)
+  grasp_gui levels [DIR]     open the main window on the level diagram (default: current directory)
+  grasp_gui wfn [DIR]        open the main window on the wave functions (default: current directory)
+  grasp_gui FILE             open the page for the file's contents with only this file checked:
+                             mixing coefficient file (.m, .cm) -> levels, radial wave functions (.w) -> wfn
+  option --lang zh|en        interface language
+
+A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
+  ln -s /path/to/grasp_gui ~/.local/bin/grasp_levels
+  ln -s /path/to/grasp_gui ~/.local/bin/grasp_wfn""",
 }
 
 

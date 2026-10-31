@@ -9,6 +9,12 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 
 ## Features / 功能
 
+- **Main window**: the working directory and the run settings (GRASP `bin`, MPI) at the top, below three tabs:
+  *Calculation*, *Wave functions* and *Levels*. The viewers show the working directory and are refreshed when
+  a run finishes; *Open in new window* shows a viewer in a separate window with its own directory (e.g. to
+  compare with another calculation). Directories and files can be dropped onto the viewers, and
+  `grasp_gui levels`, `grasp_gui wfn` or `grasp_gui FILE` open the GUI directly on a viewer (see *Usage*).
+
 - **Examples** (*File → Import example…*): the examples of the GRASP2018 manual (example1–5, 8, 9, case1 and
   case4) as ready-made pipelines. An example is imported into an empty directory with all parameters and the
   whole pipeline; press *▶ Run all* to compute it from scratch. The dialog shows what each example does, its
@@ -38,19 +44,19 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   `<working directory>/.grasp_gui.json` and restored when the directory is opened again. On start the GUI
   opens the directory used last time.
 - Save / load all parameters and the pipeline as JSON.
-- **Wave function viewer** (*Tools → Wave function viewer…* or the *Wave functions…* button): reads the `.w`
+- **Wave functions** (tab): reads the `.w`
   files of the working directory and plots P(r), Q(r) and P² + Q² on an r, log r or √r axis; several files can
   be overlaid (e.g. `odd2.w` … `odd6.w`), each orbital in one colour and each file in one line style. A table
   lists orbital energies, ⟨r⟩, peak position, nodes (vs. n − l − 1) and norms. Export as PNG or CSV.
   Files are recognised by their content, not their name, so `rwfn.inp`, `rwfn.out` and renamed files are found too.
-- **Levels and compositions** (*Tools → Levels and compositions…* or the *Levels…* button): reads the mixing
+- **Levels and compositions** (*Levels* tab): reads the mixing
   coefficient files (`.m`, `.cm`) and draws an energy level diagram, one column per J^π (odd parity red, even
   blue). Hover a level for details, click it (or a row of the level list) to see the composition of the ASF:
   the jj-coupled CSF mixing coefficients with configurations from the `.c` file, and the LSJ composition from
   `jj2lsj` (`.lsj.lbl`). Energies relative to the lowest level in eV (default), cm⁻¹ or atomic units; the choice is remembered.
   The matching `.c` and `.lsj.lbl` files are found by content (number of orbitals, CSFs and J^π of each block;
   energies of the levels), so they need not share the name of the mixing file.
-- **Transitions on demand** (in the level viewer): drag from one level to another (or Shift-click a second level)
+- **Transitions on demand** (*Levels* tab): drag from one level to another (or Shift-click a second level)
   and press *Compute (selected J)*. Nothing has to be prepared beforehand: the GUI runs `rbiotransform` (the
   biorthogonal transformation, skipped when both levels come from the same file) and `rtransition` for the
   multipoles allowed between the two levels (E1, or M2 when E1 is forbidden; M1 and E2 between levels of the
@@ -63,12 +69,15 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   Each computed transition you connect is drawn as an arrow labelled with its wavelength (right-click an
   arrow to remove it); the arrows are kept per working directory. A table lists all computed transitions of
   the selected level with branching ratios (optionally also drawn in the diagram).
-- **Export** (level viewer): the level diagram as PDF (fonts embedded), SVG or PNG, labelled with configuration
+- **Export** (*Levels* tab): the level diagram as PDF (fonts embedded), SVG or PNG, labelled with configuration
   and term (e.g. [Ne]3s3p ¹P°₁; J^π when there is no jj2lsj result) and the marked transitions; level data
   and transitions as CSV (UTF-8, NIST-style configurations such as `[Ne]3s.3p` and terms such as `1P*`); the
   computed transitions as a GRASP file (`even4.odd4.ct`) for `rtabtrans1` / `rtabtrans2`. Configuration
   abbreviations (default: noble-gas cores [He] … [Rn]) can be edited; core orbitals of the CSF file are included.
 
+**主窗口**：上方是工作目录和运行设置 (GRASP `bin`、MPI)，下面三个标签页：计算、波函数、能级图。查看器显示工作目录中的结果，
+计算完成后自动刷新；“在新窗口中打开”在单独的窗口中显示查看器，可以看另一个目录 (例如与另一次计算对照)。可以把目录或文件拖到查看器上；
+`grasp_gui levels`、`grasp_gui wfn` 或 `grasp_gui 文件` 直接打开对应的页 (见“用法”)。
 **示例**（“文件 → 导入示例…”）：GRASP2018 手册中的算例 (example1–5、8、9，case1、case4) 做成现成的流程，
 导入到一个空目录后带有全部参数和计算流程，点“▶ 运行全部”即可从头计算。对话框中有各示例的说明、所需时间、
 用到的程序，以及手册算例结果的参考能量，便于对照。
@@ -76,18 +85,18 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 “复制到 …”把当前组的参数复制到另一组并替换名称。
 **工作目录记录**：参数、态组和流程自动保存在 `工作目录/.grasp_gui.json`，再次打开该目录时自动恢复；
 启动时打开上次使用的目录。
-**波函数查看器**（“工具 → 波函数查看器…”或“波函数…”按钮）：读取工作目录中的 `.w` 文件，绘制 P(r)、Q(r)
+**波函数**（标签页）：读取工作目录中的 `.w` 文件，绘制 P(r)、Q(r)
 和径向密度 P² + Q²，可叠加多个文件比较；表格列出轨道能量、⟨r⟩、峰值位置、节点数和归一化；可导出 PNG 或 CSV。按文件内容识别波函数文件，与文件名无关 (`rwfn.inp`、`rwfn.out` 或改过名的文件也能找到)。
-**能级与组成查看器**（“工具 → 能级与组成查看器…”或“能级…”按钮）：读取混合系数文件 (`.m`、`.cm`) 画出能级图，
+**能级与组成**（“能级图”标签页）：读取混合系数文件 (`.m`、`.cm`) 画出能级图，
 每个 J^π 一列；鼠标停在能级上显示信息，点击能级 (或能级列表中的一行) 显示该原子态的组成：jj 耦合下的 CSF
 混合系数 (组态来自 `.c` 文件) 以及 jj2lsj 给出的 LSJ 组成 (`.lsj.lbl`)。能量相对于最低能级，默认用 eV，可切换为 cm⁻¹ 或原子单位，并记住选择。对应的 `.c` 和 `.lsj.lbl` 文件按内容匹配 (轨道数、各块的 CSF 数与 J^π，以及能级能量)，不要求与混合系数文件同名。
-**计算跃迁**（在能级与组成查看器中）：从一个能级拖到另一个能级 (或按住 Shift 点击第二个能级)，再点“计算跃迁 (所选 J)”。
+**计算跃迁**（“能级图”标签页）：从一个能级拖到另一个能级 (或按住 Shift 点击第二个能级)，再点“计算跃迁 (所选 J)”。
 不需要事先准备：界面自动运行 `rbiotransform` (双正交变换；两个能级来自同一个文件时跳过) 和 `rtransition`，
 跃迁类型按两个能级的 J 和宇称选择 (E1，E1 禁戒时为 M2；同宇称为 M1 和 E2)。默认只算两个能级所在的 J^π
 (界面写出只含这些块的 `.c`、`.cm`)，进程数沿用主窗口；“计算全部 J (MPI)”算两个文件之间的全部跃迁 (用于寿命和分支比)，
 用 MPI 版本和旁边设置的进程数。计算范围内的所有能级一次算完，之后点其中其他能级对可直接显示；结果 (Babushkin 和 Coulomb 两种规范下的
 A、gf、S) 保存在 `工作目录/.grasp_gui/tr/` 中，输入文件不变就一直沿用。连上并算好的跃迁画成带波长的箭头 (右键点箭头移除)，按工作目录保存；表格列出选中能级的全部已算跃迁及分支比 (也可在图上显示)。
-**导出**（能级查看器）：能级图导出为 PDF (嵌入字体)、SVG 或 PNG，标注组态和谱项 (如 [Ne]3s3p ¹P°₁；没有 jj2lsj 结果时标 J^π) 以及图上标注的跃迁；
+**导出**（“能级图”标签页）：能级图导出为 PDF (嵌入字体)、SVG 或 PNG，标注组态和谱项 (如 [Ne]3s3p ¹P°₁；没有 jj2lsj 结果时标 J^π) 以及图上标注的跃迁；
 能级数据和跃迁导出为 CSV (UTF-8，组态用 NIST 写法如 `[Ne]3s.3p`，谱项如 `1P*`)；已算跃迁可保存为 GRASP 文件 (如 `even4.odd4.ct`)，
 直接交给 `rtabtrans1` / `rtabtrans2`。组态缩写规则可编辑 (默认为惰性气体原子实 [He] … [Rn])，CSF 文件中的核心轨道计入组态。
 
@@ -102,6 +111,20 @@ A、gf、S) 保存在 `工作目录/.grasp_gui/tr/` 中，输入文件不变就�
 python3 grasp_gui.py                  # 中文界面，打开上次的工作目录
 python3 grasp_gui.py path/to/workdir  # 打开指定的工作目录 / open this working directory
 python3 grasp_gui.py --lang en        # English interface
+python3 grasp_gui.py levels [dir]     # 直接打开能级图页 (默认为当前目录) / open on the Levels tab
+python3 grasp_gui.py wfn [dir]        # 直接打开波函数页 / open on the Wave functions tab
+python3 grasp_gui.py even4.cm         # 按文件内容打开对应的页，只勾选这个文件 / open the page for this file
+python3 grasp_gui.py --help
+```
+
+A symbolic link named `grasp_levels` or `grasp_wfn` opens that tab directly, e.g. for the standalone executable:
+
+以 `grasp_levels` 或 `grasp_wfn` 为名的符号链接直接打开对应的页，例如：
+
+```bash
+ln -s ~/bin/grasp_gui-linux-x86_64 ~/.local/bin/grasp_gui
+ln -s ~/bin/grasp_gui-linux-x86_64 ~/.local/bin/grasp_levels
+ln -s ~/bin/grasp_gui-linux-x86_64 ~/.local/bin/grasp_wfn
 ```
 
 The language can also be switched in the *Language / 语言* menu; the choice is remembered in
@@ -159,11 +182,13 @@ Fonts are bundled, so the GUI also works on machines without (Chinese) fonts: No
 | File | Content |
 |---|---|
 | `grasp_core.py` | Toolkit-independent core: field definitions and input rules of each program, running (serial / MPI), shell and Slurm export, translations |
-| `grasp_gui.py` | Qt (PySide6) interface; forms are generated from the field definitions in `grasp_core.py` |
+| `grasp_gui.py` | Qt (PySide6) main window: working directory, run settings, the three tabs, menus, command line |
+| `gui_common.py` | Widgets shared by the tabs: run settings, recent directories, base class of the viewer panels and their separate window |
+| `calc_panel.py` | *Calculation* tab: forms generated from the field definitions in `grasp_core.py`, pipeline, runs and output |
 | `grasp_wfn.py` | Reads GRASP radial wave function files (`.w`) and computes orbital properties (standard library only) |
-| `wfn_viewer.py` | Wave function viewer window (plots drawn with QPainter) |
+| `wfn_panel.py` | *Wave functions* tab (plots drawn with QPainter) |
 | `grasp_mix.py` | Reads mixing coefficient files (`.m`, `.cm`), CSF lists (`.c`) and `jj2lsj` labels (`.lsj.lbl`) (standard library only) |
-| `level_viewer.py` | Energy level diagram, ASF composition and transition window |
+| `level_panel.py` | *Levels* tab: energy level diagram, ASF composition and transitions |
 | `grasp_trans.py` | Transitions between two levels: prepares and runs `rbiotransform` / `rtransition` in a private directory, reads the results (standard library only) |
 | `demos/*.json` | The examples: parameters and pipeline of each manual example, reference energies |
 | `tools/make_demos.py` | Generates `demos/*.json`; `--check` compares the generated input with the manual's input files |
