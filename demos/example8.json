@@ -1,0 +1,270 @@
+{
+ "demo_format": 1,
+ "id": "example8",
+ "order": 8,
+ "title": {
+  "zh": "例 8：Be I 2s² ¹S，自然轨道",
+  "en": "Example 8: Be I 2s² ¹S, natural orbitals"
+ },
+ "summary": {
+  "zh": "2s² 与 2p² 的 Dirac-Fock，逐层扩展到 n = 3、4 的 MCDHF，CI 后用 rdensity 求自然轨道，再在自然轨道基上重做 CI；rmixextract 输出两种轨道下的主要 CSF 成分，便于比较。",
+  "en": "Dirac-Fock for 2s² and 2p², MCDHF in layers n = 3 and 4, CI, natural orbitals from rdensity and CI again in the natural-orbital basis; rmixextract lists the main CSF components in both bases for comparison."
+ },
+ "runtime": {
+  "zh": "几秒钟",
+  "en": "a few seconds"
+ },
+ "jobs": [
+  {
+   "step": "rnucleus",
+   "vals": {
+    "z": "4",
+    "a": "9",
+    "revise": false,
+    "rms": "",
+    "skin": "2.3",
+    "mass": "9",
+    "spin": "1",
+    "mu": "1",
+    "q": "1"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "1",
+    "lists": [
+     {
+      "configs": "2s(2,i)\n2p(2,i)",
+      "active": "2s,2p",
+      "jmin": "0",
+      "jmax": "0",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "DF.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "DF.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": false,
+    "wfile": "",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "",
+    "save": "DF"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "1",
+    "lists": [
+     {
+      "configs": "2s(2,*)",
+      "active": "3s,3p,3d",
+      "jmin": "0",
+      "jmax": "0",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "n3.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "n3.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "DF.w",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "5"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "",
+    "save": "n3"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "1",
+    "lists": [
+     {
+      "configs": "2s(2,*)",
+      "active": "4s,4p,4d,4f",
+      "jmin": "0",
+      "jmax": "0",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "n4.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "n4.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "n3.w",
+    "forbs": "*",
+    "method": "4",
+    "orbs": "*",
+    "delz": "5"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "",
+    "save": "n4"
+   }
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "n4",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": false,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "3",
+    "levels": "1",
+    "log": ""
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "rmixextract",
+    "args": "",
+    "stdin": "0\nn4\ny\n0\nn\n",
+    "log": "mix4"
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "rdensity",
+    "args": "",
+    "stdin": "y\nn4\ny\n2\n",
+    "log": ""
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "n4.c n4NO.c",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "n4.nw n4NO.w",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "n4NO",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": false,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "3",
+    "levels": "1",
+    "log": ""
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "rmixextract",
+    "args": "",
+    "stdin": "0\nn4NO\ny\n0\nn\n",
+    "log": "mix4NO"
+   }
+  }
+ ],
+ "reference": [
+  {
+   "file": "n4.cm",
+   "energies": [
+    -14.6208974366
+   ]
+  },
+  {
+   "file": "n4NO.cm",
+   "energies": [
+    -14.6208973822
+   ]
+  }
+ ]
+}

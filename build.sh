@@ -46,6 +46,7 @@ done
     --distpath dist --workpath build/pyinstaller --specpath build \
     --hidden-import __future__ \
     --add-data "$PWD/$FONTS:fonts" \
+    --add-data "$PWD/demos/*.json:demos" \
     grasp_gui.py
 
 echo

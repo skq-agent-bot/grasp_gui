@@ -1,0 +1,640 @@
+{
+ "demo_format": 1,
+ "id": "case1",
+ "order": 10,
+ "title": {
+  "zh": "算例 1：Mo XXXVIII 2s²2p 和 2s2p²，逐层扩展与 E1 跃迁",
+  "en": "Case 1: Mo XXXVIII 2s²2p and 2s2p², layer by layer, E1 transitions"
+ },
+ "summary": {
+  "zh": "手册第一个完整算例，也是本程序各页的默认参数。奇宇称 2s²2p、2p³ 和偶宇称 2s2p² 分别从 Dirac-Fock 开始，用 rcsfsplit 把到 n = 6 的单、双激发列表按层拆分，逐层做 n = 3 到 6 的 MCDHF，再做含 Breit 和 QED 的 CI，最后计算 E1 跃迁。",
+  "en": "The first complete case of the manual, also the default parameters of this program. Odd 2s²2p, 2p³ and even 2s2p² each start from Dirac-Fock; the list of single and double excitations to n = 6 is split into layers with rcsfsplit, MCDHF is done layer by layer for n = 3 to 6, then CI with Breit and QED, and finally the E1 transitions."
+ },
+ "runtime": {
+  "zh": "单进程约 50 分钟",
+  "en": "about 50 minutes serial"
+ },
+ "jobs": [
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(2,i)2p(1,i)\n1s(2,i)2p(3,i)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "odd2.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2s(2,*)2p(1,*)\n1s(2,*)2p(3,*)",
+      "active": "6s,6p,6d,6f,6g,6h",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "odd.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfsplit",
+   "vals": {
+    "state": "odd",
+    "splits": "3s,3p,3d 3\n4s,4p,4d,4f 4\n5s,5p,5d,5f,5g 5\n6s,6p,6d,6f,6g,6h 6"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(1,i)2p(2,i)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "even2.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2s(1,*)2p(2,*)",
+      "active": "6s,6p,6d,6f,6g,6h",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "even.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfsplit",
+   "vals": {
+    "state": "even",
+    "splits": "3s,3p,3d 3\n4s,4p,4d,4f 4\n5s,5p,5d,5f,5g 5\n6s,6p,6d,6f,6g,6h 6"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rnucleus",
+   "vals": {
+    "z": "42",
+    "a": "96",
+    "revise": false,
+    "rms": "",
+    "skin": "2.3",
+    "mass": "96",
+    "spin": "1",
+    "mu": "1",
+    "q": "1"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "odd2.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": false,
+    "wfile": "",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "outodd_rmcdhf_initial",
+    "save": "odd2"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "even2.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": false,
+    "wfile": "",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "outeven_rmcdhf_initial",
+    "save": "even2"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "odd3.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd2.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outodd_rmcdhf_3",
+    "save": "odd3"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "odd3",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "odd4.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd3.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outodd_rmcdhf_4",
+    "save": "odd4"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "odd4",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "odd5.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd4.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "5*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outodd_rmcdhf_5",
+    "save": "odd5"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "odd5",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "odd6.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd5.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "6*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outodd_rmcdhf_6",
+    "save": "odd6"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "odd6",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "oddCI6",
+    "copyfrom": "odd6",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "4",
+    "levels": "1\n1",
+    "log": "outodd_rci"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "oddCI6",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "even3.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "even2.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outeven_rmcdhf_3",
+    "save": "even3"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "even3",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "even4.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "even3.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outeven_rmcdhf_4",
+    "save": "even4"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "even4",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "even5.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "even4.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "5*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outeven_rmcdhf_5",
+    "save": "even5"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "even5",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "even6.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "even5.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "6*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outeven_rmcdhf_6",
+    "save": "even6"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "even6",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "evenCI6",
+    "copyfrom": "even6",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "4",
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "log": "outeven_rci"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "evenCI6",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rbiotransform",
+   "vals": {
+    "ci": true,
+    "init": "oddCI6",
+    "final": "evenCI6",
+    "log": "out_rbiotransform"
+   }
+  },
+  {
+   "step": "rtransition",
+   "vals": {
+    "ci": true,
+    "init": "oddCI6",
+    "final": "evenCI6",
+    "kind": "E1",
+    "m1_diffj": false,
+    "e2_diffj": false,
+    "log": "out_transition"
+   }
+  }
+ ],
+ "reference": [
+  {
+   "file": "oddCI6.cm",
+   "energies": [
+    -2386.3200262479,
+    -2381.924210085
+   ]
+  },
+  {
+   "file": "evenCI6.cm",
+   "energies": [
+    -2382.239199716,
+    -2376.5312708185,
+    -2371.9005560309,
+    -2378.9986341387,
+    -2376.7269965623,
+    -2371.8561114894,
+    -2378.1476302474,
+    -2373.9013616569
+   ]
+  }
+ ]
+}

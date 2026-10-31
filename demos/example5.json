@@ -1,0 +1,385 @@
+{
+ "demo_format": 1,
+ "id": "example5",
+ "order": 5,
+ "title": {
+  "zh": "例 5：Ni XIV 3s²3p³ 和 3s3p⁴、3s²3p²3d，E1 跃迁",
+  "en": "Example 5: Ni XIV 3s²3p³ and 3s3p⁴, 3s²3p²3d, E1 transitions"
+ },
+ "summary": {
+  "zh": "两种宇称共用一组多参考 Dirac-Fock 轨道，再分别做到 n = 4 的价电子关联 (rcsfinteract 用 Dirac-Coulomb-Breit 判断相互作用)、MCDHF 和 CI，计算奇、偶宇称之间的 E1 跃迁。手册中给偶宇称能级加唯一标记 (.uni) 的手工步骤没有收录，跃迁直接用原来的文件计算。",
+  "en": "One set of multireference Dirac-Fock orbitals for both parities, then valence correlation to n = 4 for each parity (rcsfinteract with the Dirac-Coulomb-Breit interaction), MCDHF and CI, and E1 transitions between the odd and even levels. The manual's manual step that gives the even levels unique labels (.uni) is not included; the transitions use the original files."
+ },
+ "runtime": {
+  "zh": "约 5 分钟",
+  "en": "about 5 minutes"
+ },
+ "jobs": [
+  {
+   "step": "rnucleus",
+   "vals": {
+    "z": "28",
+    "a": "61",
+    "revise": false,
+    "rms": "",
+    "skin": "2.3",
+    "mass": "58.6934",
+    "spin": "1",
+    "mu": "1",
+    "q": "1"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "1",
+    "lists": [
+     {
+      "configs": "2s(2,i)2p(6,i)3s(1,i)3p(4,i)\n2s(2,i)2p(6,i)3s(2,i)3p(2,i)3d(1,i)",
+      "active": "3s,3p,3d",
+      "jmin": "1",
+      "jmax": "9",
+      "nexc": "0"
+     },
+     {
+      "configs": "2s(2,i)2p(6,i)3s(2,i)3p(3,i)",
+      "active": "3s,3p",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "Ni_mr.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "Ni_mr.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": false,
+    "wfile": "",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1-8\n1\n1-11\n1-3\n1-10\n1\n1-5\n1-2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "999",
+    "log": "",
+    "save": "Ni_mr"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "1",
+    "lists": [
+     {
+      "configs": "2s(2,i)2p(6,i)3s(1,i)3p(4,i)\n2s(2,i)2p(6,i)3s(2,i)3p(2,i)3d(1,i)",
+      "active": "3s,3p,3d",
+      "jmin": "1",
+      "jmax": "9",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "Ni_even_mr.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "1",
+    "lists": [
+     {
+      "configs": "2s(2,i)2p(6,i)3s(1,*)3p(4,*)\n2s(2,i)2p(6,i)3s(2,*)3p(2,*)3d(1,*)",
+      "active": "4s,4p,4d,4f",
+      "jmin": "1",
+      "jmax": "9",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "Ni_even_n4.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfinteract",
+   "vals": {
+    "mr": "Ni_even_mr.c",
+    "full": "Ni_even_n4.c",
+    "ham": "2",
+    "saveas": "Ni_even_n4.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "Ni_even_n4.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "Ni_mr.w",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1-8\n1-11\n1-10\n1-5\n1-2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "999",
+    "log": "",
+    "save": "Ni_even_n4"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "Ni_even_n4",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": false,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "4",
+    "levels": "1-8\n1-11\n1-10\n1-5\n1-2",
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "Ni_even_n4",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "1",
+    "lists": [
+     {
+      "configs": "2s(2,i)2p(6,i)3s(2,i)3p(3,i)",
+      "active": "3s,3p",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "Ni_odd_mr.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "1",
+    "lists": [
+     {
+      "configs": "2s(2,i)2p(6,i)3s(2,*)3p(3,*)",
+      "active": "4s,4p,4d,4f",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "Ni_odd_n4.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfinteract",
+   "vals": {
+    "mr": "Ni_odd_mr.c",
+    "full": "Ni_odd_n4.c",
+    "ham": "2",
+    "saveas": "Ni_odd_n4.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "Ni_odd_n4.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "Ni_mr.w",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1-3\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "999",
+    "log": "",
+    "save": "Ni_odd_n4"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "Ni_odd_n4",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": false,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "4",
+    "levels": "1\n1-3\n1",
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "Ni_odd_n4",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rlevels",
+   "vals": {
+    "files": "Ni_even_n4.cm Ni_odd_n4.cm",
+    "log": "energy4"
+   }
+  },
+  {
+   "step": "rbiotransform",
+   "vals": {
+    "ci": true,
+    "init": "Ni_odd_n4",
+    "final": "Ni_even_n4",
+    "log": "out_rbiotransform"
+   }
+  },
+  {
+   "step": "rtransition",
+   "vals": {
+    "ci": true,
+    "init": "Ni_odd_n4",
+    "final": "Ni_even_n4",
+    "kind": "E1",
+    "m1_diffj": false,
+    "e2_diffj": false,
+    "log": "out_transition"
+   }
+  }
+ ],
+ "reference": [
+  {
+   "file": "Ni_even_n4.cm",
+   "energies": [
+    -1441.6893374884,
+    -1441.145755202,
+    -1441.040747703,
+    -1440.880743134,
+    -1440.5059856511,
+    -1440.4811029725,
+    -1440.2296306452,
+    -1440.1603320135,
+    -1441.7163490161,
+    -1441.4303647271,
+    -1441.1719219417,
+    -1441.002531135,
+    -1440.8744143601,
+    -1440.5811087735,
+    -1440.5083509498,
+    -1440.4611905422,
+    -1440.304097919,
+    -1440.1738625552,
+    -1440.028435379,
+    -1441.7819193232,
+    -1441.4141226424,
+    -1440.9762734062,
+    -1440.9108203567,
+    -1440.8441957881,
+    -1440.5348164423,
+    -1440.3895597155,
+    -1440.2991882121,
+    -1440.1955930243,
+    -1440.0334583065,
+    -1440.9366781947,
+    -1440.8808794397,
+    -1440.7788693806,
+    -1440.622963368,
+    -1440.1590800523,
+    -1440.8905993683,
+    -1440.5997041509
+   ]
+  },
+  {
+   "file": "Ni_odd_n4.cm",
+   "energies": [
+    -1442.8231291344,
+    -1443.2224318182,
+    -1443.0055952612,
+    -1442.7718373513,
+    -1442.96998415
+   ]
+  }
+ ]
+}
