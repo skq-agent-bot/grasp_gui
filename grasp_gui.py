@@ -75,8 +75,8 @@ def fix_fontconfig():
 fix_wsl_display()
 fix_fontconfig()
 
-from PySide6.QtCore import QByteArray, Qt                           # noqa: E402
-from PySide6.QtGui import QAction, QActionGroup, QFontDatabase, QKeySequence     # noqa: E402
+from PySide6.QtCore import QByteArray, QEvent, QObject, Qt          # noqa: E402
+from PySide6.QtGui import QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPalette  # noqa: E402
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit,  # noqa: E402
                                QMainWindow, QMessageBox, QTabWidget, QToolButton, QVBoxLayout, QWidget)
 
@@ -412,6 +412,32 @@ def start_window(args):
     return path, tab, None
 
 
+class WindowFrames(QObject):
+    """在 Wayland 下 (如 WSLg) 窗口的标题栏和边框由 Qt 自己绘制 (bradient 装饰)，颜色取自程序调色板的
+    窗口背景色，与窗口内容相同，又没有窗口阴影，对话框叠在主窗口上时分不清边界。因此把程序调色板的
+    窗口背景色换成 FRAME_COLOR (只有标题栏和边框直接使用程序调色板)，各窗口在显示前恢复原来的调色板。"""
+    FRAME_COLOR = QColor("#c3cede")
+
+    def __init__(self, app):
+        super().__init__(app)
+        framed = app.palette()
+        # 每种颜色都显式设置：复制来的调色板不带“已设置”标记，设给窗口后仍会沿用程序调色板
+        self.normal = QPalette()
+        for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+            for role in range(QPalette.NColorRoles.value):
+                role = QPalette.ColorRole(role)
+                self.normal.setBrush(group, role, framed.brush(group, role))
+        for group in (QPalette.Active, QPalette.Inactive):
+            framed.setColor(group, QPalette.Window, self.FRAME_COLOR)
+        app.setPalette(framed)
+        app.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Polish and obj.isWidgetType() and obj.isWindow():
+            obj.setPalette(self.normal)
+        return False
+
+
 def main():
     args = sys.argv[1:]
     if "--lang" in args and args.index("--lang") + 1 < len(args):
@@ -433,6 +459,8 @@ def main():
     global DEFAULT_PT
     DEFAULT_PT = app.font().pointSizeF() if app.font().pointSizeF() > 0 else DEFAULT_PT
     load_fonts()
+    if app.platformName().startswith("wayland"):
+        app.frames = WindowFrames(app)
     win = MainWindow(workdir, tab)
     win.show()
     if path:
