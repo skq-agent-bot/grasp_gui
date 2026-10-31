@@ -200,6 +200,35 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
   `rlevels_csfg` 与 `rlevels` 读的是同样格式的 `.m`/`.cm`，区别只在于能读部分写完的文件 (`rci_block_csfg_mpi` 逐块计算) 和更长的
   LSJ 标记 (128 字符)。因此径向波函数和能级图页应能直接读 GRASPG 的结果；V3 需要实测，并让 `grasp_mix` 容忍不完整的混合系数文件。
 - **另外注意**：GRASPG 的脚本用了较新的 GRASP 程序 (`jj2lsj_2024`、`rtransition_2024`)，GRASP 主线在 2018 版之后也有更新。
+- **实测** (2026-10-31，单独编译的 GRASP2018 + GRASPG，`graspgtest/script1`，B 样 Mo 到 n = 6)：CSFG 版 5 分钟，CSF 版
+  50 分钟 (4 个 MPI 进程)；`n6.lev` 最大能量差 4.0e-7、`n6CI.clev` 1.1e-6 Hartree (约 0.24 cm⁻¹)，J/宇称顺序相同。
+  V2 的查看器能读 GRASPG 的结果：能量与 `rlevels_csfg` 一致，`.c` 与 LSJ 标记对得上，`.g`/`.l` 不会被当成结果文件。
+- **编译**：GRASPG 的 Makefile 到 `src/lib/*` 找 `.mod`，所以 GRASP2018 要用 make 编译 (CMake 不行)，并串行编译
+  (并行时模块顺序出错)；`srcg` 中 `make` 时需导出 `GRASP`、`FC`、`FC_FLAGS`、`FC_MPI`、`FC_MPIFLAGS`、`LAPACK_LIBS`。
+
+#### V3 中的实现 (分支 `v3`)
+
+- 计算页右上角的“程序包”选择 GRASP2018 / GRASPG，按工作目录保存；只换程序页 (`core.STEP_GROUPS[package]`)，
+  rnucleus、性质与跃迁、表格程序和“自定义”两者共用同一个表单。GRASPG 的程序页是独立的 `Step` 子类 (key 带 `_csfg`)，
+  参数与 GRASP2018 的程序页分开保存，态组 odd/even 照常使用。
+- **标记轨道**：`rcsfggenerate_csfg` 的提问与 `rcsfgenerate` 相同，只是没有开头的排序问题。激发数为 0 的列表 (多参考)
+  必须先给出：它们的活跃轨道成为“标记轨道” (写入 `rlabel.out`)，其余关联轨道才由 CSFG 合并。不给出时所有轨道都是标记轨道：
+  script1 的奇宇称列表由 2420 个 CSFG 变成 16354 个。多参考加激发列表生成的 `rlabel.out` 与只生成多参考时相同。
+- **文件**：`rcsfgsplit_csfg` 读 `name.g` 和 `rlabel.inp`，为每层复制一份 `.l`；`rangular_csfg_mpi` 读 `rcsfg.inp`、
+  `rlabel.inp`，写展开的 `rcsf.out`；`rsave_csfg` 另存 `.g`、`.l`；`rci_csfg_mpi` 读 `name.g/.l/.w`，写 `name.c`。
+  `rcsfginteract_csfg` 读 `rcsfgmr.inp`/`rcsfgmr.l` 和 `rcsfg.inp`/`rlabel.inp` (两个标记文件必须相同)，写 `rcsfg.out`。
+- **rci_csfg 的提问** (`getcid.f90`)：横向频率之后总是问“按 n 限制 Breit”(y/n) 和 n 值、“按 l 限制”和 l 值 (不限制时也读入)；
+  自能之后总是问 NQEDMAX (谱学轨道的最大 n，≤ 8 且不超过列表中的最大 n，超出时程序反复要求重新输入) 和每个进程的内存上限 (GB)。
+- **MPI**：`rangular`、`rmcdhf`、`rci` 只有 `*_csfg_mpi`。不经 mpirun 直接启动 (MPI 单例) 可以运行，所以进程数为 1 时直接启动；
+  角系数总是写在 `$MPI_TMP/000/csfg_mcp000.30` 等 (单进程时也是)，`rmcdhf_csfg` 前按此检查进程数 (`core.check_mcp_csfg`)。
+  任务的 `mpi` 为 `"only"`，导出的脚本在没有 mpirun 时也设置 `MPI_TMP`。
+- **出错时退出码为 0**：如缺少 `rlabel.inp` 时打印 “rlabel.inp not exists, Stop Error!” 后正常退出，Fortran 的
+  `STOP 'Error! …'` 也是。GRASPG 程序结束后检查输出的最后 4 KB (`core.csfg_failed`)，发现错误时停止流程。
+- **示例** `demos/graspg1.json` (`tools/make_demos.py` 的 `graspg1`)：按作者的 `script1/csfg` 逐步写成 (每次 rmcdhf_csfg
+  运行两次，同作者)，参考能量取自该脚本的结果；包括 GRASP2018 的 `rbiotransform`、`rtransition` (作者的脚本中未运行)。
+  共享配置的 `package` 为 `"GRASPG"` (用到 GRASPG 程序页时由 `core.package_of` 确定)；GRASPG 配置也可以用 GRASP2018 的程序页。
+- 尚未做成程序页 (可用“自定义”运行)：`rci_block_csfg_mpi` (逐块 CI，配合 `rcsfgblocksplit_csfg`、`rmixaccumulate_csfg`)、
+  `rcsfgzerofirst_csfg`、`rcsfgexpand_csfg`、`rcsfgextend_csfg`、`rdistHmatrix_csfg`。
 
 ## 测试方法
 
@@ -229,9 +258,10 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
 - **legacy**：旧系统版 (见第 13 节)，与 main 一起发布。
 - **V3** (分支 `v3`)：支持 GRASP 的扩展和再开发版本。基础工作：把各程序的输入规则（`grasp_core.py` 中的字段和提问顺序）按
   “程序包 / 版本”区分 (共享配置的 `package` 字段已为此预留)，按 bin 目录中的程序识别可用的扩展，并识别它们特有的程序和文件格式。
-  - **GRASPG**：不能无缝替换 GRASP2018 (见第 14 节)。需要 CSFG 流程的程序页 (`.g`/`.l` 文件、`rcsfggenerate_csfg` 等的提问)，
-    查看器容忍逐块写出的混合系数文件。
-  - **QED**：[compas/grasp-rci-qed](https://github.com/compas/grasp-rci-qed) 的 `rci-qed` (改写的 `rci_mpi`，单独安装到
+  - **GRASPG** (优先)：不能无缝替换 GRASP2018 (见第 14 节)。已完成：程序包选择、CSFG 流程的程序页 (`.g`/`.l` 文件、
+    `rcsfggenerate_csfg` 等的提问)、示例 graspg1。待做：逐块 CI (`rci_block_csfg_mpi` 等) 的程序页，查看器容忍逐块写出的
+    混合系数文件。
+  - **QED** (暂缓，先做 GRASPG)：[compas/grasp-rci-qed](https://github.com/compas/grasp-rci-qed) 的 `rci-qed` (改写的 `rci_mpi`，单独安装到
     `$GRASP/bin`；自能可选不同模型，包括 Shabaev 等的模型算符 QEDMOD、Flambaum–Ginges、Pyykkö–Zhao 和原来的氢样估计；设置另存为
     TOML 文件)。`rci-qed.pt <state>` (命令行参数，不是交互输入) 把各能级的能量按项列出：动能 + 核势、Coulomb、Breit、正常 / 特殊质量
     移位、真空极化、自能。需要这两个程序的程序页，并在能级图中显示各项修正。作者注明仍在开发中。GRASP2018 自带 `rci` 中的真空极化和

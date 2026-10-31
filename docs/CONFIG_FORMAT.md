@@ -39,7 +39,7 @@ A UTF-8 JSON object. Current version: **2**.
 | `format` | yes | always `"grasp-gui-config"` |
 | `version` | yes | format version (integer). Readers convert older versions; a newer version is refused with a request to update the GUI. 格式版本：旧版本读入时转换，比程序新的版本拒绝导入并提示更新。 |
 | `created_by` | no | program that wrote the file, e.g. `"GRASP GUI 2.1.0"` (informational) |
-| `package` | no | program package, default `"GRASP2018"`; other values (GRASPG, grasp-continuum, …) are reserved for V3 and refused by V2. 程序包；其他值留给 V3。 |
+| `package` | no | program package, default `"GRASP2018"`; `"GRASPG"` (V3) when a step uses a GRASPG tab (`*_csfg`) — such a configuration may also use the GRASP2018 tabs; a GRASP2018 configuration with a GRASPG tab is refused. V2 refuses `"GRASPG"`; other values (grasp-continuum, …) are reserved. 程序包；用到 GRASPG 程序页时为 GRASPG (V3)。 |
 | `title`, `summary`, `runtime` | `title` recommended | a string, or one string per interface language: `{"zh": "…", "en": "…"}` |
 | `author`, `created` | no | author, date (`YYYY-MM-DD`) |
 | `id`, `order` | no | identifier and sort order of the examples shipped with the GUI |

@@ -4,7 +4,7 @@ GRASP2018 手册算例 (demos/*.json) 也采用这个格式。只用标准库，
 
     format, version         固定为 FORMAT 和配置格式的版本 (VERSION)；旧版本的文件读入时由 upgrade 逐版转换
     created_by              导出时的界面版本，如 "GRASP GUI 2.1.0"
-    package                 计算所用的程序包，目前只支持 "GRASP2018"
+    package                 计算所用的程序包："GRASP2018" 或 "GRASPG" (用到 GRASPG 的程序页时)
     title / summary / runtime   字符串，或按语言给出的 {"zh": …, "en": …}
     author, created         作者、日期 (可选)；id, order 用于随程序提供的示例
     jobs                    按顺序组成流程：
@@ -28,7 +28,7 @@ from grasp_core import T
 
 FORMAT = "grasp-gui-config"
 VERSION = 2                    # 1：GUI 1.3 / 2.0 的示例格式 (demo_format = 1)
-PACKAGES = ("GRASP2018",)
+PACKAGES = core.PACKAGES
 MAX_FILE = 1 << 20             # 附带文件：每个最多 1 MB，合计最多 MAX_FILES_TOTAL
 MAX_FILES_TOTAL = 4 << 20
 DEMO_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "demos")
@@ -93,6 +93,8 @@ def check(doc):
         step = STEPS.get(job.get("step"))
         if step is None:
             raise ConfigError(T("第 {i} 步的程序页 {step} 不存在", i=i, step=job.get("step")))
+        if not core.package_allows(package, step.key):
+            raise ConfigError(T("第 {i} 步的程序页 {step} 不属于程序包 {p}", i=i, step=step.key, p=package))
         if step.key in core.GROUP_STEPS and job.get("group", core.GROUPS[0]) not in core.GROUPS:
             raise ConfigError(T("第 {i} 步的态组 {g} 不存在", i=i, g=job.get("group")))
         vals = job.get("vals")
@@ -163,7 +165,7 @@ def make_job(job):
         return dict(title=c.get("title") or c["prog"], prog=c["prog"], args=list(c.get("args", [])),
                     stdin=c.get("stdin", ""), log=c.get("log", ""),
                     pre=[tuple(a) for a in c.get("pre", [])], post=[tuple(a) for a in c.get("post", [])],
-                    mpi=bool(c.get("mpi", False)))
+                    mpi="only" if c.get("mpi") == "only" else bool(c.get("mpi", False)))
     step = STEPS[job["step"]]
     vals = job_values(job)
     out = step.job(vals)
@@ -185,7 +187,8 @@ def session(cfg):
             forms[j["step"]] = job_values(j)
     first = next((j for j in cfg["jobs"] if "step" in j), {})
     return dict(steps=forms, groups=groups, group=first.get("group") or core.GROUPS[0],
-                pipeline=pipeline, tab=first.get("step", core.STEPS[0].key))
+                pipeline=pipeline, tab=first.get("step", core.STEPS[0].key),
+                package=cfg.get("package", core.PACKAGES[0]))
 
 
 def programs(cfg):
@@ -265,7 +268,8 @@ def reference_energies(path):
 
 def export(pipeline, meta, files=(), references=()):
     """由流程生成配置。meta：title、summary、author 等；files、references 为文件路径。"""
-    cfg = dict(format=FORMAT, version=VERSION, created_by=f"GRASP GUI {core.VERSION}", package="GRASP2018")
+    cfg = dict(format=FORMAT, version=VERSION, created_by=f"GRASP GUI {core.VERSION}",
+               package=core.package_of(j.get("step") for j in pipeline))
     cfg.update({k: v for k, v in meta.items() if v})
     cfg["jobs"] = [export_job(j) for j in pipeline]
     if files:

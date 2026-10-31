@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Generate demos/*.json from the examples of the GRASP2018 manual.
+"""Generate demos/*.json from the examples of the GRASP2018 manual and of GRASPG (graspgtest).
 
     tools/make_demos.py                       write demos/*.json
     tools/make_demos.py --check DIR...        also compare the generated program input with the manual's input
                                               files and take the reference energies from the results of the
                                               manual's scripts; each DIR is a copy of GRASP2018's grasptest
-                                              directory, the first one that has a file is used
+                                              (or GRASPG's graspgtest) directory, the first one that has a
+                                              file is used
 
 The demos are shared configurations (grasp_config.py, docs/CONFIG_FORMAT.md). Each job is given as the values of
 the GUI form of that program, so that the imported demo shows them in the forms; the program input (stdin) is
@@ -78,7 +79,8 @@ class Demo:
         self.custom("cp", f"{src} {dst}")
 
     def json(self):
-        return dict(format=grasp_config.FORMAT, version=grasp_config.VERSION, package="GRASP2018", id=self.id,
+        package = core.package_of(j["step"] for j in self.jobs)
+        return dict(format=grasp_config.FORMAT, version=grasp_config.VERSION, package=package, id=self.id,
                     order=self.order, title=self.title, summary=self.summary, runtime=self.runtime, jobs=self.jobs)
 
 
@@ -436,7 +438,77 @@ def case4():
     return d
 
 
-DEMOS = [example1, example2, example3, example4, example5, example8, example9, case1, case4]
+def graspg1():
+    """graspgtest/script1/csfg: the same calculation as case 1 with CSFG lists (each rmcdhf run twice, as there)."""
+    d = Demo("graspg1", 20,
+             dict(zh="GRASPG 示例 1：Mo XXXVIII，与算例 1 相同的计算用 CSFG 完成",
+                  en="GRASPG example 1: Mo XXXVIII, the calculation of case 1 with CSFGs"),
+             dict(zh="GRASPG 作者的第一个示例 (graspgtest/script1/csfg)，需要装有 GRASPG 的 GRASP。物理内容与算例 1 相同："
+                     "奇宇称 2s²2p、2p³ 和偶宇称 2s2p²，到 n = 6 的单、双激发按层拆分，逐层 MCDHF，再做含 Breit 和 QED "
+                     "的 CI。组态列表是 CSFG 列表 (.g) 加标记轨道文件 (.l)：先给出激发数为 0 的多参考列表，再给出激发列表。"
+                     "能量与 GRASP2018 的结果相差约 1e-6 Hartree，用时约为十分之一。",
+                  en="The first example of the GRASPG authors (graspgtest/script1/csfg); needs GRASP with GRASPG "
+                     "installed. The physics is that of case 1: odd 2s²2p, 2p³ and even 2s2p², single and double "
+                     "excitations to n = 6 split into layers, MCDHF layer by layer, then CI with Breit and QED. The "
+                     "configuration lists are CSFG lists (.g) with labelling-orbital files (.l): the multireference "
+                     "lists with 0 excitations come first, then the excitation lists. The energies agree with "
+                     "GRASP2018 to about 1e-6 Hartree in about a tenth of the time."),
+             dict(zh="4 个 MPI 进程约 5 分钟", en="about 5 minutes with 4 MPI processes"),
+             "script1/csfg", ["oddCI6.cm", "evenCI6.cm"])
+    sets = dict(odd=(["1s(2,i)2s(2,i)2p(1,i)", "1s(2,i)2p(3,i)"], ("1", "3"), ["1", "1"], "8"),
+                even=(["1s(2,i)2s(1,i)2p(2,i)"], ("1", "5"), ["1,2,3", "1,2,3", "1,2"], "2"))
+    splits = "3s,3p,3d 3\n4s,4p,4d,4f 4\n5s,5p,5d,5f,5g 5\n6s,6p,6d,6f,6g,6h 6"
+
+    def csfgs(lists, saveas):
+        d.add("rcsfggenerate_csfg", core="0", saveas=saveas,
+              lists=[dict(configs="\n".join(c), active=act, jmin=j[0], jmax=j[1], nexc=n) for c, act, j, n in lists])
+
+    def scf(levels, vary, spec, save, log):
+        # the authors run rmcdhf_csfg twice, the second time starting from the first result
+        for k, s in enumerate(("", save)):
+            if k:
+                d.cp("rwfn.out", "rwfn.inp")
+            d.add("rmcdhf_csfg", levels="\n".join(levels), weights="5", uweights="", vary=vary, spec=spec,
+                  nscf="100", log=log, save=s)
+
+    for g, (mr, j, lv, mem) in sets.items():
+        d.group = g
+        csfgs([(mr, "2s,2p", j, "0")], f"{g}2")
+        sd = [c.replace(",i)", ",*)") for c in mr]
+        # the multireference first (it defines the labelling orbitals), then the excitations
+        csfgs([(sd, "2s,2p", j, "0"), (sd, "6s,6p,6d,6f,6g,6h", j, "2")], g)
+        d.add("rcsfgsplit_csfg", state=g, label=f"{g}.l", splits=splits)
+    d.group = None
+    d.nucleus("42", "96", "96", src=None)
+    for g, (mr, j, lv, mem) in sets.items():
+        d.group = g
+        d.add("rangular_csfg", csf=f"{g}2")
+        d.add("rwfnestimate_csfg", use_file=False, method="3", orbs="*")
+        scf(lv, "*", "*", f"{g}2", f"out_rmcdhf_{g}2")
+        d.add("jj2lsj_csfg", state=f"{g}2", ci=False, unique=True)
+    d.group = None
+    d.add("rlevels_csfg", files="odd2.m even2.m", log="n2.lev")
+    for g, (mr, j, lv, mem) in sets.items():
+        d.group = g
+        for n in range(3, 7):
+            d.add("rangular_csfg", csf=f"{g}{n}")
+            d.add("rwfnestimate_csfg", use_file=True, wfile=f"{g}{n - 1}.w", forbs="*", method="3", orbs="*")
+            scf(lv, f"{n}*", "", f"{g}{n}", f"out_rmcdhf_{g}{n}")
+            d.add("jj2lsj_csfg", state=f"{g}{n}", ci=False, unique=True)
+        d.add("rci_csfg", state=f"{g}CI6", copyfrom=f"{g}6", trans=True, modfreq=True, factor="1.0d-6",
+              limn=False, maxn="15", liml=False, maxl="14", vp=True, nms=False, sms=False, se=True, nqed="2", mem=mem,
+              levels="\n".join(lv), log=f"out_rci_{g}")
+        d.add("jj2lsj_csfg", state=f"{g}CI6", ci=True, unique=True)
+    d.group = None
+    for n in range(3, 7):
+        d.add("rlevels_csfg", files=f"odd{n}.m even{n}.m", log=f"n{n}.lev")
+    d.add("rlevels_csfg", files="oddCI6.cm evenCI6.cm", log="n6CI.clev")
+    d.add("rbiotransform", ci=True, init="oddCI6", final="evenCI6", log="out_rbiotransform")
+    d.add("rtransition", ci=True, init="oddCI6", final="evenCI6", kind="E1", log="out_transition")
+    return d
+
+
+DEMOS = [example1, example2, example3, example4, example5, example8, example9, case1, case4, graspg1]
 
 
 def stdin_of(job):

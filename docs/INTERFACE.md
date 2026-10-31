@@ -66,7 +66,7 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
 ## Calculation tab / 计算页
 
 ```
-┌ Nucleus & CSFs ┬ SCF & CI ┬ Properties & transitions ┬ Results & tools ┐  State group [odd][even] Copy to even
+┌ Nucleus & CSFs ┬ SCF & CI ┬ Properties & transitions ┬ Results & tools ┐  Package [GRASP2018▾]  State group [odd][even] Copy to even
 │ rangular·odd ┬ rwfnestimate·odd ┬ rmcdhf·odd ┬ rsave·odd ┬ rci·odd       │
 │  description of the program                                             │
 │  form fields (label, editor, hint)                                      │
@@ -84,6 +84,28 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
     `rtransition`
   * *Results & tools (结果与工具)*: `jj2lsj`, `rlevels`, `rtablevels`, `rtabtrans1`, `rtabtrans2`, *Custom (自定义)*
     (any program with hand-written input)
+* **Package (程序包)** combo box at the top right: *GRASP2018* (default) or *GRASPG* (V3). It selects which program
+  tabs are shown and is saved per working directory; importing a GRASPG configuration switches to it. With GRASPG
+  the tabs are:
+  * *Nucleus & CSFs*: `rnucleus`, `rcsfggenerate_csfg`, `rcsfginteract_csfg`, `rcsfgsplit_csfg`
+  * *SCF & CI*: `rangular_csfg`, `rwfnestimate_csfg`, `rmcdhf_csfg`, `rsave_csfg`, `rci_csfg`
+  * *Properties & transitions*: as GRASP2018 (they read the expanded `name.c` written by `rsave_csfg` / `rci_csfg`)
+  * *Results & tools*: `jj2lsj_csfg`, `rlevels_csfg`, `rtablevels`, `rtabtrans1`, `rtabtrans2`, *Custom*
+
+  GRASPG forms work on CSFG lists `name.g` + labelling-orbital files `name.l` (names given without extension; the
+  GUI copies them to `rcsfg.inp` / `rlabel.inp`, or `rcsfgmr.inp` / `rcsfgmr.l` for the multireference of
+  `rcsfginteract_csfg`). `rcsfggenerate_csfg` is the `rcsfgenerate` form without the ordering question, with a note
+  that the lists with 0 excitations must come first (they define the labelling orbitals); *Save as* writes `name.g`
+  and `name.l`. `rcsfgsplit_csfg` has *Copy this labelling-orbital file to rlabel.inp*. `rci_csfg` adds *Limit the
+  Breit interaction by n / l* (with the n / l values, always sent), *Largest n of the spectroscopic orbitals
+  (NQEDMAX)* (always asked) and *Memory limit per process (GB)*, and copies `.g/.l/.w`. `rangular_csfg`,
+  `rmcdhf_csfg`, `rci_csfg` exist only as MPI programs (`*_csfg_mpi`): with 1 MPI process they are started directly
+  (MPI_TMP is still set), otherwise with the MPI command. Before `rmcdhf_csfg` the GUI checks the angular files
+  `MPI_TMP/<rank>/csfg_mcp<rank>.*` (same process count, not older than `rcsfg.inp`). GRASPG programs exit with code 0
+  on errors; the GUI recognises their error messages (`Stop Error`, `STOP …error…`) and stops the pipeline.
+  Choosing GRASPG when the bin directory has no `rcsfggenerate_csfg` shows a warning in the status bar.
+  Other GRASPG programs (`rci_block_csfg_mpi`, `rcsfgzerofirst_csfg`, `rcsfgexpand_csfg`, `rmixaccumulate_csfg`, …)
+  can be run from *Custom*.
 * **Forms**: one per program, generated from the field definitions in `grasp_core.py` (description line, fields
   with hints at the right). Inputs follow each program's default-settings question order; they reproduce the inputs
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use
@@ -114,7 +136,7 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
 ### Import example / configuration (导入示例 / 导入配置)
 
 Dialog *Import configuration (导入配置)*: an explanatory line at the top; left the list of examples (GRASP2018 manual:
-example1–5, 8, 9, case1, case4) or, with *Open configuration file… (打开配置文件…)*, a file; right an information
+example1–5, 8, 9, case1, case4; GRASPG: graspg1 = `graspgtest/script1/csfg`, case 1 with CSFGs, package GRASPG) or, with *Open configuration file… (打开配置文件…)*, a file; right an information
 pane: title, origin (*Example included with the program*), summary, *Estimated time (预计时间)*, *Package (程序包)*,
 *Pipeline (流程)* (n steps), *Programs used (用到的程序)* (missing ones in the GRASP bin directory marked), attached
 files, compatibility warnings, **custom commands** (orange, on a light background: *Custom* tab steps and steps
@@ -218,7 +240,7 @@ cannot handle paths longer than 128 characters; the GUI then falls back to the s
 | Where | What |
 |---|---|
 | `~/.config/grasp_gui.json` | language, font size, last working directory, recent directories, GRASP bin, MPI settings, settings collapsed, window geometry, calculation splitter, last tab, Slurm settings, energy unit, level-export options, configuration abbreviations, transition process count, show-links option, configuration author |
-| `<workdir>/.grasp_gui.json` | session: parameters per group, current group, pipeline |
+| `<workdir>/.grasp_gui.json` | session: parameters per group, current group, pipeline, package |
 | `<workdir>/.grasp_gui/tr/` | cached transition calculations |
 | `<workdir>/.grasp_gui/marked.json` | transitions drawn as arrows |
 

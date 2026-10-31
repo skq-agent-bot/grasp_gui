@@ -471,34 +471,61 @@ class ExportDialog(QDialog):
 # ---------------------------------------------------------------------------
 
 class StepNav(QWidget):
-    def __init__(self, forms):
+    """只显示当前程序包的程序页 (core.STEP_GROUPS)；各程序包共用的程序页 (rnucleus 等) 是同一个表单。"""
+
+    def __init__(self, forms, package):
         super().__init__()
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.groups = QTabWidget()
         self.groups.tabBar().setStyleSheet("QTabBar::tab { font-weight: bold; padding: 5px 18px; }")
-        by_key = {f.step.key: f for f in forms}
+        self.by_key = {f.step.key: f for f in forms}
         self.inner = {}                         # 程序 key -> 所在分组的下层标签页
-        for title, keys in core.STEP_GROUPS:
+        lay.addWidget(self.groups)
+        self.set_package(package)
+
+    def set_package(self, package):
+        current = self.currentWidget() if self.groups.count() else None
+        index = self.groups.currentIndex()
+        while self.groups.count():
+            tabs = self.groups.widget(0)
+            self.groups.removeTab(0)
+            while tabs.count():                 # 表单留给别的程序包使用，不随旧标签页删除
+                form = tabs.widget(0)
+                tabs.removeTab(0)
+                form.setParent(None)
+            tabs.deleteLater()
+        self.inner = {}
+        for title, keys in core.STEP_GROUPS[package]:
             tabs = QTabWidget()
             tabs.setDocumentMode(True)
             for key in keys:
-                tabs.addTab(by_key[key], T(by_key[key].step.name))
+                tabs.addTab(self.by_key[key], T(self.by_key[key].step.name))
                 self.inner[key] = tabs
             self.groups.addTab(tabs, T(title).replace("&", "&&"))     # "&" 在标签里是快捷键标记
-        lay.addWidget(self.groups)
+        # 尽量停在原来的位置：同一个程序页，否则同一个分组
+        if current is not None and current.step.key in self.inner:
+            self.setCurrentWidget(current)
+        elif index >= 0:
+            self.groups.setCurrentIndex(min(index, self.groups.count() - 1))
+
+    def has(self, form):
+        return form.step.key in self.inner
 
     def currentWidget(self):
         return self.groups.currentWidget().currentWidget()
 
     def setCurrentWidget(self, form):
-        tabs = self.inner[form.step.key]
+        tabs = self.inner.get(form.step.key)
+        if tabs is None:
+            return
         self.groups.setCurrentWidget(tabs)
         tabs.setCurrentWidget(form)
 
     def setText(self, form, text):
-        tabs = self.inner[form.step.key]
-        tabs.setTabText(tabs.indexOf(form), text)
+        tabs = self.inner.get(form.step.key)
+        if tabs is not None:
+            tabs.setTabText(tabs.indexOf(form), text)
 
     def text(self, form):
         tabs = self.inner[form.step.key]
@@ -529,6 +556,7 @@ class CalcPanel(QWidget):
         self.busy = False
         self.group = core.GROUPS[0]
         self.groups = {g: core.group_defaults(g) for g in core.GROUPS}
+        self.package = core.PACKAGES[0]
         self.slurm = dict(core.SLURM_DEFAULTS, **core.load_config().get("slurm", {}))
         self.formats = {}
         for tag, color in TAG_COLORS.items():
@@ -586,6 +614,18 @@ class CalcPanel(QWidget):
         corner = QWidget()
         gb = QHBoxLayout(corner)
         gb.setContentsMargins(0, 0, 4, 2)
+        package_hint = T("GRASPG 是 GRASP2018 基于组态函数生成器 (CSFG) 的扩展，程序名带 _csfg，装在同一个 bin 目录中；"
+                         "大规模组态展开时计算快得多。")
+        label = QLabel(T("程序包"))
+        label.setToolTip(package_hint)
+        gb.addWidget(label)
+        self.package_box = QComboBox()
+        self.package_box.addItems(core.PACKAGES)
+        self.package_box.setCurrentText(self.package)
+        self.package_box.setToolTip(package_hint)
+        self.package_box.currentTextChanged.connect(self.switch_package)
+        gb.addWidget(self.package_box)
+        gb.addSpacing(12)
         group_hint = T("标签上带组名的程序页按态组分别保存参数，其余程序页两组共用。")
         label = QLabel(T("态组"))
         label.setToolTip(group_hint)
@@ -606,7 +646,7 @@ class CalcPanel(QWidget):
         gb.addWidget(self.copy_btn)
 
         self.forms = [StepForm(step, self.run.bindir()) for step in core.STEPS]
-        self.nav = StepNav(self.forms)
+        self.nav = StepNav(self.forms, self.package)
         self.nav.groups.setCornerWidget(corner, Qt.TopRightCorner)
         for f in self.group_forms():
             f.set_values(self.groups[self.group][f.step.key])
@@ -712,6 +752,27 @@ class CalcPanel(QWidget):
         self.group = g
         self.load_group()
         self.status(T("当前态组：{g}", g=g))
+        self.save_session()
+
+    # ---- 程序包 ----
+    def set_package(self, package):
+        self.package = package if package in core.PACKAGES else core.PACKAGES[0]
+        self.package_box.blockSignals(True)
+        self.package_box.setCurrentText(self.package)
+        self.package_box.blockSignals(False)
+        self.nav.set_package(self.package)
+        self.update_group_labels()
+
+    def switch_package(self, package):
+        if package == self.package:
+            return
+        self.set_package(package)
+        probe = core.PACKAGE_PROBE.get(package)
+        if probe and not os.path.isfile(os.path.join(self.run.bindir(), probe)):
+            self.status(T("GRASP bin 目录中没有 {p}：{pkg} 似乎没有安装 (需要装在 GRASP2018 中，见 compas/graspg)",
+                          p=probe, pkg=package))
+        else:
+            self.status(T("程序包：{p}", p=package))
         self.save_session()
 
     def copy_group(self):
@@ -927,7 +988,7 @@ class CalcPanel(QWidget):
         return dict(workdir=self.cur_workdir, **self.run.values(),
                     slurm=self.slurm, steps={f.step.key: f.values() for f in self.forms},
                     groups=self.groups, group=self.group,
-                    pipeline=self.pipeline, tab=self.nav.currentWidget().step.key)
+                    pipeline=self.pipeline, tab=self.nav.currentWidget().step.key, package=self.package)
 
     def apply(self, data):
         self.run.apply(data)
@@ -951,6 +1012,7 @@ class CalcPanel(QWidget):
                        for g in core.GROUPS}
         self.group = data.get("group") if data.get("group") in core.GROUPS else core.GROUPS[0]
         self.load_group()
+        self.set_package(data.get("package", core.PACKAGES[0]))
         self.pipeline = [dict(j, pre=[tuple(a) for a in j["pre"]], post=[tuple(a) for a in j["post"]])
                          for j in data.get("pipeline", [])]
         self.refresh_list()

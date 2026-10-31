@@ -640,6 +640,46 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
     "第 {steps} 步由旧版本加入流程，没有记录表单参数，只能按原样的命令导出；在程序页中重新“加入流程”可以改为保存参数。": "Steps {steps} were added to the pipeline by an older version without their form parameters and are exported as plain commands; add them to the pipeline again from the program tab to export their parameters.",
     "第 {i} 步含有绝对路径，在别的机器上可能不存在": "Step {i} contains an absolute path, which may not exist on other machines",
     "第 {steps} 步是自定义命令，导入的人会看到这些命令并确认": "Steps {steps} are custom commands; whoever imports the configuration is shown them for confirmation",
+    # GRASPG
+    "GRASPG 是 GRASP2018 基于组态函数生成器 (CSFG) 的扩展，程序名带 _csfg，装在同一个 bin 目录中；大规模组态展开时计算快得多。": "GRASPG extends GRASP2018 with configuration state function generators (CSFGs); its programs end in _csfg and are installed in the same bin directory. It is much faster for large expansions.",
+    "GRASP bin 目录中没有 {p}：{pkg} 似乎没有安装 (需要装在 GRASP2018 中，见 compas/graspg)": "{p} is not in the GRASP bin directory: {pkg} does not seem to be installed (it is installed into GRASP2018, see compas/graspg)",
+    "程序包：{p}": "Package: {p}",
+    "第 {i} 步的程序页 {step} 不属于程序包 {p}": "Step {i}: the program tab {step} does not belong to the package {p}",
+    "{p} 报告了错误 (退出码为 0)，详见输出": "{p} reported an error (with exit code 0), see the output",
+    "rcsfg.inp 比角系数文件新：请先对当前的 rcsfg.inp 运行 rangular_csfg。": "rcsfg.inp is newer than the angular coefficient files: run rangular_csfg on the current rcsfg.inp first.",
+    "找不到 rangular_csfg 生成的角系数文件 (在 {d} 中)：请先运行 rangular_csfg。": "No angular coefficient files from rangular_csfg (in {d}): run rangular_csfg first.",
+    "角系数文件是 rangular_csfg 用 {k} 个 MPI 进程生成的 (在 {d} 中)，rmcdhf_csfg 必须使用相同的进程数：请把 MPI 进程数设为 {k}，或用 {np} 个进程重新运行 rangular_csfg。": "The angular coefficient files were made by rangular_csfg with {k} MPI processes (in {d}); rmcdhf_csfg must use the same number: set the MPI processes to {k}, or run rangular_csfg again with {np} processes.",
+    "生成 CSFG 列表 rcsfg.out 和标记轨道文件 rlabel.out。组态写法与 rcsfgenerate 相同。": "Generates the CSFG list rcsfg.out and the labelling-orbital file rlabel.out. Configurations are written as in rcsfgenerate.",
+    "先给出激发数为 0 的列表 (多参考组态)：它们的活跃轨道是“标记轨道”。再添加激发列表 (见作者的示例 graspgtest)。标记轨道以外的关联轨道由 CSFG 合并处理，GRASPG 因此省时；没有激发数为 0 的列表时所有轨道都是标记轨道，CSFG 列表并不比 CSF 列表短。": "Give the lists with 0 excitations (the multireference) first: their active orbitals are the labelling orbitals. Then add the excitation lists (see the authors' examples in graspgtest). Correlation orbitals beyond the labelling orbitals are combined into CSFGs, which is where GRASPG saves time; without lists with 0 excitations all orbitals are labelling orbitals and the CSFG list is no shorter than the CSF list.",
+    "保存为 (不含扩展名)": "Save as (without extension)",
+    "写出 name.g 和 name.l；留空则不复制": "writes name.g and name.l; empty = no copy",
+    "从完整 CSFG 列表中只保留与多参考组态有相互作用的 CSFG。读取 rcsfgmr.inp、rcsfgmr.l (多参考) 和 rcsfg.inp、rlabel.inp (完整列表)，输出 rcsfg.out。两个列表的标记轨道必须相同。": "Keeps only the CSFGs of the full list that interact with the multireference. Reads rcsfgmr.inp, rcsfgmr.l (multireference) and rcsfg.inp, rlabel.inp (full list); writes rcsfg.out. Both lists must have the same labelling orbitals.",
+    "多参考列表 (不含扩展名)": "Multireference list (without extension)",
+    "复制 name.g / name.l 为 rcsfgmr.inp / rcsfgmr.l；留空则用现有文件": "copies name.g / name.l to rcsfgmr.inp / rcsfgmr.l; empty = use the existing files",
+    "完整列表 (不含扩展名)": "Full list (without extension)",
+    "复制 name.g / name.l 为 rcsfg.inp / rlabel.inp；留空则用现有文件": "copies name.g / name.l to rcsfg.inp / rlabel.inp; empty = use the existing files",
+    "结果保存为 (不含扩展名)": "Save the result as (without extension)",
+    "写出 name.g 和 name.l；与完整列表同名时覆盖原列表；留空则不复制": "writes name.g and name.l; the same name as the full list overwrites it; empty = no copy",
+    "按轨道集把 name.g 拆分为 name<标签>.g 等多个文件，并为每个文件复制一份标记轨道文件 name<标签>.l。读取 name.g 和 rlabel.inp。": "Splits name.g by orbital set into name<label>.g etc., with a copy of the labelling-orbital file name<label>.l for each. Reads name.g and rlabel.inp.",
+    "CSFG 列表名 (不含 .g)": "CSFG list name (without .g)",
+    "复制此标记轨道文件为 rlabel.inp": "Copy this labelling-orbital file to rlabel.inp",
+    "留空则直接用现有 rlabel.inp": "empty = use the existing rlabel.inp",
+    "计算角系数 (写在 MPI 临时目录中，rmcdhf_csfg 必须使用相同的 MPI 进程数)。读取 rcsfg.inp、rlabel.inp，并写出展开的 CSF 列表 rcsf.out。": "Computes the angular coefficients (written to the MPI temporary directory; rmcdhf_csfg must use the same number of MPI processes). Reads rcsfg.inp, rlabel.inp and writes the expanded CSF list rcsf.out.",
+    "CSFG 列表 (不含扩展名)": "CSFG list (without extension)",
+    "生成初始径向波函数 rwfn.inp (读取 rcsfg.inp)。可先从已有 .w 文件读取部分轨道，其余用 Thomas-Fermi 或屏蔽类氢估计。": "Generates initial radial wave functions rwfn.inp (reads rcsfg.inp). Some orbitals can first be read from an existing .w file, the rest estimated by Thomas-Fermi or screened hydrogenic functions.",
+    "自洽场计算 (读取 rcsfg.inp, rlabel.inp, rwfn.inp 和 rangular_csfg 的角系数；输出 rwfn.out, rmix.out)。每个 J 对称块一行能级号，例如 1,2,3 或 1-3。": "Self-consistent field calculation (reads rcsfg.inp, rlabel.inp, rwfn.inp and the angular coefficients of rangular_csfg; writes rwfn.out, rmix.out). One line of level numbers per J block, e.g. 1,2,3 or 1-3.",
+    "把 rwfn.out / rcsf.out / rmix.out / rcsfg.inp / rlabel.inp 等保存为 name.w / name.c / name.m / name.g / name.l ...": "Saves rwfn.out / rcsf.out / rmix.out / rcsfg.inp / rlabel.inp etc. as name.w / name.c / name.m / name.g / name.l ...",
+    "组态相互作用计算 (可含 Breit 与 QED)。读取 name.g、name.l、name.w，输出 name.cm 和展开的 CSF 列表 name.c 等。": "Configuration interaction (optionally with Breit and QED). Reads name.g, name.l, name.w; writes name.cm, the expanded CSF list name.c etc.",
+    "先从此态复制 .g/.l/.w": "First copy .g/.l/.w from state",
+    "按 n 限制 Breit 相互作用": "Limit the Breit interaction by n",
+    "  略去 n 大于此值的轨道的 Breit 相互作用": "  Drop the Breit interaction of orbitals with n above",
+    "按 l 限制 Breit 相互作用": "Limit the Breit interaction by l",
+    "  略去 l 大于此值的轨道的 Breit 相互作用": "  Drop the Breit interaction of orbitals with l above",
+    "不勾选时程序也读入此值": "read by the program even when not ticked",
+    "谱学轨道的最大 n (NQEDMAX)": "Largest n of the spectroscopic orbitals (NQEDMAX)",
+    "自能只算到此 n，频率相关的 Breit 也用它；≤ 8，且不超过列表中的最大 n": "self-energy up to this n, also used by the frequency-dependent Breit; ≤ 8 and not above the largest n of the list",
+    "每个进程的内存上限 (GB，整数)": "Memory limit per process (GB, integer)",
+    "列出能级。可给多个 .m / .cm 文件；也能读 rci_block_csfg 逐块写出、尚未写完的文件。": "Lists the levels. Several .m / .cm files can be given; files that rci_block_csfg is still writing block by block can be read too.",
 }
 
 
@@ -888,12 +928,17 @@ class RcsfGenerate(Step):
     ]
 
     def stdin(self, v):
-        lines = [v["order"], v["core"]]
+        return answers([v["order"]] + self.list_answers(v))
+
+    @staticmethod
+    def list_answers(v):
+        """闭壳芯和各个 CSF 列表的回答 (rcsfggenerate_csfg 相同，只是没有开头的排序问题)。"""
+        lines = [v["core"]]
         for k, lst in enumerate(v["lists"]):
             lines += nonblank_lines(lst["configs"])
             lines += ["", lst["active"].strip(), f'{lst["jmin"].strip()},{lst["jmax"].strip()}',
                       lst["nexc"].strip(), "y" if k < len(v["lists"]) - 1 else "n"]
-        return answers(lines)
+        return lines
 
     def post(self, v):
         s = v["saveas"].strip()
@@ -1283,18 +1328,249 @@ class Custom(Step):
         return s if s.endswith("\n") or not s else s + "\n"
 
 
+# ---------------------------------------------------------------------------
+#  GRASPG：GRASP2018 基于组态函数生成器 (CSFG) 的扩展，程序名带 _csfg，装在同一个 bin 目录中
+#  (https://github.com/compas/graspg)。组态列表是 CSFG 列表 name.g 加标记轨道文件 name.l，
+#  程序读 rcsfg.inp 和 rlabel.inp。rangular、rmcdhf、rci 只有 MPI 版本 (mpi = "only")，
+#  MPI 进程数为 1 时直接启动；角系数总是写在 MPI_TMP 中。其他程序 (rnucleus、rhfs、ris4、
+#  rbiotransform、rtransition、表格程序) 沿用 GRASP2018：rsave_csfg 和 rci_csfg 照常写出展开的 name.c。
+# ---------------------------------------------------------------------------
+
+def csfg_inputs(name):
+    """把 name.g / name.l 复制为 rcsfg.inp / rlabel.inp。"""
+    return [("cp", f"{name}.g", "rcsfg.inp"), ("cp", f"{name}.l", "rlabel.inp")] if name else []
+
+
+class RcsfgGenerate(RcsfGenerate):
+    key = name = prog = "rcsfggenerate_csfg"
+    fields = [
+        Note("生成 CSFG 列表 rcsfg.out 和标记轨道文件 rlabel.out。组态写法与 rcsfgenerate 相同。"),
+        Note("先给出激发数为 0 的列表 (多参考组态)：它们的活跃轨道是“标记轨道”。再添加激发列表 (见作者的示例 graspgtest)。"
+             "标记轨道以外的关联轨道由 CSFG 合并处理，GRASPG 因此省时；没有激发数为 0 的列表时所有轨道都是标记轨道，"
+             "CSFG 列表并不比 CSF 列表短。"),
+        RcsfGenerate.fields[2],             # 闭壳芯
+        CsfLists("lists", [dict(configs="1s(2,i)2s(2,i)2p(1,i)\n1s(2,i)2p(3,i)",
+                                active="2s,2p", jmin="1", jmax="3", nexc="0")]),
+        Entry("saveas", "保存为 (不含扩展名)", "odd2", "写出 name.g 和 name.l；留空则不复制"),
+    ]
+
+    def stdin(self, v):
+        return answers(self.list_answers(v))
+
+    def post(self, v):
+        s = v["saveas"].strip()
+        return [("cp", "rcsfg.out", f"{s}.g"), ("cp", "rlabel.out", f"{s}.l")] if s else []
+
+    def title(self, v):
+        s = v["saveas"].strip()
+        return f"{self.prog} -> {s}.g" if s else self.prog
+
+
+class RcsfgInteract(Step):
+    key = name = prog = "rcsfginteract_csfg"
+    fields = [
+        Note("从完整 CSFG 列表中只保留与多参考组态有相互作用的 CSFG。读取 rcsfgmr.inp、rcsfgmr.l (多参考) 和 rcsfg.inp、"
+             "rlabel.inp (完整列表)，输出 rcsfg.out。两个列表的标记轨道必须相同。"),
+        Entry("mr", "多参考列表 (不含扩展名)", "odd2", "复制 name.g / name.l 为 rcsfgmr.inp / rcsfgmr.l；留空则用现有文件"),
+        Entry("full", "完整列表 (不含扩展名)", "odd", "复制 name.g / name.l 为 rcsfg.inp / rlabel.inp；留空则用现有文件"),
+        Choice("ham", "按哪种哈密顿量判断相互作用", [("1", "Dirac-Coulomb"), ("2", "Dirac-Coulomb-Breit")]),
+        Entry("saveas", "结果保存为 (不含扩展名)", "", "写出 name.g 和 name.l；与完整列表同名时覆盖原列表；留空则不复制"),
+    ]
+
+    def stdin(self, v):
+        return answers([v["ham"]])
+
+    def pre(self, v):
+        mr, full = v["mr"].strip(), v["full"].strip()
+        acts = [("cp", f"{mr}.g", "rcsfgmr.inp"), ("cp", f"{mr}.l", "rcsfgmr.l")] if mr else []
+        return acts + csfg_inputs(full)
+
+    def post(self, v):
+        s = v["saveas"].strip()
+        return [("cp", "rcsfg.out", f"{s}.g"), ("cp", "rlabel.inp", f"{s}.l")] if s else []
+
+    def title(self, v):
+        s = v["saveas"].strip()
+        return f"{self.prog} -> {s}.g" if s else self.prog
+
+
+class RcsfgSplit(RcsfSplit):
+    key = name = prog = "rcsfgsplit_csfg"
+    fields = [
+        Note("按轨道集把 name.g 拆分为 name<标签>.g 等多个文件，并为每个文件复制一份标记轨道文件 name<标签>.l。"
+             "读取 name.g 和 rlabel.inp。"),
+        Entry("state", "CSFG 列表名 (不含 .g)", "odd"),
+        Entry("label", "复制此标记轨道文件为 rlabel.inp", "odd.l", "留空则直接用现有 rlabel.inp"),
+        RcsfSplit.fields[2],                # 拆分
+    ]
+
+    def pre(self, v):
+        s = v["label"].strip()
+        return [("cp", s, "rlabel.inp")] if s else []
+
+    def title(self, v):
+        return f"{self.prog} {v['state']}"
+
+
+class RAngularCsfg(RAngular):
+    key = name = "rangular_csfg"
+    prog = "rangular_csfg_mpi"
+    mpi = "only"
+    fields = [
+        Note("计算角系数 (写在 MPI 临时目录中，rmcdhf_csfg 必须使用相同的 MPI 进程数)。读取 rcsfg.inp、rlabel.inp，"
+             "并写出展开的 CSF 列表 rcsf.out。"),
+        Entry("csf", "CSFG 列表 (不含扩展名)", "odd2", "复制 name.g / name.l 为 rcsfg.inp / rlabel.inp；留空则用现有文件"),
+    ]
+
+    def pre(self, v):
+        return csfg_inputs(v["csf"].strip())
+
+    def title(self, v):
+        s = v["csf"].strip()
+        return f"{self.key} ({s})" if s else self.key
+
+
+class RWfnEstimateCsfg(RWfnEstimate):
+    key = name = prog = "rwfnestimate_csfg"
+    fields = [Note("生成初始径向波函数 rwfn.inp (读取 rcsfg.inp)。可先从已有 .w 文件读取部分轨道，其余用 Thomas-Fermi "
+                   "或屏蔽类氢估计。")] + RWfnEstimate.fields[1:]
+
+
+class RMcdhfCsfg(RMcdhf):
+    key = name = "rmcdhf_csfg"
+    prog = "rmcdhf_csfg_mpi"
+    mpi = "only"
+    fields = [Note("自洽场计算 (读取 rcsfg.inp, rlabel.inp, rwfn.inp 和 rangular_csfg 的角系数；输出 rwfn.out, rmix.out)。"
+                   "每个 J 对称块一行能级号，例如 1,2,3 或 1-3。")] + \
+             [f for f in RMcdhf.fields[1:] if getattr(f, "key", "") != "mem"]
+
+    def program(self, v):
+        return self.prog
+
+    def post(self, v):
+        s = v["save"].strip()
+        return [("run", ["rsave_csfg", s])] if s else []
+
+    def title(self, v):
+        s = v["save"].strip()
+        return f"{self.key} -> {s}" if s else self.key
+
+
+class RSaveCsfg(RSave):
+    key = name = prog = "rsave_csfg"
+    fields = [
+        Note("把 rwfn.out / rcsf.out / rmix.out / rcsfg.inp / rlabel.inp 等保存为 name.w / name.c / name.m / name.g / "
+             "name.l ..."),
+        Entry("state", "态名称", "odd2"),
+    ]
+
+    def title(self, v):
+        return f"{self.prog} {v['state']}"
+
+
+class RCiCsfg(RCi):
+    key = name = "rci_csfg"
+    prog = "rci_csfg_mpi"
+    mpi = "only"
+    fields = [
+        Note("组态相互作用计算 (可含 Breit 与 QED)。读取 name.g、name.l、name.w，输出 name.cm 和展开的 CSF 列表 name.c 等。"),
+        Entry("state", "态名称", "oddCI6"),
+        Entry("copyfrom", "先从此态复制 .g/.l/.w", "odd6", "空 = 不复制"),
+        Check("trans", "包含横向 (Breit) 相互作用", True),
+        Check("modfreq", "修改横向光子频率", True),
+        Entry("factor", "  频率缩放因子", "1.d-6"),
+        Check("limn", "按 n 限制 Breit 相互作用", False),
+        Entry("maxn", "  略去 n 大于此值的轨道的 Breit 相互作用", "15", "不勾选时程序也读入此值"),
+        Check("liml", "按 l 限制 Breit 相互作用", False),
+        Entry("maxl", "  略去 l 大于此值的轨道的 Breit 相互作用", "14", "不勾选时程序也读入此值"),
+        Check("vp", "真空极化 (Vacuum Polarisation)", True),
+        Check("nms", "正常质量移动 (NMS)", False),
+        Check("sms", "特殊质量移动 (SMS)", False),
+        Check("se", "估计自能 (Self-energy)", True),
+        Entry("nqed", "谱学轨道的最大 n (NQEDMAX)", "2", "自能只算到此 n，频率相关的 Breit 也用它；≤ 8，且不超过列表中的最大 n"),
+        Entry("mem", "每个进程的内存上限 (GB，整数)", "8"),
+        Text("levels", "各块计算的能级", "1\n1", "每块一行", lines=3),
+        Entry("log", "输出日志文件", "outodd_rci"),
+    ]
+
+    def stdin(self, v):
+        lines = ["y", v["state"].strip(), yn(v["trans"]), yn(v["modfreq"])]
+        if v["modfreq"]:
+            lines.append(v["factor"])
+        lines += [yn(v["limn"]), v["maxn"], yn(v["liml"]), v["maxl"]]
+        lines += [yn(v["vp"]), yn(v["nms"]), yn(v["sms"]), yn(v["se"]), v["nqed"], v["mem"]]
+        return answers(lines + nonblank_lines(v["levels"]))
+
+    def pre(self, v):
+        src, dst = v["copyfrom"].strip(), v["state"].strip()
+        if not src:
+            return []
+        return [("cp", f"{src}.{ext}", f"{dst}.{ext}") for ext in ("g", "l", "w")]
+
+    def title(self, v):
+        return f"{self.key} {v['state']}"
+
+
+class Jj2lsjCsfg(Jj2lsj):
+    key = name = prog = "jj2lsj_csfg"
+
+    def title(self, v):
+        return f"{self.prog} {v['state']}"
+
+
+class RLevelsCsfg(RLevels):
+    key = name = prog = "rlevels_csfg"
+    fields = [
+        Note("列出能级。可给多个 .m / .cm 文件；也能读 rci_block_csfg 逐块写出、尚未写完的文件。"),
+    ] + RLevels.fields[1:]
+
+
 STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
          RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RTabTrans1(), RTabTrans2(),
-         RBioTransform(), RTransition(), Custom()]
+         RBioTransform(), RTransition(), Custom(),
+         RcsfgGenerate(), RcsfgInteract(), RcsfgSplit(), RAngularCsfg(), RWfnEstimateCsfg(), RMcdhfCsfg(), RSaveCsfg(),
+         RCiCsfg(), Jj2lsjCsfg(), RLevelsCsfg()]
 
-# 界面左侧程序列表的功能分组 (每个程序恰好出现一次)
-STEP_GROUPS = [
-    ("核与组态", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit"]),
-    ("自洽场与 CI", ["rangular", "rwfnestimate", "rmcdhf", "rsave", "rci"]),
-    ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
-    ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
-]
-assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s in STEPS)
+# 程序包 (计算页右上角选择)：GRASPG 的程序装在 GRASP2018 的 bin 目录中，以此程序判断是否已安装
+PACKAGES = ("GRASP2018", "GRASPG")
+PACKAGE_PROBE = {"GRASPG": "rcsfggenerate_csfg"}
+
+# 界面左侧程序列表的功能分组 (每个程序包中每个程序恰好出现一次)
+STEP_GROUPS = {
+    "GRASP2018": [
+        ("核与组态", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit"]),
+        ("自洽场与 CI", ["rangular", "rwfnestimate", "rmcdhf", "rsave", "rci"]),
+        ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
+        ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
+    ],
+    "GRASPG": [
+        ("核与组态", ["rnucleus", "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg"]),
+        ("自洽场与 CI", ["rangular_csfg", "rwfnestimate_csfg", "rmcdhf_csfg", "rsave_csfg", "rci_csfg"]),
+        ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
+        ("结果与工具", ["jj2lsj_csfg", "rlevels_csfg", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
+    ],
+}
+
+
+def package_keys(package):
+    return [k for _, keys in STEP_GROUPS[package] for k in keys]
+
+
+assert all(len(set(package_keys(p))) == len(package_keys(p)) for p in PACKAGES)
+assert set().union(*(package_keys(p) for p in PACKAGES)) == {s.key for s in STEPS}
+# 只属于某个扩展程序包的程序页 (导出配置时据此确定 package)
+PACKAGE_ONLY = {p: set(package_keys(p)) - set(package_keys(PACKAGES[0])) for p in PACKAGES[1:]}
+
+
+def package_allows(package, key):
+    """扩展程序包装在 GRASP2018 上，GRASP2018 的程序页也可以使用。"""
+    return key in package_keys(PACKAGES[0]) or key in package_keys(package)
+
+
+def package_of(step_keys):
+    """一组程序页所需的程序包 (只用到 GRASP2018 的程序页时为 GRASP2018)。"""
+    keys = set(step_keys)
+    return next((p for p, only in PACKAGE_ONLY.items() if keys & only), PACKAGES[0])
 
 
 # ---------------------------------------------------------------------------
@@ -1307,7 +1583,9 @@ assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s 
 
 GROUPS = ("odd", "even")
 GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci",
-               "jj2lsj", "rhfs", "ris4")
+               "jj2lsj", "rhfs", "ris4",
+               "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg", "rangular_csfg", "rwfnestimate_csfg",
+               "rmcdhf_csfg", "rsave_csfg", "rci_csfg", "jj2lsj_csfg")
 
 # even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))
 EVEN_DEFAULTS = {
@@ -1315,6 +1593,10 @@ EVEN_DEFAULTS = {
                                      jmin="1", jmax="5", nexc="0")]),
     "rmcdhf": dict(levels="1,2,3\n1,2,3\n1,2"),
     "rci": dict(levels="1,2,3\n1,2,3\n1,2"),
+    "rcsfggenerate_csfg": dict(lists=[dict(configs="1s(2,i)2s(1,i)2p(2,i)", active="2s,2p",
+                                           jmin="1", jmax="5", nexc="0")]),
+    "rmcdhf_csfg": dict(levels="1,2,3\n1,2,3\n1,2"),
+    "rci_csfg": dict(levels="1,2,3\n1,2,3\n1,2"),
 }
 
 
@@ -1386,11 +1668,14 @@ def action_sh(a):
 def describe(job, mpi_prefix=""):
     """任务的 shell 等价写法，用于预览和导出脚本。
 
-    mpi_prefix 非空 (如 "mpirun -np 4") 时，有并行版本的程序写成 "<mpi_prefix> <prog>_mpi"。
+    mpi_prefix 非空 (如 "mpirun -np 4") 时，有并行版本的程序写成 "<mpi_prefix> <prog>_mpi"；
+    只有 MPI 版本的程序 (mpi = "only"，程序名已含 _mpi) 写成 "<mpi_prefix> <prog>"，单进程时直接运行。
     """
     out = [action_sh(a) for a in job["pre"]]
     args = " ".join(shlex.quote(x) for x in job["args"])
-    if mpi_prefix and job.get("mpi"):
+    if mpi_prefix and job.get("mpi") == "only":
+        cmd = f"{mpi_prefix} {shlex.quote(job['prog'])} {args}".rstrip()
+    elif mpi_prefix and job.get("mpi"):
         cmd = f"{mpi_prefix} {job['prog']}_mpi {args}".rstrip()
     else:
         cmd = f"{shlex.quote(job['prog'])} {args}".rstrip()
@@ -1408,7 +1693,7 @@ def shell_script(pipeline, bindir, workdir, mpi_prefix="", mpitmp="tmp_mpi"):
     body = ["#!/bin/sh", "set -x", "",
             f"export PATH={shlex.quote(bindir)}:$PATH",
             f"cd {shlex.quote(workdir)}", ""]
-    if mpi_prefix:
+    if mpi_prefix or any(job.get("mpi") == "only" for job in pipeline):
         body += [f"export MPI_TMP=\"$PWD\"/{shlex.quote(mpitmp or 'tmp_mpi')}", 'mkdir -p "$MPI_TMP"',
                  "# hwloc's GL plugin makes mpirun hang under WSLg",
                  'export HWLOC_COMPONENTS="${HWLOC_COMPONENTS:--gl}"', ""]
@@ -1491,6 +1776,35 @@ def check_mcp(cwd, np, mpitmp):
     return None
 
 
+def check_mcp_csfg(cwd, np, mpitmp):
+    """rmcdhf_csfg 的角系数检查：rangular_csfg 总是写 <MPI_TMP>/<rank>/csfg_mcp<rank>.30 … (单进程时也是)，
+    rmcdhf_csfg 必须使用相同的进程数。"""
+    tmp = os.path.join(cwd, mpitmp)
+    np = max(np, 1)
+
+    def rank_file(i):
+        return os.path.join(tmp, f"{i:03d}", f"csfg_mcp{i:03d}.30")
+
+    k = 0
+    while os.path.isfile(rank_file(k)):
+        k += 1
+    if not k:
+        return T("找不到 rangular_csfg 生成的角系数文件 (在 {d} 中)：请先运行 rangular_csfg。", d=tmp)
+    if k != np:
+        return T("角系数文件是 rangular_csfg 用 {k} 个 MPI 进程生成的 (在 {d} 中)，rmcdhf_csfg 必须使用相同的进程数："
+                 "请把 MPI 进程数设为 {k}，或用 {np} 个进程重新运行 rangular_csfg。", k=k, d=tmp, np=np)
+    rcsfg = os.path.join(cwd, "rcsfg.inp")
+    if os.path.isfile(rcsfg) and os.path.getmtime(rcsfg) > os.path.getmtime(rank_file(0)) + 1:
+        return T("rcsfg.inp 比角系数文件新：请先对当前的 rcsfg.inp 运行 rangular_csfg。")
+    return None
+
+
+def csfg_failed(tail):
+    """GRASPG 的程序出错时也以退出码 0 结束，只在输出中报告 (如 "rlabel.inp not exists, Stop Error!"，
+    或 Fortran 的 STOP 'Error! …')。"""
+    return bool(re.search(r"Stop Error|^\s*STOP\b.*(error|unexpected|warning)", tail, re.I | re.M))
+
+
 class Runner:
     """在后台线程中依次执行任务，输出通过 emit(text, tag) 送回界面（tag: "", head, info, err）。
 
@@ -1525,14 +1839,18 @@ class Runner:
             own = env.pop("GRASP_GUI_FONTCONFIG", None)
             if own and env.get("FONTCONFIG_FILE") == own:
                 env.pop("FONTCONFIG_FILE")
-        if mpi and cfg["np"] > 1:
+        if mpi and (cfg["np"] > 1 or mpi == "only"):
             mpitmp = os.path.join(cwd, cfg["mpitmp"])
             os.makedirs(mpitmp, exist_ok=True)
             env["MPI_TMP"] = mpitmp
             # hwloc 的 GL 插件会连接图形显示，在 WSLg 下使 mpirun 启动时卡住
             env.setdefault("HWLOC_COMPONENTS", "-gl")
-            argv = (shlex.split(cfg["mpirun"]) + ["-np", str(cfg["np"]),
-                    self.resolve(bindir, argv[0] + "_mpi")] + list(argv[1:]))
+            # 只有 MPI 版本的程序 (mpi = "only") 名称已含 _mpi，单进程时直接启动
+            prog = self.resolve(bindir, argv[0] if mpi == "only" else argv[0] + "_mpi")
+            if cfg["np"] > 1:
+                argv = shlex.split(cfg["mpirun"]) + ["-np", str(cfg["np"]), prog] + list(argv[1:])
+            else:
+                argv = [prog] + list(argv[1:])
         else:
             argv = [self.resolve(bindir, argv[0])] + list(argv[1:])
         if cfg.get("nice") and shutil.which("nice"):
@@ -1547,6 +1865,7 @@ class Runner:
         fd = self.proc.stdout.fileno()
         dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
         logf = open(os.path.join(cwd, log), "wb") if log else None
+        self.tail = b""                     # 输出的最后一段，用于识别错误 (见 csfg_failed)
         try:
             while True:
                 data = os.read(fd, 65536)
@@ -1554,6 +1873,7 @@ class Runner:
                     break
                 if logf:
                     logf.write(data)
+                self.tail = (self.tail + data)[-4096:]
                 self.emit(dec.decode(data), "")
             self.emit(dec.decode(b"", final=True), "")
         finally:
@@ -1575,8 +1895,9 @@ class Runner:
         self.emit(f"\n===== {job['title']} =====\n", "head")
         for a in job["pre"]:
             self.do_action(a, cfg)
-        if job["prog"] in ("rmcdhf", "rmcdhf_mem"):
-            err = check_mcp(cfg["cwd"], cfg["np"], cfg["mpitmp"])
+        check = {"rmcdhf": check_mcp, "rmcdhf_mem": check_mcp, "rmcdhf_csfg_mpi": check_mcp_csfg}.get(job["prog"])
+        if check:
+            err = check(cfg["cwd"], cfg["np"], cfg["mpitmp"])
             if err:
                 raise RuntimeError(err)
         rc = self.exec_cmd([job["prog"]] + job["args"], cfg, job["stdin"], job["log"], job.get("mpi"))
@@ -1584,6 +1905,8 @@ class Runner:
             self.emit(T("[输出已写入 {f}]", f=job["log"]) + "\n", "info")
         if rc != 0 or self.stopped:
             raise RuntimeError(T("{p} 退出码 {rc}", p=job["prog"], rc=rc))
+        if "_csfg" in job["prog"] and csfg_failed(self.tail.decode(errors="replace")):
+            raise RuntimeError(T("{p} 报告了错误 (退出码为 0)，详见输出", p=job["prog"]))
         for a in job["post"]:
             self.do_action(a, cfg)
 

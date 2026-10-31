@@ -1,0 +1,946 @@
+{
+ "format": "grasp-gui-config",
+ "version": 2,
+ "package": "GRASPG",
+ "id": "graspg1",
+ "order": 20,
+ "title": {
+  "zh": "GRASPG 示例 1：Mo XXXVIII，与算例 1 相同的计算用 CSFG 完成",
+  "en": "GRASPG example 1: Mo XXXVIII, the calculation of case 1 with CSFGs"
+ },
+ "summary": {
+  "zh": "GRASPG 作者的第一个示例 (graspgtest/script1/csfg)，需要装有 GRASPG 的 GRASP。物理内容与算例 1 相同：奇宇称 2s²2p、2p³ 和偶宇称 2s2p²，到 n = 6 的单、双激发按层拆分，逐层 MCDHF，再做含 Breit 和 QED 的 CI。组态列表是 CSFG 列表 (.g) 加标记轨道文件 (.l)：先给出激发数为 0 的多参考列表，再给出激发列表。能量与 GRASP2018 的结果相差约 1e-6 Hartree，用时约为十分之一。",
+  "en": "The first example of the GRASPG authors (graspgtest/script1/csfg); needs GRASP with GRASPG installed. The physics is that of case 1: odd 2s²2p, 2p³ and even 2s2p², single and double excitations to n = 6 split into layers, MCDHF layer by layer, then CI with Breit and QED. The configuration lists are CSFG lists (.g) with labelling-orbital files (.l): the multireference lists with 0 excitations come first, then the excitation lists. The energies agree with GRASP2018 to about 1e-6 Hartree in about a tenth of the time."
+ },
+ "runtime": {
+  "zh": "4 个 MPI 进程约 5 分钟",
+  "en": "about 5 minutes with 4 MPI processes"
+ },
+ "jobs": [
+  {
+   "step": "rcsfggenerate_csfg",
+   "vals": {
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(2,i)2p(1,i)\n1s(2,i)2p(3,i)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "odd2"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfggenerate_csfg",
+   "vals": {
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2s(2,*)2p(1,*)\n1s(2,*)2p(3,*)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "0"
+     },
+     {
+      "configs": "1s(2,*)2s(2,*)2p(1,*)\n1s(2,*)2p(3,*)",
+      "active": "6s,6p,6d,6f,6g,6h",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "odd"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfgsplit_csfg",
+   "vals": {
+    "state": "odd",
+    "label": "odd.l",
+    "splits": "3s,3p,3d 3\n4s,4p,4d,4f 4\n5s,5p,5d,5f,5g 5\n6s,6p,6d,6f,6g,6h 6"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfggenerate_csfg",
+   "vals": {
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(1,i)2p(2,i)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "even2"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfggenerate_csfg",
+   "vals": {
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2s(1,*)2p(2,*)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "0"
+     },
+     {
+      "configs": "1s(2,*)2s(1,*)2p(2,*)",
+      "active": "6s,6p,6d,6f,6g,6h",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "even"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfgsplit_csfg",
+   "vals": {
+    "state": "even",
+    "label": "even.l",
+    "splits": "3s,3p,3d 3\n4s,4p,4d,4f 4\n5s,5p,5d,5f,5g 5\n6s,6p,6d,6f,6g,6h 6"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rnucleus",
+   "vals": {
+    "z": "42",
+    "a": "96",
+    "revise": false,
+    "rms": "",
+    "skin": "2.3",
+    "mass": "96",
+    "spin": "1",
+    "mu": "1",
+    "q": "1"
+   }
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "odd2"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": false,
+    "wfile": "odd2.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd2",
+    "save": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd2",
+    "save": "odd2"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "odd2",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "even2"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": false,
+    "wfile": "odd2.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "out_rmcdhf_even2",
+    "save": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "out_rmcdhf_even2",
+    "save": "even2"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "even2",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rlevels_csfg",
+   "vals": {
+    "files": "odd2.m even2.m",
+    "log": "n2.lev"
+   }
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "odd3"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd2.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd3",
+    "save": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd3",
+    "save": "odd3"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "odd3",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "odd4"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd3.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd4",
+    "save": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd4",
+    "save": "odd4"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "odd4",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "odd5"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd4.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "5*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd5",
+    "save": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "5*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd5",
+    "save": "odd5"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "odd5",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "odd6"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd5.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "6*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd6",
+    "save": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "6*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_odd6",
+    "save": "odd6"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "odd6",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rci_csfg",
+   "vals": {
+    "state": "oddCI6",
+    "copyfrom": "odd6",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.0d-6",
+    "limn": false,
+    "maxn": "15",
+    "liml": false,
+    "maxl": "14",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "2",
+    "mem": "8",
+    "levels": "1\n1",
+    "log": "out_rci_odd"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "oddCI6",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "even3"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": true,
+    "wfile": "even2.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_even3",
+    "save": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_even3",
+    "save": "even3"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "even3",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "even4"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": true,
+    "wfile": "even3.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_even4",
+    "save": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_even4",
+    "save": "even4"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "even4",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "even5"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": true,
+    "wfile": "even4.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "5*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_even5",
+    "save": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "5*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_even5",
+    "save": "even5"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "even5",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular_csfg",
+   "vals": {
+    "csf": "even6"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate_csfg",
+   "vals": {
+    "use_file": true,
+    "wfile": "even5.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "6*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_even6",
+    "save": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "rwfn.out rwfn.inp",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rmcdhf_csfg",
+   "vals": {
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "weights": "5",
+    "uweights": "",
+    "vary": "6*",
+    "spec": "",
+    "nscf": "100",
+    "log": "out_rmcdhf_even6",
+    "save": "even6"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "even6",
+    "ci": false,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rci_csfg",
+   "vals": {
+    "state": "evenCI6",
+    "copyfrom": "even6",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.0d-6",
+    "limn": false,
+    "maxn": "15",
+    "liml": false,
+    "maxl": "14",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "2",
+    "mem": "2",
+    "levels": "1,2,3\n1,2,3\n1,2",
+    "log": "out_rci_even"
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj_csfg",
+   "vals": {
+    "state": "evenCI6",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rlevels_csfg",
+   "vals": {
+    "files": "odd3.m even3.m",
+    "log": "n3.lev"
+   }
+  },
+  {
+   "step": "rlevels_csfg",
+   "vals": {
+    "files": "odd4.m even4.m",
+    "log": "n4.lev"
+   }
+  },
+  {
+   "step": "rlevels_csfg",
+   "vals": {
+    "files": "odd5.m even5.m",
+    "log": "n5.lev"
+   }
+  },
+  {
+   "step": "rlevels_csfg",
+   "vals": {
+    "files": "odd6.m even6.m",
+    "log": "n6.lev"
+   }
+  },
+  {
+   "step": "rlevels_csfg",
+   "vals": {
+    "files": "oddCI6.cm evenCI6.cm",
+    "log": "n6CI.clev"
+   }
+  },
+  {
+   "step": "rbiotransform",
+   "vals": {
+    "ci": true,
+    "init": "oddCI6",
+    "final": "evenCI6",
+    "log": "out_rbiotransform"
+   }
+  },
+  {
+   "step": "rtransition",
+   "vals": {
+    "ci": true,
+    "init": "oddCI6",
+    "final": "evenCI6",
+    "kind": "E1",
+    "m1_diffj": false,
+    "e2_diffj": false,
+    "log": "out_transition"
+   }
+  }
+ ],
+ "reference": [
+  {
+   "file": "oddCI6.cm",
+   "energies": [
+    -2386.3201941634,
+    -2381.9243794982
+   ]
+  },
+  {
+   "file": "evenCI6.cm",
+   "energies": [
+    -2382.2392409745,
+    -2376.5313398321,
+    -2371.9006385878,
+    -2378.9986772262,
+    -2376.7270521133,
+    -2371.8561868121,
+    -2378.1476744206,
+    -2373.9014162414
+   ]
+  }
+ ]
+}
