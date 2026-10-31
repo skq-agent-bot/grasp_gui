@@ -1,5 +1,7 @@
 {
- "demo_format": 1,
+ "format": "grasp-gui-config",
+ "version": 2,
+ "package": "GRASP2018",
  "id": "example1",
  "order": 1,
  "title": {

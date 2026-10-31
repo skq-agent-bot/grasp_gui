@@ -211,7 +211,8 @@ class MainWindow(QMainWindow):
         mb.clear()
         fm = mb.addMenu(T("文件"))
         calc = lambda name: lambda: getattr(self.calc, name)()      # noqa: E731 (self.calc 在菜单之后创建)
-        for item in [("导入示例…", calc("import_demo")), None,
+        for item in [("导入示例…", calc("import_demo")), ("导入配置文件…", calc("import_file")),
+                     ("导出配置…", calc("export_config")), None,
                      ("保存参数…", calc("save_params")), ("载入参数…", calc("load_params")), None,
                      ("导出流程为 shell 脚本…", calc("export_script")),
                      ("导出 Slurm 作业脚本…", calc("export_slurm")), None]:

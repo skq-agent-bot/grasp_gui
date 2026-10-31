@@ -19,6 +19,7 @@ import subprocess
 import sys
 import threading
 
+VERSION = "2.1.0.dev0"         # 发布时改为发布的版本号 (写入导出的共享配置)
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".config", "grasp_gui.json")
 
@@ -150,9 +151,9 @@ EN = {
     "J = 0 → J = 0：单光子跃迁严格禁戒。": "J = 0 → J = 0: single-photon transitions are strictly forbidden.",
     "已算出 {k}。结果保存在 {d}": "{k} computed. Results are kept in {d}",
     "工作目录中没有 isodata：{d}": "No isodata in the working directory: {d}",
-    "无法确定与 {f} 对应的径向波函数文件，候选：{c}。请把对应的 .w 文件命名为与混合系数文件同名 (如 {s}.w)。":
+    "无法确定与 {f} 对应的径向波函数文件，候选：{c}。请把对应的 .w 文件命名为与混合系数文件同名 (如 {stem}.w)。":
         "Cannot tell which wave function file belongs to {f} (candidates: {c}). Name the matching .w file "
-        "like the mixing coefficient file (e.g. {s}.w).",
+        "like the mixing coefficient file (e.g. {stem}.w).",
     "找不到与 {f} 对应的 {what} 文件": "No {what} file matching {f} found",
     "两个能级来自同一个文件，轨道相同，不需要双正交变换。":
         "Both levels come from the same file and share the orbitals: no biorthogonal transformation needed.",
@@ -535,23 +536,15 @@ EN = {
     "导入示例": "Import example",
     "导入到目录": "Import into directory",
     "导入": "Import",
-    "示例来自 GRASP2018 手册的算例，只包含各程序的参数和计算流程。导入到一个空目录后，点“▶ 运行全部”即可从头计算；"
-    "各程序页显示该程序在流程中最后一次使用的参数。":
-        "The examples are the cases of the GRASP2018 manual; they contain only the parameters of the programs and "
-        "the pipeline. After importing one into an empty directory, press “▶ Run all” to compute it from scratch; "
-        "each program tab shows the parameters of the last run of that program in the pipeline.",
     "预计时间": "Estimated time",
     "{n} 步": "{n} steps",
     "用到的程序": "Programs used",
     "在 bin 目录和 PATH 中找不到": "Not found in the bin directory or PATH",
     "流程运行到这些程序时会出错。": "The pipeline will stop with an error when it reaches them.",
     "参考结果": "Reference results",
-    "手册脚本算出的能量，可与自己的结果对照": "energies from the manual's scripts, to compare with your results",
     "{n} 个能级": "{n} level(s)",
     "最低": "lowest",
     "找不到示例文件 ({p})": "No example files found ({p})",
-    "已导入示例“{t}”到 {p}；点“▶ 运行全部”开始计算":
-        "Imported the example “{t}” into {p}; press “▶ Run all” to start",
     "目录不是空的：{p}": "The directory is not empty: {p}",
     # 主窗口的三个标签页、单独的窗口
     "计算": "Calculation",
@@ -594,14 +587,66 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
   ln -s /path/to/grasp_gui ~/.local/bin/grasp_levels
   ln -s /path/to/grasp_gui ~/.local/bin/grasp_wfn""",
     "操作提示": "Tips",
+    # 共享配置
+    "导入配置文件…": "Import configuration file…",
+    "导出配置…": "Export configuration…",
+    "导入配置": "Import configuration",
+    "导出配置": "Export configuration",
+    "打开配置文件…": "Open configuration file…",
+    "配置文件 (*.json)": "Configuration files (*.json)",
+    "(无标题)": "(untitled)",
+    "随程序提供的示例": "Example included with the program",
+    "作者": "Author",
+    "日期": "Date",
+    "程序包": "Package",
+    "导出自": "Exported by",
+    "兼容性": "Compatibility",
+    "自定义命令": "Custom commands",
+    "可以运行任意程序；导入他人的配置前请确认这些命令是安全的": "they can run any program; make sure they are safe before importing someone else's configuration",
+    "附带文件": "Attached files",
+    "导入时写入工作目录": "written to the working directory on import",
+    "配置作者算出的能量，可与自己的结果对照": "energies computed by the author of the configuration, to compare with your results",
+    "这个配置含有 {n} 条自定义命令 (见右侧)，运行流程时会执行它们。确定导入吗？": "This configuration contains {n} custom command(s) (see on the right), which are executed when the pipeline runs. Import it?",
+    "配置只包含各程序的参数和计算流程 (以及少量附带的输入文件)，不含计算结果。导入到一个空目录后，点“▶ 运行全部”即可从头计算；各程序页显示该程序在流程中最后一次使用的参数。": "A configuration contains only the parameters of the programs and the pipeline (and possibly a few small input files), no results. Import it into an empty directory and press “▶ Run all” to compute from scratch; each program tab shows the parameters of the last use of that program in the pipeline.",
+    "已导入“{t}”到 {p}；点“▶ 运行全部”开始计算": "Imported “{t}” into {p}; press “▶ Run all” to start",
+    "已导出配置 {p} ({n} 步)": "Exported configuration {p} ({n} steps)",
+    "配置保存当前流程中各步的参数，不含计算结果，也不含 GRASP bin 目录、MPI 进程数等与机器有关的设置。别人导入后可以从头重复这个计算。": "The configuration stores the parameters of the steps of the current pipeline — no results, and no machine-specific settings such as the GRASP bin directory or the number of MPI processes. Others can import it and repeat the calculation from scratch.",
+    "标题": "Title",
+    "说明": "Description",
+    "计算的内容和目的": "what is computed and why",
+    "可选": "optional",
+    "可选，如“约 10 分钟”": "optional, e.g. “about 10 minutes”",
+    "参考结果 (勾选的混合系数文件中的能级能量)": "Reference results (level energies of the checked mixing coefficient files)",
+    "附带文件 (界面不能生成的小文本输入文件，每个最多 {n} MB)": "Attached files (small text input files the GUI cannot generate, at most {n} MB each)",
+    "添加…": "Add…",
+    "提示": "Notes",
+    "没有发现可移植性问题。": "No portability problems found.",
+    "请填写标题。": "Please enter a title.",
+    "不是 GRASP GUI 的配置文件": "Not a GRASP GUI configuration file",
+    "配置文件的版本号有误": "Invalid version number in the configuration file",
+    "配置文件的格式 (版本 {v}) 比本程序新，请更新 GRASP GUI": "The configuration file format (version {v}) is newer than this program; please update GRASP GUI",
+    "配置使用的程序包 {p} 本程序不支持 (支持：{supported})": "The configuration uses the package {p}, which this program does not support (supported: {supported})",
+    "配置中没有计算步骤": "The configuration has no steps",
+    "第 {i} 步的格式有误": "Step {i} is malformed",
+    "第 {i} 步的程序页 {step} 不存在": "Step {i}: unknown program tab {step}",
+    "第 {i} 步的态组 {g} 不存在": "Step {i}: unknown state group {g}",
+    "第 {i} 步 ({step}) 中不认识的参数已忽略：{k}": "Step {i} ({step}): unknown parameters ignored: {k}",
+    "第 {i} 步 ({step}) 缺少的参数用默认值：{k}": "Step {i} ({step}): missing parameters set to defaults: {k}",
+    "附带文件 {f} 的名称或内容有误": "Invalid name or content of the attached file {f}",
+    "附带文件太大 ({f})": "Attached files too large ({f})",
+    "无法读取 {p}：{e}": "Cannot read {p}: {e}",
+    "{f} 太大 (附带文件最多 {n} MB)": "{f} is too large (attached files: at most {n} MB)",
+    "{f} 不是文本文件": "{f} is not a text file",
+    "第 {steps} 步由旧版本加入流程，没有记录表单参数，只能按原样的命令导出；在程序页中重新“加入流程”可以改为保存参数。": "Steps {steps} were added to the pipeline by an older version without their form parameters and are exported as plain commands; add them to the pipeline again from the program tab to export their parameters.",
+    "第 {i} 步含有绝对路径，在别的机器上可能不存在": "Step {i} contains an absolute path, which may not exist on other machines",
+    "第 {steps} 步是自定义命令，导入的人会看到这些命令并确认": "Steps {steps} are custom commands; whoever imports the configuration is shown them for confirmation",
 }
 
 
-def T(s, **kw):
-    """翻译界面文字；kw 用于格式化占位符。"""
-    if LANG == "en":
-        s = EN.get(s, s)
-    return s.format(**kw) if kw else s
+def T(_text, /, **kw):
+    """翻译界面文字；kw 用于格式化占位符 (第一个参数只能按位置传入，占位符可以用任何名字)。"""
+    text = EN.get(_text, _text) if LANG == "en" else _text
+    return text.format(**kw) if kw else text
 
 
 def set_lang(lang):
@@ -788,8 +833,9 @@ class Step:
         return self.prog
 
     def job(self, v):
+        """流程中的任务；step 和 vals 记录来自哪个程序页和表单参数 (导出共享配置时使用)。"""
         return dict(title=self.title(v), prog=self.program(v), args=self.args(v), stdin=self.stdin(v),
-                    log=self.log(v), pre=self.pre(v), post=self.post(v), mpi=self.mpi)
+                    log=self.log(v), pre=self.pre(v), post=self.post(v), mpi=self.mpi, step=self.key, vals=dict(v))
 
 
 def fortran_zero(s):
@@ -1321,85 +1367,6 @@ def save_session(workdir, data):
         return True
     except OSError:
         return False
-
-
-# ---------------------------------------------------------------------------
-#  示例：GRASP2018 手册中的算例
-#
-#  demos/<id>.json 只保存各步的表单参数，不含计算结果：
-#    demo_format, id, order, title / summary / runtime: {zh, en}
-#    jobs: [dict(step, vals, group)]    按顺序组成流程；vals 是该程序页的完整参数
-#    reference: [dict(file, energies)]  手册算例的能级能量 (Hartree)，供对照
-#  导入时在空目录中写入目录记录 (SESSION_FILE)，打开该目录即载入参数和流程。
-# ---------------------------------------------------------------------------
-
-DEMO_FORMAT = 1
-DEMO_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "demos")
-
-
-def list_demos(path=DEMO_DIR):
-    """全部示例，按 order 排序；格式版本不认识或无法读取的文件跳过。"""
-    out = []
-    for name in sorted(os.listdir(path)) if os.path.isdir(path) else []:
-        if not name.endswith(".json"):
-            continue
-        try:
-            with open(os.path.join(path, name), encoding="utf-8") as f:
-                demo = json.load(f)
-        except (OSError, ValueError):
-            continue
-        if demo.get("demo_format") == DEMO_FORMAT:
-            out.append(demo)
-    return sorted(out, key=lambda d: (d.get("order", 99), d["id"]))
-
-
-def demo_text(demo, key):
-    """title / summary / runtime 按当前界面语言取值。"""
-    d = demo.get(key, "")
-    return (d.get(LANG) or d.get("zh", "")) if isinstance(d, dict) else d
-
-
-def demo_session(demo):
-    """示例对应的目录记录：流程，以及各程序页显示该程序最后一次使用的参数。"""
-    steps = {s.key: s for s in STEPS}
-    forms, groups = {}, {g: {} for g in GROUPS}
-    pipeline = []
-    for j in demo["jobs"]:
-        step = steps[j["step"]]
-        vals = {f.key: normalize(f, j["vals"].get(f.key, f.default)) for f in step.fields if isinstance(f, Field)}
-        pipeline.append(step.job(vals))
-        if step.key in GROUP_STEPS:
-            groups[j.get("group") or GROUPS[0]][step.key] = vals
-        else:
-            forms[step.key] = vals
-    first = demo["jobs"][0]
-    return dict(steps=forms, groups=groups, group=first.get("group") or GROUPS[0],
-                pipeline=pipeline, tab=first["step"])
-
-
-def demo_programs(demo):
-    """示例用到的程序 (不含 cp)。"""
-    progs = []
-    for job in demo_session(demo)["pipeline"]:
-        for p in [job["prog"]] + [a[1][0] for a in job["pre"] + job["post"] if a[0] == "run"]:
-            if p not in progs and p != "cp":
-                progs.append(p)
-    return progs
-
-
-def missing_programs(demo, bindir):
-    """示例用到、但在 bin 目录和 PATH 中都找不到的程序。"""
-    return [p for p in demo_programs(demo)
-            if not os.path.isfile(os.path.join(bindir, p)) and not shutil.which(p)]
-
-
-def install_demo(demo, workdir):
-    """在 workdir (不存在或为空) 中写入示例的目录记录；目录非空时抛出 FileExistsError。"""
-    if os.path.isdir(workdir) and os.listdir(workdir):
-        raise FileExistsError(T("目录不是空的：{p}", p=workdir))
-    os.makedirs(workdir, exist_ok=True)
-    if not save_session(workdir, demo_session(demo)):
-        raise OSError(T("无法写入 {p}", p=os.path.join(workdir, SESSION_FILE)))
 
 
 # ---------------------------------------------------------------------------

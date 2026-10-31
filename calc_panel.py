@@ -3,18 +3,22 @@
 运行；多个步骤可以加入“流程”后顺序运行 (可选 MPI)，或导出为 shell 脚本 / Slurm 作业脚本。
 """
 
+import datetime
 import json
 import os
 import queue
+import re
 import threading
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QGridLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QListWidget, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
-                               QScrollArea, QSplitter, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
+                               QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit,
+                               QPushButton, QScrollArea, QSplitter, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
+import grasp_config
 import grasp_core as core
+import grasp_mix
 from grasp_core import T
 from gui_common import button, fixed_font, hint_label, text_edit
 
@@ -195,10 +199,11 @@ class SlurmDialog(QDialog):
 
 
 # ---------------------------------------------------------------------------
-#  示例对话框
+#  共享配置：导入 (包括随程序提供的手册算例) 和导出
 # ---------------------------------------------------------------------------
 
 DEMO_ROOT = os.path.join(os.path.expanduser("~"), "grasp_demos")
+CALC_ROOT = os.path.join(os.path.expanduser("~"), "grasp_calcs")
 
 
 def free_dir(path):
@@ -209,30 +214,39 @@ def free_dir(path):
     return cand
 
 
-class DemoDialog(QDialog):
-    """选择 GRASP2018 手册中的算例，导入到一个空目录。"""
+def esc(s):
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-    def __init__(self, parent, demos, bindir):
+
+class ConfigDialog(QDialog):
+    """选择一个配置 (手册算例或打开的配置文件)，导入到一个空目录。
+    entries：[dict(cfg, warnings, path)]，path 为 None 表示随程序提供的示例。"""
+
+    def __init__(self, parent, entries, bindir):
         super().__init__(parent)
-        self.setWindowTitle(T("导入示例"))
-        self.resize(900, 560)
-        self.demos, self.bindir = demos, bindir
+        self.setWindowTitle(T("导入配置"))
+        self.resize(960, 620)
+        self.entries, self.bindir = list(entries), bindir
         lay = QVBoxLayout(self)
-        note = QLabel(T("示例来自 GRASP2018 手册的算例，只包含各程序的参数和计算流程。导入到一个空目录后，"
+        note = QLabel(T("配置只包含各程序的参数和计算流程 (以及少量附带的输入文件)，不含计算结果。导入到一个空目录后，"
                         "点“▶ 运行全部”即可从头计算；各程序页显示该程序在流程中最后一次使用的参数。"))
         note.setWordWrap(True)
         lay.addWidget(note)
         split = QSplitter()
+        left = QWidget()
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(0, 0, 0, 0)
         self.list = QListWidget()
         self.list.setWordWrap(True)             # 标题较长：换行显示，不出现横向滚动条
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list.setSpacing(2)
-        self.list.addItems([core.demo_text(d, "title") for d in demos])
-        split.addWidget(self.list)
+        ll.addWidget(self.list)
+        ll.addWidget(button("打开配置文件…", self.open_file))
+        split.addWidget(left)
         self.info = QTextBrowser()
         split.addWidget(self.info)
         split.setStretchFactor(1, 2)
-        split.setSizes([300, 600])
+        split.setSizes([300, 640])
         lay.addWidget(split, 1)
         row = QHBoxLayout()
         row.addWidget(QLabel(T("导入到目录")))
@@ -249,35 +263,95 @@ class DemoDialog(QDialog):
         bar.addWidget(button("取消", self.reject))
         lay.addLayout(bar)
         self.dir_edited = False
-        self.list.currentRowChanged.connect(self.show_demo)
+        self.list.currentRowChanged.connect(self.show_entry)
         self.list.itemDoubleClicked.connect(lambda _: self.accept())
+        for e in self.entries:
+            self.add_item(e)
         self.list.setCurrentRow(0)
 
-    def demo(self):
-        return self.demos[max(self.list.currentRow(), 0)]
+    def add_item(self, e):
+        title = grasp_config.text(e["cfg"], "title") or os.path.basename(e["path"] or "")
+        self.list.addItem(title if e["path"] is None else f"{title}\n({os.path.basename(e['path'])})")
 
-    def show_demo(self, row):
-        d = self.demos[row]
-        esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")     # noqa: E731
-        html = [f"<h3>{esc(core.demo_text(d, 'title'))}</h3>", f"<p>{esc(core.demo_text(d, 'summary'))}</p>",
-                f"<p><b>{T('预计时间')}:</b> {esc(core.demo_text(d, 'runtime'))}<br>"
-                f"<b>{T('流程')}:</b> {T('{n} 步', n=len(d['jobs']))}<br>"
-                f"<b>{T('用到的程序')}:</b> {esc(', '.join(core.demo_programs(d)))}</p>"]
-        missing = core.missing_programs(d, self.bindir)
+    def open_file(self, path=None):
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(self, T("打开配置文件…"), os.path.expanduser("~"),
+                                                  T("配置文件 (*.json)"))
+        if not path:
+            return False
+        try:
+            cfg, warnings = grasp_config.load(path)
+        except grasp_config.ConfigError as e:
+            QMessageBox.warning(self, T("导入配置"), str(e))
+            return False
+        self.entries.insert(0, dict(cfg=cfg, warnings=warnings, path=os.path.abspath(path)))
+        self.list.clear()
+        for e in self.entries:
+            self.add_item(e)
+        self.dir_edited = False
+        self.list.setCurrentRow(0)
+        return True
+
+    def entry(self):
+        return self.entries[max(self.list.currentRow(), 0)]
+
+    def show_entry(self, row):
+        if row < 0:
+            return
+        e = self.entries[row]
+        d = e["cfg"]
+        html = [f"<h3>{esc(grasp_config.text(d, 'title') or T('(无标题)'))}</h3>"]
+        source = T("随程序提供的示例") if e["path"] is None else esc(e["path"])
+        html.append(f"<p style='color:gray'>{source}</p>")
+        if grasp_config.text(d, "summary"):
+            html.append(f"<p>{esc(grasp_config.text(d, 'summary'))}</p>")
+        meta = [(T("作者"), d.get("author")), (T("日期"), d.get("created")),
+                (T("预计时间"), grasp_config.text(d, "runtime")), (T("程序包"), d.get("package")),
+                (T("导出自"), d.get("created_by")), (T("流程"), T("{n} 步", n=len(d["jobs"]))),
+                (T("用到的程序"), ", ".join(grasp_config.programs(d)))]
+        html.append("<p>" + "<br>".join(f"<b>{k}:</b> {esc(v)}" for k, v in meta if v) + "</p>")
+        missing = grasp_config.missing_programs(d, self.bindir)
         if missing:
             html.append(f"<p style='color:#c00000'><b>{T('在 bin 目录和 PATH 中找不到')}:</b> "
                         f"{esc(', '.join(missing))}<br>{T('流程运行到这些程序时会出错。')}</p>")
+        commands = grasp_config.custom_commands(d)
+        if commands:
+            html.append(f"<p style='color:#a05000'><b>{T('自定义命令')}</b> "
+                        f"({T('可以运行任意程序；导入他人的配置前请确认这些命令是安全的')}):</p>"
+                        "<pre style='background:#fff4e0'>" +
+                        "\n".join(f"{i:2d}. " + esc(c).replace("\n", "\n    ") for i, c in commands) + "</pre>")
+        files = d.get("files", [])
+        if files:
+            html.append(f"<p><b>{T('附带文件')}</b> ({T('导入时写入工作目录')}):</p><ul>" +
+                        "".join(f"<li>{esc(f['name'])} ({len(f['text'].encode('utf-8'))} B)</li>" for f in files) +
+                        "</ul>")
+        if e["warnings"]:
+            html.append(f"<p style='color:#a05000'><b>{T('兼容性')}:</b></p><ul>" +
+                        "".join(f"<li>{esc(w)}</li>" for w in e["warnings"]) + "</ul>")
         refs = d.get("reference", [])
         if refs:
-            html.append(f"<p><b>{T('参考结果')}</b> ({T('手册脚本算出的能量，可与自己的结果对照')}):</p><ul>")
+            html.append(f"<p><b>{T('参考结果')}</b> ({T('配置作者算出的能量，可与自己的结果对照')}):</p><ul>")
             for r in refs:
-                e = r["energies"]
-                html.append(f"<li>{esc(r['file'])}: {T('{n} 个能级', n=len(e))}, "
-                            f"{T('最低')} {min(e):.8f} Eh</li>")
+                en = r["energies"]
+                html.append(f"<li>{esc(r['file'])}: {T('{n} 个能级', n=len(en))}"
+                            + (f", {T('最低')} {min(en):.8f} Eh" if en else "") + "</li>")
             html.append("</ul>")
         self.info.setHtml("".join(html))
         if not self.dir_edited:
-            self.dir.setText(free_dir(os.path.join(DEMO_ROOT, d["id"])))
+            if e["path"] is None:
+                self.dir.setText(free_dir(os.path.join(DEMO_ROOT, d.get("id") or "demo")))
+            else:
+                stem = os.path.basename(e["path"]).split(".")[0] or "calc"
+                self.dir.setText(free_dir(os.path.join(CALC_ROOT, stem)))
+
+    def accept(self):
+        e = self.entry()
+        commands = grasp_config.custom_commands(e["cfg"])
+        if e["path"] is not None and commands and QMessageBox.question(
+                self, T("导入配置"), T("这个配置含有 {n} 条自定义命令 (见右侧)，运行流程时会执行它们。确定导入吗？",
+                                      n=len(commands))) != QMessageBox.Yes:
+            return
+        super().accept()
 
     def pick(self):
         d = QFileDialog.getExistingDirectory(self, "", os.path.dirname(self.dir.text()) or os.path.expanduser("~"))
@@ -287,6 +361,109 @@ class DemoDialog(QDialog):
 
     def target(self):
         return os.path.abspath(os.path.expanduser(self.dir.text().strip()))
+
+
+class ExportDialog(QDialog):
+    """把当前目录的流程导出为共享配置：填写说明，选择参考结果和附带文件。"""
+
+    def __init__(self, parent, workdir, pipeline):
+        super().__init__(parent)
+        self.setWindowTitle(T("导出配置"))
+        self.resize(820, 680)
+        self.workdir, self.pipeline = workdir, pipeline
+        lay = QVBoxLayout(self)
+        note = QLabel(T("配置保存当前流程中各步的参数，不含计算结果，也不含 GRASP bin 目录、MPI 进程数等与机器有关的设置。"
+                        "别人导入后可以从头重复这个计算。"))
+        note.setWordWrap(True)
+        lay.addWidget(note)
+        g = QGridLayout()
+        g.setColumnStretch(1, 1)
+        cfg = core.load_config()
+        self.title = QLineEdit(os.path.basename(workdir.rstrip("/")))
+        self.summary = text_edit("", 3)
+        self.summary.setFont(self.font())
+        self.author = QLineEdit(cfg.get("config_author", ""))
+        self.runtime = QLineEdit()
+        for r, (label, w, hint) in enumerate([("标题", self.title, ""), ("说明", self.summary, "计算的内容和目的"),
+                                              ("作者", self.author, "可选"), ("预计时间", self.runtime, "可选，如“约 10 分钟”")]):
+            g.addWidget(QLabel(T(label)), r, 0, Qt.AlignTop)
+            g.addWidget(w, r, 1)
+            g.addWidget(hint_label(hint), r, 2, Qt.AlignTop)
+        lay.addLayout(g)
+
+        lists = QHBoxLayout()
+        rb = QVBoxLayout()
+        rb.addWidget(QLabel(T("参考结果 (勾选的混合系数文件中的能级能量)")))
+        self.refs = QListWidget()
+        for name in grasp_mix.find_mix_files(workdir):
+            it = QListWidgetItem(name)
+            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Checked if name.endswith(".cm") else Qt.Unchecked)
+            self.refs.addItem(it)
+        rb.addWidget(self.refs)
+        lists.addLayout(rb)
+        fb = QVBoxLayout()
+        fb.addWidget(QLabel(T("附带文件 (界面不能生成的小文本输入文件，每个最多 {n} MB)", n=grasp_config.MAX_FILE >> 20)))
+        self.files = QListWidget()
+        fb.addWidget(self.files)
+        frow = QHBoxLayout()
+        frow.addWidget(button("添加…", self.add_files))
+        frow.addWidget(button("删除", lambda: self.files.takeItem(self.files.currentRow())))
+        frow.addStretch()
+        fb.addLayout(frow)
+        lists.addLayout(fb)
+        lay.addLayout(lists, 1)
+
+        lay.addWidget(QLabel(T("提示")))
+        self.notes = QTextBrowser()
+        self.notes.setMaximumHeight(130)
+        lay.addWidget(self.notes)
+        bar = QHBoxLayout()
+        bar.addStretch()
+        ok = button("导出…", self.accept)
+        ok.setDefault(True)
+        bar.addWidget(ok)
+        bar.addWidget(button("取消", self.reject))
+        lay.addLayout(bar)
+        self.show_notes()
+
+    def show_notes(self):
+        cfg = dict(jobs=[grasp_config.export_job(j) for j in self.pipeline])
+        notes = grasp_config.portability(cfg) or [T("没有发现可移植性问题。")]
+        self.notes.setHtml("<ul>" + "".join(f"<li>{esc(n)}</li>" for n in notes) + "</ul>")
+
+    def add_files(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, T("附带文件"), self.workdir)
+        have = {self.files.item(i).data(Qt.UserRole) for i in range(self.files.count())}
+        for p in paths:
+            try:
+                grasp_config.read_text_file(p)
+            except (grasp_config.ConfigError, OSError) as e:
+                QMessageBox.warning(self, T("附带文件"), str(e))
+                continue
+            if p not in have:
+                it = QListWidgetItem(os.path.basename(p))
+                it.setData(Qt.UserRole, p)
+                self.files.addItem(it)
+
+    def meta(self):
+        return dict(title=self.title.text().strip(), summary=self.summary.toPlainText().strip(),
+                    author=self.author.text().strip(), runtime=self.runtime.text().strip(),
+                    created=datetime.date.today().isoformat())
+
+    def file_paths(self):
+        return [self.files.item(i).data(Qt.UserRole) for i in range(self.files.count())]
+
+    def reference_paths(self):
+        return [os.path.join(self.workdir, self.refs.item(i).text()) for i in range(self.refs.count())
+                if self.refs.item(i).checkState() == Qt.Checked]
+
+    def accept(self):
+        if not self.title.text().strip():
+            QMessageBox.information(self, T("导出配置"), T("请填写标题。"))
+            return
+        core.save_config(config_author=self.author.text().strip())
+        super().accept()
 
 
 # ---------------------------------------------------------------------------
@@ -656,6 +833,8 @@ class CalcPanel(QWidget):
     def add_to_pipeline(self):
         job = self.current_job()
         if job:
+            if job["step"] in core.GROUP_STEPS:
+                job["group"] = self.group           # 导出共享配置时需要
             self.pipeline.append(job)
             self.refresh_list()
             self.btabs.setCurrentIndex(0)
@@ -785,27 +964,63 @@ class CalcPanel(QWidget):
                     self.nav.setCurrentWidget(f)
 
     def import_demo(self):
+        self.import_config(examples=True)
+
+    def import_file(self):
+        self.import_config(examples=False)
+
+    def import_config(self, examples, path=None):
+        """导入共享配置：examples 为真时列出随程序提供的手册算例，否则先选择一个配置文件。"""
         if self.busy:
             QMessageBox.information(self, T("运行中"), T("已有任务在运行，请等待或先停止。"))
             return
-        demos = core.list_demos()
-        if not demos:
-            QMessageBox.warning(self, T("导入示例"), T("找不到示例文件 ({p})", p=core.DEMO_DIR))
+        entries = [dict(cfg=c, warnings=[], path=None) for c in grasp_config.list_demos()] if examples else []
+        if examples and not entries:
+            QMessageBox.warning(self, T("导入示例"), T("找不到示例文件 ({p})", p=grasp_config.DEMO_DIR))
             return
-        dlg = DemoDialog(self, demos, self.run.bindir())
+        dlg = ConfigDialog(self, entries, self.run.bindir())
+        if not examples and not dlg.open_file(path):
+            return
         if dlg.exec() != QDialog.Accepted:
             return
-        demo, path = dlg.demo(), dlg.target()
+        cfg, path = dlg.entry()["cfg"], dlg.target()
         try:
-            core.install_demo(demo, path)
+            grasp_config.install(cfg, path)
         except OSError as e:
-            QMessageBox.warning(self, T("导入示例"), str(e))
+            QMessageBox.warning(self, T("导入配置"), str(e))
             return
         if path == self.cur_workdir:
             self.open_workdir(path)
         else:
             self.workdirRequested.emit(path)
-        self.status(T("已导入示例“{t}”到 {p}；点“▶ 运行全部”开始计算", t=core.demo_text(demo, "title"), p=path))
+        self.status(T("已导入“{t}”到 {p}；点“▶ 运行全部”开始计算", t=grasp_config.text(cfg, "title"), p=path))
+
+    def export_config(self):
+        """把当前流程导出为共享配置文件。"""
+        if not self.need_pipeline():
+            return
+        self.flush_group()
+        dlg = ExportDialog(self, self.cur_workdir, self.pipeline)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        try:
+            cfg = grasp_config.export(self.pipeline, dlg.meta(), dlg.file_paths(), dlg.reference_paths())
+        except (grasp_config.ConfigError, OSError, ValueError) as e:
+            QMessageBox.warning(self, T("导出配置"), str(e))
+            return
+        name = re.sub(r"[^\w.-]+", "_", cfg["title"]).strip("_") or "config"
+        path, _ = QFileDialog.getSaveFileName(self, T("导出配置"), os.path.join(self.cur_workdir, name + ".json"),
+                                              T("配置文件 (*.json)"))
+        if not path:
+            return
+        if not path.endswith(".json"):
+            path += ".json"
+        try:
+            grasp_config.save(cfg, path)
+        except OSError as e:
+            QMessageBox.warning(self, T("导出配置"), str(e))
+            return
+        self.status(T("已导出配置 {p} ({n} 步)", p=path, n=len(cfg["jobs"])))
 
     def save_params(self):
         path, _ = QFileDialog.getSaveFileName(self, T("保存参数"), self.cur_workdir, "JSON (*.json)")

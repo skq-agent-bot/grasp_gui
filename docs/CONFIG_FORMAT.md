@@ -1,0 +1,105 @@
+# Shared configuration format / 共享配置格式
+
+A *configuration* describes a GRASP calculation — the parameters of each program and the pipeline — so that
+someone else can import it into an empty directory and repeat the calculation from scratch. It contains no
+results and no machine-specific settings (GRASP `bin` directory, MPI processes, `mpirun`, working directory).
+The examples of the GRASP2018 manual shipped with the GUI (`demos/*.json`) use the same format.
+
+“配置”描述一个 GRASP 计算 (各程序的参数和计算流程)，别人导入到空目录后可以从头重复这个计算。配置不含计算结果，也不含
+与机器有关的设置 (GRASP `bin` 目录、MPI 进程数、`mpirun`、工作目录)。随程序提供的 GRASP2018 手册算例 (`demos/*.json`)
+也采用这个格式。实现见 `grasp_config.py`。
+
+## File / 文件
+
+A UTF-8 JSON object. Current version: **2**.
+
+```json
+{
+  "format": "grasp-gui-config",
+  "version": 2,
+  "created_by": "GRASP GUI 2.1.0",
+  "package": "GRASP2018",
+  "title": "Li I 2s and 2p",
+  "summary": "…",
+  "runtime": "about 1 minute",
+  "author": "…",
+  "created": "2026-11-01",
+  "jobs": [
+    {"step": "rnucleus", "vals": {"z": "3", "a": "7", "…": "…"}},
+    {"step": "rcsfgenerate", "group": "odd", "vals": {"…": "…"}},
+    {"command": {"title": "…", "prog": "…", "args": [], "stdin": "…", "log": "", "pre": [], "post": [], "mpi": false}}
+  ],
+  "files": [{"name": "my.inp", "text": "…"}],
+  "reference": [{"file": "2s_3.cm", "energies": [-7.4477432154]}]
+}
+```
+
+| Key | Required | Meaning / 含义 |
+|---|---|---|
+| `format` | yes | always `"grasp-gui-config"` |
+| `version` | yes | format version (integer). Readers convert older versions; a newer version is refused with a request to update the GUI. 格式版本：旧版本读入时转换，比程序新的版本拒绝导入并提示更新。 |
+| `created_by` | no | program that wrote the file, e.g. `"GRASP GUI 2.1.0"` (informational) |
+| `package` | no | program package, default `"GRASP2018"`; other values (GRASPG, grasp-continuum, …) are reserved for V3 and refused by V2. 程序包；其他值留给 V3。 |
+| `title`, `summary`, `runtime` | `title` recommended | a string, or one string per interface language: `{"zh": "…", "en": "…"}` |
+| `author`, `created` | no | author, date (`YYYY-MM-DD`) |
+| `id`, `order` | no | identifier and sort order of the examples shipped with the GUI |
+| `jobs` | yes | the pipeline, in order (at least one step); see below |
+| `files` | no | small text input files written into the working directory on import |
+| `reference` | no | reference results to compare with: level energies (Hartree) of mixing coefficient files, in file order |
+
+### Jobs / 计算步骤
+
+* **Form step** `{"step", "group", "vals"}` — `step` is the key of a program tab (`rnucleus`, `rcsfgenerate`,
+  `rmcdhf`, …, `custom`; see `STEPS` in `grasp_core.py`), `vals` the values of its form fields. `group` (`"odd"` or
+  `"even"`, default `"odd"`) is used by the tabs that keep separate parameters for the two state groups
+  (`GROUP_STEPS`). The program input (stdin), command line and file actions are **generated on import by the
+  importing GUI**, so corrections of the input rules also apply to old configurations.
+  Missing fields take their default values and unknown fields are ignored; both are reported to the user.
+* **Command** `{"command": {…}}` — a step stored as the command itself (program, arguments, stdin, log file,
+  file actions `pre` / `post`). Used only for pipeline steps added by GUI versions before 2.1, which did not record
+  their form values. Less portable: the input is not regenerated.
+
+* **表单步骤**：`step` 为程序页，`vals` 为表单参数；按态组保存参数的程序页用 `group` 指明 odd / even (默认 odd)。程序输入、
+  命令行和文件操作由导入方的界面按当前规则**重新生成**。缺少的参数用默认值，不认识的参数忽略，并都告知用户。
+* **命令**：直接保存命令本身，只用于 2.1 之前的版本加入流程、没有记录表单参数的步骤；不会重新生成输入，可移植性较差。
+
+### Attached files / 附带文件
+
+`{"name", "text"}`: a plain file name (no directory, not starting with `.`), UTF-8 text, at most 1 MB per file and
+4 MB in total. Only for inputs the GUI cannot generate (e.g. files used by custom steps).
+
+附带文件：普通文件名 (不含目录，不以 `.` 开头)，UTF-8 文本，每个最多 1 MB，合计最多 4 MB；只用于界面不能生成的输入文件。
+
+## Import / 导入
+
+1. The file is read and converted to the current version; it is refused if the format, version, package, a
+   program tab or an attached file is invalid.
+2. The import dialog shows the description, the programs needed (missing ones are marked), the attached files,
+   compatibility warnings and — highlighted — every **custom command** (custom tab steps and stored commands).
+   These can run any program; a configuration from a file with custom commands must be confirmed explicitly.
+3. The configuration is imported into an empty directory: attached files are written and the pipeline and forms
+   are stored as the session of that directory (`.grasp_gui.json`). *▶ Run all* computes it from scratch.
+
+1. 读取并转换为当前版本；格式、版本、程序包、程序页或附带文件不合法时拒绝导入。
+2. 导入对话框显示说明、所需的程序 (找不到的标出)、附带文件、兼容性提示，并醒目地列出全部**自定义命令** (“自定义”程序页和
+   原样保存的命令)；这些命令可以运行任意程序，文件中的配置含有自定义命令时需要用户确认。
+3. 导入到空目录：写入附带文件，流程和表单参数作为该目录的记录保存；点“▶ 运行全部”即可从头计算。
+
+## Export / 导出
+
+*File → Export configuration…* writes the current pipeline. Before saving, the dialog points out what may not
+work elsewhere: steps stored as commands, absolute paths, custom commands.
+
+“文件 → 导出配置…”导出当前流程；导出前提示可能影响可移植性的地方：按命令保存的步骤、绝对路径、自定义命令。
+
+## Versions / 版本
+
+| Version | GUI | Changes |
+|---|---|---|
+| 1 | 1.3.0 – 2.0.0 | examples only: `"demo_format": 1`, no `format` / `package` |
+| 2 | 2.1.0 | `format`, `package`, `created_by`, `author`, `created`, command steps, attached files |
+
+When the format changes, `VERSION` in `grasp_config.py` is increased and `upgrade()` gets a conversion from the
+previous version, so that every older file stays readable.
+
+格式改变时，`grasp_config.py` 中的 `VERSION` 加 1，并在 `upgrade()` 中加入从上一版本的转换，保证旧文件都能读入。

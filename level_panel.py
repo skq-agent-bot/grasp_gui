@@ -1441,9 +1441,9 @@ class LevelPanel(Panel):
                     text.append(T("工作目录中没有 isodata：{d}", d=where))
                 elif what == "w?":
                     text.append(T("无法确定与 {f} 对应的径向波函数文件，候选：{c}。请把对应的 .w 文件命名为与混合系数文件同名 "
-                                  "(如 {s}.w)。", f=os.path.basename(where[0]),
+                                  "(如 {stem}.w)。", f=os.path.basename(where[0]),
                                   c=", ".join(os.path.basename(c) for c in where[1]),
-                                  s=os.path.splitext(os.path.basename(where[0]))[0]))
+                                  stem=os.path.splitext(os.path.basename(where[0]))[0]))
                 else:
                     text.append(T("找不到与 {f} 对应的 {what} 文件", f=os.path.basename(where),
                                   what=".c" if what == "CSF" else ".w"))
