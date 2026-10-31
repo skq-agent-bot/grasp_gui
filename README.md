@@ -158,6 +158,11 @@ modules on first use. The executable (about 90 MB) needs a glibc at least as new
 (e.g. built on Ubuntu 22.04: glibc ≥ 2.35); to use it on an older system, run `build.sh` there. GRASP
 itself is not included: point the GUI at a GRASP `bin` directory as usual.
 
+**Old servers, `ssh -X`:** each release also has `grasp_gui-legacy`, the same program built for glibc ≥ 2.17
+(CentOS 7, Rocky 8, Ubuntu 18.04, Debian 9 and newer) with Qt 5. It needs nothing else on the server, so you can
+start it where the (large) result files are and see the window on your own computer over X11 forwarding.
+See [legacy/README.md](https://github.com/skq1998/grasp_gui/blob/legacy/legacy/README.md) (branch `legacy`).
+
 Fonts are bundled, so the GUI also works on machines without (Chinese) fonts: Noto Sans CJK
 (SIL Open Font License) and DejaVu Sans / DejaVu Sans Mono (free licence), with their licence files.
 `build.sh` takes them from the build machine via fontconfig (Debian/Ubuntu:
@@ -166,6 +171,9 @@ Fonts are bundled, so the GUI also works on machines without (Chinese) fonts: No
 `build.sh` 首次运行时自动建立打包环境。生成的可执行文件约 90 MB，不需要 Python 或 PySide6；
 要求系统的 glibc 不低于打包机器的版本（在 Ubuntu 22.04 上打包则需 glibc ≥ 2.35），
 在更老的系统上使用时，在那台机器上重新运行 `build.sh` 即可。GRASP 本身不包含在内。
+**旧服务器、`ssh -X`**：每个发布版还附带 `grasp_gui-legacy`，是为 glibc ≥ 2.17 (CentOS 7、Rocky 8、Ubuntu 18.04、
+Debian 9 及更新的系统) 用 Qt 5 构建的同一程序，服务器上不需要安装其他东西：在存放 (很大的) 计算结果的服务器上运行，
+通过 X11 转发在自己的电脑上显示窗口。见 `legacy` 分支的 [legacy/README.md](https://github.com/skq1998/grasp_gui/blob/legacy/legacy/README.md)。
 可执行文件内置了字体 (Noto Sans CJK、DejaVu Sans / Sans Mono 及其许可证)，没有安装中文字体的机器也能正常显示；
 打包时从本机取这些字体 (Ubuntu：`apt install fonts-noto-cjk fonts-dejavu-core`)。
 
