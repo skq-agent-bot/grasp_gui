@@ -179,6 +179,28 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
 - **验证**：CentOS 7、Debian 9、Ubuntu 18.04、Rocky 8 和不装任何 X 库的 CentOS 7 容器中启动并显示到 Xvfb 容器；
   两个容器之间真实的 `ssh -X` 登录并操作能级图；全部界面测试在 PySide2 下通过。详见 `legacy/README.md`。
 
+### 14. GRASPG 能否直接替换 GRASP2018 (V3 前的调查)
+
+结论：**不能无缝替换**，V3 仍需专门支持；但计算结果的文件格式相同，现有的查看器基本可以直接使用。
+
+- **来源**：[compas/graspg](https://github.com/compas/graspg) (基于组态波函数生成器 CSFG；Li et al., CPC 283 (2023) 108562)。
+  它不是独立的 GRASP，而是装进已有的 GRASP2018 目录 (`srcg/`)，向 `$GRASP/bin` **新增**程序，不修改 GRASP2018 的程序。
+  所以装了 GRASPG 的机器上，现有界面照常可用。
+- **新增的程序** (都带 `_csfg` 后缀)：`rcsfggenerate_csfg`、`rcsfginteract_csfg`、`rcsfgzerofirst_csfg`、`rcsfgsplit_csfg`、
+  `rcsfgexpand_csfg`、`rcsfgextend_csfg`、`rcsfgblocksplit_csfg`、`rwfnestimate_csfg`、`rangular_csfg_mpi`、`rmcdhf_csfg_mpi`、
+  `rci_csfg_mpi`、`rci_block_csfg_mpi`、`rmixaccumulate_csfg`、`jj2lsj_csfg`、`rlevels_csfg`、`rsave_csfg`、`rdistHmatrix_csfg`。
+  `rangular`、`rmcdhf`、`rci` 只有 MPI 版本。
+- **计算流程不同** (对照 `graspgtest/script1` 中作者给出的 csf / csfg 两套脚本)：
+  - 组态列表是 CSFG 列表 `*.g` 加标记文件 `*.l` (输入文件为 `rcsfg.inp`、`rlabel.inp`)，不是 `*.c`/`rcsf.inp`；
+  - `rcsfggenerate_csfg` 的提问不同 (没有开头的排序问题，另有生成 CSFG 的轨道和激发设置)；
+  - `rci_csfg_mpi` 多出 Breit 相互作用按 n、l 截断和每个进程内存上限的问题；
+  - 其他程序 (`rwfnestimate`、`rmcdhf`、`jj2lsj`) 的提问与 GRASP2018 相同，只是程序名和输入文件不同；`rnucleus`、`rtransition`、
+    `rbiotransform` 等沿用 GRASP2018。
+- **结果文件相同**：`rsave_csfg` 照常写出 `.w`、`.c` (展开后的 CSF 列表)、`.m`，并另存 `.g`、`.l`；`rci_csfg_mpi` 自动写出 `.c`。
+  `rlevels_csfg` 与 `rlevels` 读的是同样格式的 `.m`/`.cm`，区别只在于能读部分写完的文件 (`rci_block_csfg_mpi` 逐块计算) 和更长的
+  LSJ 标记 (128 字符)。因此径向波函数和能级图页应能直接读 GRASPG 的结果；V3 需要实测，并让 `grasp_mix` 容忍不完整的混合系数文件。
+- **另外注意**：GRASPG 的脚本用了较新的 GRASP 程序 (`jj2lsj_2024`、`rtransition_2024`)，GRASP 主线在 2018 版之后也有更新。
+
 ## 测试方法
 
 | 测试 | 内容 |
@@ -205,4 +227,13 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
 - **V2**：v2.0.0 起为正式版，`main` 即 V2；后续的 V2.x 在 main 上开发。
   - v2.1.0：共享配置 (见第 12 节)；公共配置库是另外的社区项目，暂不做。
 - **legacy**：旧系统版 (见第 13 节)，与 main 一起发布。
-- **V3**：兼容 GRASP 的再开发版本，如 GRASPG、grasp-continuum。需要把各程序的输入规则（`grasp_core.py` 中的字段和提问顺序）按“程序包 / 版本”区分，并识别这些版本特有的程序和文件格式。
+- **V3** (分支 `v3`)：支持 GRASP 的扩展和再开发版本。基础工作：把各程序的输入规则（`grasp_core.py` 中的字段和提问顺序）按
+  “程序包 / 版本”区分 (共享配置的 `package` 字段已为此预留)，按 bin 目录中的程序识别可用的扩展，并识别它们特有的程序和文件格式。
+  - **GRASPG**：不能无缝替换 GRASP2018 (见第 14 节)。需要 CSFG 流程的程序页 (`.g`/`.l` 文件、`rcsfggenerate_csfg` 等的提问)，
+    查看器容忍逐块写出的混合系数文件。
+  - **QED**：[compas/grasp-rci-qed](https://github.com/compas/grasp-rci-qed) 的 `rci-qed` (改写的 `rci_mpi`，单独安装到
+    `$GRASP/bin`；自能可选不同模型，包括 Shabaev 等的模型算符 QEDMOD、Flambaum–Ginges、Pyykkö–Zhao 和原来的氢样估计；设置另存为
+    TOML 文件)。`rci-qed.pt <state>` (命令行参数，不是交互输入) 把各能级的能量按项列出：动能 + 核势、Coulomb、Breit、正常 / 特殊质量
+    移位、真空极化、自能。需要这两个程序的程序页，并在能级图中显示各项修正。作者注明仍在开发中。GRASP2018 自带 `rci` 中的真空极化和
+    自能估计已在 V2 中支持。
+  - **grasp-continuum**：连续态计算。
