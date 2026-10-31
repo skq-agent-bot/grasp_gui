@@ -100,7 +100,7 @@ def check(doc):
             raise ConfigError(T("第 {i} 步的格式有误", i=i))
         keys = {f.key for f in step.fields if isinstance(f, core.Field)}
         unknown = sorted(set(vals) - keys)
-        missing = sorted(keys - set(vals))
+        missing = sorted(keys - set(vals) - {f.key for f in step.fields if getattr(f, "added", False)})
         if unknown:
             warnings.append(T("第 {i} 步 ({step}) 中不认识的参数已忽略：{k}", i=i, step=step.key, k=", ".join(unknown)))
         if missing:

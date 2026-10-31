@@ -640,6 +640,20 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
     "第 {steps} 步由旧版本加入流程，没有记录表单参数，只能按原样的命令导出；在程序页中重新“加入流程”可以改为保存参数。": "Steps {steps} were added to the pipeline by an older version without their form parameters and are exported as plain commands; add them to the pipeline again from the program tab to export their parameters.",
     "第 {i} 步含有绝对路径，在别的机器上可能不存在": "Step {i} contains an absolute path, which may not exist on other machines",
     "第 {steps} 步是自定义命令，导入的人会看到这些命令并确认": "Steps {steps} are custom commands; whoever imports the configuration is shown them for confirmation",
+    # 零阶 / 一阶划分
+    "零阶 / 一阶划分：零阶空间以外的 CSF 按一阶微扰处理": "Zero/first-order partition: CSFs outside the zero-order space treated as first-order perturbations",
+    "先用 rcsfzerofirst 把零阶空间的 CSF 排在各块最前面": "first put the zero-order CSFs at the top of each block with rcsfzerofirst",
+    "  零阶空间的 CSF 列表": "  CSF list of the zero-order space",
+    "各块的 ICCUT 取此列表各块的 CSF 数 (运行时读取)": "the ICCUT of each block is the number of CSFs of that block in this list (read when run)",
+    "零阶 / 一阶划分的第一步：把 CSF 列表各块中属于零阶空间的 CSF 排到最前面，输出 rcsf.out。之后在 rangular 和 rci 中勾选“零阶 / 一阶划分”并给出同一个零阶空间列表：各块前 ICCUT 个 CSF 按变分处理，其余按一阶微扰处理 (只算它们与零阶空间的相互作用和对角元)，大规模展开时省时、省内存。": "First step of the zero/first-order partition: moves the CSFs of the zero-order space to the top of each block of a CSF list, writing rcsf.out. Then tick \"Zero/first-order partition\" in rangular and rci with the same zero-order list: the first ICCUT CSFs of each block are treated variationally, the rest as first-order perturbations (only their interaction with the zero-order space and their diagonal elements are computed), which saves time and memory for large expansions.",
+    "零阶空间的 CSF 列表": "CSF list of the zero-order space",
+    "如多参考列表；对称块须与要划分的列表一一对应": "e.g. the multireference list; its symmetry blocks must match those of the list to partition",
+    "要划分的 CSF 列表": "CSF list to partition",
+    "与要划分的列表同名时覆盖原列表；留空则不复制": "the same name as the list to partition overwrites it; empty = no copy",
+    "无法读取零阶空间的 CSF 列表 {z} 或 {f}：{e}": "Cannot read the zero-order CSF list {z} or {f}: {e}",
+    "零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。": "The zero-order CSF list {z} and {f} have different symmetry blocks ({a} / {b}): their J and parity blocks must match one to one.",
+    "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
+    "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
 }
 
 
@@ -955,15 +969,87 @@ class RcsfSplit(Step):
         return f"rcsfsplit {v['state']}"
 
 
+# 零阶 / 一阶划分 (rcsfzerofirst 把零阶空间的 CSF 排在各块最前面)：rangular、rci 的非默认设置按块询问 ICCUT，
+# 即各块前 ICCUT 个 CSF 按变分处理，其余按一阶微扰处理 (只保留它们与零阶空间的相互作用和对角元)。ICCUT 取零阶空间
+# CSF 列表各块的 CSF 数；该列表在加入流程时可能还不存在，所以输入中先写占位行 "@ICCUT 零阶列表 CSF 列表"，
+# 运行时由 expand_iccut 换成各块的数 (导出的脚本中用 awk 计算，见 describe)。
+ICCUT = "@ICCUT"
+ICCUT_AWK = "f&&/^ *[*]/{print int(n/3);n=0;next} f&&NF{n++} /^CSF[(]s[)]:/{f=1} END{print int(n/3)}"
+
+
+def zero_first_fields(default_zero):
+    # added=True：2.2.0 新增的字段，旧版本导出的配置中没有时直接用默认值 (不提示)
+    return [Check("zf", "零阶 / 一阶划分：零阶空间以外的 CSF 按一阶微扰处理", False,
+                  "先用 rcsfzerofirst 把零阶空间的 CSF 排在各块最前面", added=True),
+            Entry("zero", "  零阶空间的 CSF 列表", default_zero, "各块的 ICCUT 取此列表各块的 CSF 数 (运行时读取)",
+                  added=True)]
+
+
+def csf_blocks(path):
+    """CSF 列表各块的 (CSF 数, J 和宇称，如 3/2-)。"""
+    import grasp_mix
+    return [(len(b), b[0][1].split()[-1] if b and b[0][1].split() else "") for b in grasp_mix.read_csfs(path)]
+
+
+def expand_iccut(stdin, cwd, strict=False):
+    """把输入中的 ICCUT 占位行换成各块的 ICCUT；零阶列表与 CSF 列表的块不对应时抛出 RuntimeError。
+    strict：rangular_mpi 要求 1 < ICCUT < 块的 CSF 数 (否则反复要求重新输入)。"""
+    out = []
+    for line in stdin.split("\n"):
+        if not line.startswith(ICCUT + " "):
+            out.append(line)
+            continue
+        zero, full = line.split()[1:3]
+        try:
+            zb, fb = csf_blocks(os.path.join(cwd, zero)), csf_blocks(os.path.join(cwd, full))
+        except (OSError, StopIteration, IndexError) as e:
+            raise RuntimeError(T("无法读取零阶空间的 CSF 列表 {z} 或 {f}：{e}", z=zero, f=full, e=e))
+        if [s for _, s in zb] != [s for _, s in fb]:
+            raise RuntimeError(T("零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。",
+                                 z=zero, f=full, a=" ".join(s for _, s in zb), b=" ".join(s for _, s in fb)))
+        for (n, sym), (ncf, _) in zip(zb, fb):
+            if n > ncf or (strict and not 1 < n < ncf):
+                raise RuntimeError(T("块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。"
+                                     if strict else "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。",
+                                     s=sym, n=n, f=full, ncf=ncf))
+            out.append(str(n))
+    return "\n".join(out)
+
+
+class RcsfZeroFirst(Step):
+    key = name = prog = "rcsfzerofirst"
+    fields = [
+        Note("零阶 / 一阶划分的第一步：把 CSF 列表各块中属于零阶空间的 CSF 排到最前面，输出 rcsf.out。之后在 rangular 和 rci "
+             "中勾选“零阶 / 一阶划分”并给出同一个零阶空间列表：各块前 ICCUT 个 CSF 按变分处理，其余按一阶微扰处理 "
+             "(只算它们与零阶空间的相互作用和对角元)，大规模展开时省时、省内存。"),
+        Entry("zero", "零阶空间的 CSF 列表", "odd2.c", "如多参考列表；对称块须与要划分的列表一一对应"),
+        Entry("full", "要划分的 CSF 列表", "odd3.c"),
+        Entry("saveas", "结果 rcsf.out 保存为", "odd3.c", "与要划分的列表同名时覆盖原列表；留空则不复制"),
+    ]
+
+    def stdin(self, v):
+        return answers([v["zero"].strip(), v["full"].strip()])
+
+    def post(self, v):
+        s = v["saveas"].strip()
+        return [("cp", "rcsf.out", s)] if s else []
+
+    def title(self, v):
+        s = v["saveas"].strip()
+        return f"rcsfzerofirst -> {s}" if s else "rcsfzerofirst"
+
+
 class RAngular(Step):
     key = name = prog = "rangular"
     mpi = True
     fields = [
         Note("计算角系数 (mcp.*)。读取 rcsf.inp。"),
         Entry("csf", "复制此 CSF 文件为 rcsf.inp", "odd2.c", "留空则直接用现有 rcsf.inp"),
-    ]
+    ] + zero_first_fields("odd2.c")
 
     def stdin(self, v):
+        if v["zf"]:
+            return answers(["n", f"{ICCUT} {v['zero'].strip()} rcsf.inp"])
         return "y\n"
 
     def pre(self, v):
@@ -1067,11 +1153,18 @@ class RCi(Step):
         Check("se", "估计自能 (Self-energy)", True),
         Entry("nqed", "  自能计算的最大 n (≤8)", "4"),
         Text("levels", "各块计算的能级", "1\n1", "每块一行", lines=3),
+    ] + zero_first_fields("odd2.c") + [
         Entry("log", "输出日志文件", "outodd_rci"),
     ]
 
     def stdin(self, v):
-        lines = ["y", v["state"].strip(), yn(v["trans"]), yn(v["modfreq"])]
+        state = v["state"].strip()
+        if v.get("zf"):
+            # 非默认设置：不重启、不改光速、按一阶微扰处理部分 CSF，再逐块给出 ICCUT
+            lines = ["n", state, "n", "n", "y", f"{ICCUT} {v['zero'].strip()} {state}.c"]
+        else:
+            lines = ["y", state]
+        lines += [yn(v["trans"]), yn(v["modfreq"])]
         if v["modfreq"]:
             lines.append(v["factor"])
         lines += [yn(v["vp"]), yn(v["nms"]), yn(v["sms"]), yn(v["se"])]
@@ -1283,13 +1376,13 @@ class Custom(Step):
         return s if s.endswith("\n") or not s else s + "\n"
 
 
-STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
+STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RcsfZeroFirst(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
          RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RTabTrans1(), RTabTrans2(),
          RBioTransform(), RTransition(), Custom()]
 
 # 界面左侧程序列表的功能分组 (每个程序恰好出现一次)
 STEP_GROUPS = [
-    ("核与组态", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit"]),
+    ("核与组态", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst"]),
     ("自洽场与 CI", ["rangular", "rwfnestimate", "rmcdhf", "rsave", "rci"]),
     ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
     ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
@@ -1306,7 +1399,7 @@ assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s 
 # ---------------------------------------------------------------------------
 
 GROUPS = ("odd", "even")
-GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci",
+GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci",
                "jj2lsj", "rhfs", "ris4")
 
 # even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))
@@ -1396,7 +1489,12 @@ def describe(job, mpi_prefix=""):
         cmd = f"{shlex.quote(job['prog'])} {args}".rstrip()
     if job["log"]:
         cmd += f" > {shlex.quote(job['log'])}"
-    if job["stdin"].strip():
+    if any(ln.startswith(ICCUT + " ") for ln in job["stdin"].split("\n")):
+        # 各块的 ICCUT 在运行时由零阶列表算出：不加引号的 here-document，其余各行转义
+        lines = [f"$(awk '{ICCUT_AWK}' {shlex.quote(ln.split()[1])})" if ln.startswith(ICCUT + " ")
+                 else re.sub(r"([\\$`])", r"\\\1", ln) for ln in job["stdin"].split("\n")]
+        out.append(f"{cmd} <<EOF\n" + "\n".join(lines) + "EOF")
+    elif job["stdin"].strip():
         out.append(f"{cmd} <<'EOF'\n{job['stdin']}EOF")
     else:
         out.append(cmd + " < /dev/null")
@@ -1579,7 +1677,10 @@ class Runner:
             err = check_mcp(cfg["cwd"], cfg["np"], cfg["mpitmp"])
             if err:
                 raise RuntimeError(err)
-        rc = self.exec_cmd([job["prog"]] + job["args"], cfg, job["stdin"], job["log"], job.get("mpi"))
+        stdin = job["stdin"]
+        if ICCUT in stdin:
+            stdin = expand_iccut(stdin, cfg["cwd"], strict=job["prog"] == "rangular" and cfg["np"] > 1)
+        rc = self.exec_cmd([job["prog"]] + job["args"], cfg, stdin, job["log"], job.get("mpi"))
         if job["log"]:
             self.emit(T("[输出已写入 {f}]", f=job["log"]) + "\n", "info")
         if rc != 0 or self.stopped:
