@@ -680,6 +680,19 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
     "自能只算到此 n，频率相关的 Breit 也用它；≤ 8，且不超过列表中的最大 n": "self-energy up to this n, also used by the frequency-dependent Breit; ≤ 8 and not above the largest n of the list",
     "每个进程的内存上限 (GB，整数)": "Memory limit per process (GB, integer)",
     "列出能级。可给多个 .m / .cm 文件；也能读 rci_block_csfg 逐块写出、尚未写完的文件。": "Lists the levels. Several .m / .cm files can be given; files that rci_block_csfg is still writing block by block can be read too.",
+    "CSFG 工具": "CSFG tools",
+    "把 CSFG 列表展开为普通的 CSF 列表 rcsf.out (GRASP2018 的程序可以使用)。读取 rcsfg.inp、rlabel.inp。": "Expands a CSFG list into an ordinary CSF list rcsf.out (usable by the GRASP2018 programs). Reads rcsfg.inp, rlabel.inp.",
+    "结果 rcsf.out 保存为": "Save rcsf.out as",
+    "把 name.g 中的 CSFG 扩展到更大的轨道集 (各 l 的最高 n 加大)，每个轨道集写出 name<标签>.g 和 name<标签>.l。读取 name.g、name.l。新的轨道集不能比原来的小。": "Extends the CSFGs of name.g to larger orbital sets (higher n per l), writing name<label>.g and name<label>.l for each set. Reads name.g, name.l. The new sets must not be smaller than the original one.",
+    "扩展 (每行: 轨道集  标签)": "Extensions (per line: orbital set  label)",
+    "把 name.g 按 J 和宇称拆分为每块一个文件 name_odd1.g、name_even1.g …，并各复制一份 name.l。用于逐块的 CI 计算。各块必须由同一组轨道构成 (到同一 n 的单双激发一般满足，多参考列表不一定)。": "Splits name.g by J and parity into one file per block, name_odd1.g, name_even1.g …, each with a copy of name.l. Used for block-by-block CI. All blocks must be built from the same orbital set (normally true for single and double excitations to one n, not necessarily for multireference lists).",
+    "按混合系数的平方累计，只保留占波函数一定比例的 CSFG，得到压缩的列表 (可再把最高轨道换成更大的轨道集，用于更大的 CI)。读取 name.(c)m、name.g、name.l；输出 rcsfg.out (换轨道集时为 rcsfg.nmax)、rcsf.out 等。": "Accumulates the squared mixing coefficients and keeps only the CSFGs making up a given fraction of the wave function, giving a condensed list (whose highest orbitals can be replaced by a larger set for a larger CI). Reads name.(c)m, name.g, name.l; writes rcsfg.out (rcsfg.nmax with a new orbital set), rcsf.out etc.",
+    "保留的波函数比例 (0–1)": "Fraction of the wave function to keep (0–1)",
+    "按混合系数排序": "Sort by mixing coefficients",
+    "把各 l 的最高轨道换成更大的轨道集": "Replace the highest orbitals of each l by a larger set",
+    "  新的轨道集": "  New orbital set",
+    "各 l 的最高 n": "highest n per l",
+    "写出 name.g，并复制 state.l 为 name.l；留空则不复制": "writes name.g and copies state.l to name.l; empty = no copy",
 }
 
 
@@ -1525,11 +1538,92 @@ class RLevelsCsfg(RLevels):
     ] + RLevels.fields[1:]
 
 
+class RcsfgExpand(Step):
+    key = name = prog = "rcsfgexpand_csfg"
+    fields = [
+        Note("把 CSFG 列表展开为普通的 CSF 列表 rcsf.out (GRASP2018 的程序可以使用)。读取 rcsfg.inp、rlabel.inp。"),
+        Entry("csf", "CSFG 列表 (不含扩展名)", "odd", "复制 name.g / name.l 为 rcsfg.inp / rlabel.inp；留空则用现有文件"),
+        Entry("saveas", "结果 rcsf.out 保存为", "odd.c", "留空则不复制"),
+    ]
+
+    def pre(self, v):
+        return csfg_inputs(v["csf"].strip())
+
+    def post(self, v):
+        s = v["saveas"].strip()
+        return [("cp", "rcsf.out", s)] if s else []
+
+    def title(self, v):
+        s = v["saveas"].strip()
+        return f"{self.prog} -> {s}" if s else self.prog
+
+
+class RcsfgExtend(RcsfSplit):
+    key = name = prog = "rcsfgextend_csfg"
+    fields = [
+        Note("把 name.g 中的 CSFG 扩展到更大的轨道集 (各 l 的最高 n 加大)，每个轨道集写出 name<标签>.g 和 name<标签>.l。"
+             "读取 name.g、name.l。新的轨道集不能比原来的小。"),
+        Entry("state", "CSFG 列表名 (不含 .g)", "odd6"),
+        Text("splits", "扩展 (每行: 轨道集  标签)", "7s,7p,7d,7f,7g,7h _n7", lines=4),
+    ]
+
+    def title(self, v):
+        return f"{self.prog} {v['state']}"
+
+
+class RcsfgBlockSplit(Step):
+    key = name = prog = "rcsfgblocksplit_csfg"
+    fields = [
+        Note("把 name.g 按 J 和宇称拆分为每块一个文件 name_odd1.g、name_even1.g …，并各复制一份 name.l。"
+             "用于逐块的 CI 计算。各块必须由同一组轨道构成 (到同一 n 的单双激发一般满足，多参考列表不一定)。"),
+        Entry("state", "CSFG 列表名 (不含 .g)", "odd6"),
+    ]
+
+    def stdin(self, v):
+        return answers([v["state"].strip(), "y"])
+
+    def title(self, v):
+        return f"{self.prog} {v['state']}"
+
+
+class RMixAccumulateCsfg(Step):
+    key = name = prog = "rmixaccumulate_csfg"
+    fields = [
+        Note("按混合系数的平方累计，只保留占波函数一定比例的 CSFG，得到压缩的列表 (可再把最高轨道换成更大的轨道集，"
+             "用于更大的 CI)。读取 name.(c)m、name.g、name.l；输出 rcsfg.out (换轨道集时为 rcsfg.nmax)、rcsf.out 等。"),
+        Entry("state", "态名称", "oddCI6"),
+        Check("ci", "混合系数来自 CI 计算 (.cm)", True, "否则读 .m"),
+        Entry("frac", "保留的波函数比例 (0–1)", "0.9999999"),
+        Check("sort", "按混合系数排序", True),
+        Check("redefine", "把各 l 的最高轨道换成更大的轨道集", False),
+        Entry("orbs", "  新的轨道集", "7s,7p,7d,7f,7g,7h", "各 l 的最高 n"),
+        Entry("saveas", "结果保存为 (不含扩展名)", "oddRAC6", "写出 name.g，并复制 state.l 为 name.l；留空则不复制"),
+    ]
+
+    def stdin(self, v):
+        lines = [v["state"].strip(), yn(v["ci"]), v["frac"], yn(v["sort"]), yn(v["redefine"])]
+        if v["redefine"]:
+            lines.append(v["orbs"].strip())
+        return answers(lines)
+
+    def post(self, v):
+        s = v["saveas"].strip()
+        if not s:
+            return []
+        out = "rcsfg.nmax" if v["redefine"] else "rcsfg.out"
+        return [("cp", out, f"{s}.g"), ("cp", f"{v['state'].strip()}.l", f"{s}.l")]
+
+    def title(self, v):
+        s = v["saveas"].strip()
+        return f"{self.prog} {v['state']} -> {s}.g" if s else f"{self.prog} {v['state']}"
+
+
 STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
          RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RTabTrans1(), RTabTrans2(),
          RBioTransform(), RTransition(), Custom(),
          RcsfgGenerate(), RcsfgInteract(), RcsfgSplit(), RAngularCsfg(), RWfnEstimateCsfg(), RMcdhfCsfg(), RSaveCsfg(),
-         RCiCsfg(), Jj2lsjCsfg(), RLevelsCsfg()]
+         RCiCsfg(), Jj2lsjCsfg(), RLevelsCsfg(), RcsfgExpand(), RcsfgExtend(), RcsfgBlockSplit(),
+         RMixAccumulateCsfg()]
 
 # 程序包 (计算页右上角选择)：GRASPG 的程序装在 GRASP2018 的 bin 目录中，以此程序判断是否已安装
 PACKAGES = ("GRASP2018", "GRASPG")
@@ -1548,6 +1642,7 @@ STEP_GROUPS = {
         ("自洽场与 CI", ["rangular_csfg", "rwfnestimate_csfg", "rmcdhf_csfg", "rsave_csfg", "rci_csfg"]),
         ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
         ("结果与工具", ["jj2lsj_csfg", "rlevels_csfg", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
+        ("CSFG 工具", ["rcsfgexpand_csfg", "rcsfgextend_csfg", "rcsfgblocksplit_csfg", "rmixaccumulate_csfg"]),
     ],
 }
 
@@ -1585,7 +1680,8 @@ GROUPS = ("odd", "even")
 GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci",
                "jj2lsj", "rhfs", "ris4",
                "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg", "rangular_csfg", "rwfnestimate_csfg",
-               "rmcdhf_csfg", "rsave_csfg", "rci_csfg", "jj2lsj_csfg")
+               "rmcdhf_csfg", "rsave_csfg", "rci_csfg", "jj2lsj_csfg", "rcsfgexpand_csfg", "rcsfgextend_csfg",
+               "rcsfgblocksplit_csfg", "rmixaccumulate_csfg")
 
 # even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))
 EVEN_DEFAULTS = {
@@ -1800,9 +1896,10 @@ def check_mcp_csfg(cwd, np, mpitmp):
 
 
 def csfg_failed(tail):
-    """GRASPG 的程序出错时也以退出码 0 结束，只在输出中报告 (如 "rlabel.inp not exists, Stop Error!"，
-    或 Fortran 的 STOP 'Error! …')。"""
-    return bool(re.search(r"Stop Error|^\s*STOP\b.*(error|unexpected|warning)", tail, re.I | re.M))
+    """GRASPG 的程序出错时也以退出码 0 结束，只在输出中报告 (如 "rlabel.inp not exists, Stop Error!"、
+    "Error!name.l is not found ..."、"Problems with opening the file name.g"，或 Fortran 的 STOP 'Error! …')。"""
+    return bool(re.search(r"Stop Error|Error!|Problems with opening|is not found|not exists"
+                          r"|^\s*STOP\b.*(error|unexpected|warning)", tail, re.I | re.M))
 
 
 class Runner:

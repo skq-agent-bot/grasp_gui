@@ -91,6 +91,11 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   * *SCF & CI*: `rangular_csfg`, `rwfnestimate_csfg`, `rmcdhf_csfg`, `rsave_csfg`, `rci_csfg`
   * *Properties & transitions*: as GRASP2018 (they read the expanded `name.c` written by `rsave_csfg` / `rci_csfg`)
   * *Results & tools*: `jj2lsj_csfg`, `rlevels_csfg`, `rtablevels`, `rtabtrans1`, `rtabtrans2`, *Custom*
+  * *CSFG tools (CSFG 工具)*, a fifth group only for GRASPG: `rcsfgexpand_csfg` (CSFG list → CSF list `rcsf.out`,
+    *Save rcsf.out as*), `rcsfgextend_csfg` (larger orbital sets, lines `orbital set  label` like the split),
+    `rcsfgblocksplit_csfg` (one file per J/parity block, answers the "same orbital set" question with y),
+    `rmixaccumulate_csfg` (condense by accumulated weight; optional new orbital set → `rcsfg.nmax`; *Save the result
+    as* writes `name.g` and copies `state.l`)
 
   GRASPG forms work on CSFG lists `name.g` + labelling-orbital files `name.l` (names given without extension; the
   GUI copies them to `rcsfg.inp` / `rlabel.inp`, or `rcsfgmr.inp` / `rcsfgmr.l` for the multireference of
@@ -102,10 +107,10 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   `rmcdhf_csfg`, `rci_csfg` exist only as MPI programs (`*_csfg_mpi`): with 1 MPI process they are started directly
   (MPI_TMP is still set), otherwise with the MPI command. Before `rmcdhf_csfg` the GUI checks the angular files
   `MPI_TMP/<rank>/csfg_mcp<rank>.*` (same process count, not older than `rcsfg.inp`). GRASPG programs exit with code 0
-  on errors; the GUI recognises their error messages (`Stop Error`, `STOP …error…`) and stops the pipeline.
+  on errors; the GUI recognises their error messages (`Stop Error`, `Error!`, `… is not found`, `not exists`,
+  `Problems with opening`, `STOP …error…`) and stops the pipeline.
   Choosing GRASPG when the bin directory has no `rcsfggenerate_csfg` shows a warning in the status bar.
-  Other GRASPG programs (`rci_block_csfg_mpi`, `rcsfgzerofirst_csfg`, `rcsfgexpand_csfg`, `rmixaccumulate_csfg`, …)
-  can be run from *Custom*.
+  Other GRASPG programs (`rci_block_csfg_mpi`, `rcsfgzerofirst_csfg`, `rdistHmatrix_csfg`) can be run from *Custom*.
 * **Forms**: one per program, generated from the field definitions in `grasp_core.py` (description line, fields
   with hints at the right). Inputs follow each program's default-settings question order; they reproduce the inputs
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use

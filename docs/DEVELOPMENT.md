@@ -227,8 +227,12 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
 - **示例** `demos/graspg1.json` (`tools/make_demos.py` 的 `graspg1`)：按作者的 `script1/csfg` 逐步写成 (每次 rmcdhf_csfg
   运行两次，同作者)，参考能量取自该脚本的结果；包括 GRASP2018 的 `rbiotransform`、`rtransition` (作者的脚本中未运行)。
   共享配置的 `package` 为 `"GRASPG"` (用到 GRASPG 程序页时由 `core.package_of` 确定)；GRASPG 配置也可以用 GRASP2018 的程序页。
-- 尚未做成程序页 (可用“自定义”运行)：`rci_block_csfg_mpi` (逐块 CI，配合 `rcsfgblocksplit_csfg`、`rmixaccumulate_csfg`)、
-  `rcsfgzerofirst_csfg`、`rcsfgexpand_csfg`、`rcsfgextend_csfg`、`rdistHmatrix_csfg`。
+- **CSFG 工具** (GRASPG 独有的第五个分组)：`rcsfgexpand_csfg` (无提问，读 rcsfg.inp/rlabel.inp，写 rcsf.out；结果与
+  rsave_csfg 的 .c 逐字节相同)、`rcsfgextend_csfg` (提问同 rcsfgsplit_csfg，读 name.g/name.l)、`rcsfgblocksplit_csfg`
+  (名称 + “各块同一组轨道?” 回答 y；输出 name_odd1.g …)、`rmixaccumulate_csfg` (名称、CI?、比例、排序?、换轨道集? [+ 轨道集]；
+  输出 rcsfg.out 或 rcsfg.nmax)。错误识别补充了 “Error!… is not found”“Problems with opening the file” 等写法。
+- 尚未做成程序页 (可用“自定义”运行)：`rci_block_csfg_mpi` (逐块 CI)、`rcsfgzerofirst_csfg` (零阶 / 一阶空间划分，要配合
+  rangular_csfg 和 rci_csfg 的非默认提问：一阶微扰、icut)、`rdistHmatrix_csfg` (改变进程数时重新分配 H 矩阵)。
 
 ## 测试方法
 
@@ -259,7 +263,8 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
 - **V3** (分支 `v3`)：支持 GRASP 的扩展和再开发版本。基础工作：把各程序的输入规则（`grasp_core.py` 中的字段和提问顺序）按
   “程序包 / 版本”区分 (共享配置的 `package` 字段已为此预留)，按 bin 目录中的程序识别可用的扩展，并识别它们特有的程序和文件格式。
   - **GRASPG** (优先)：不能无缝替换 GRASP2018 (见第 14 节)。已完成：程序包选择、CSFG 流程的程序页 (`.g`/`.l` 文件、
-    `rcsfggenerate_csfg` 等的提问)、示例 graspg1。待做：逐块 CI (`rci_block_csfg_mpi` 等) 的程序页，查看器容忍逐块写出的
+    `rcsfggenerate_csfg` 等的提问)、示例 graspg1、CSFG 工具 (expand、extend、blocksplit、mixaccumulate)。待做：零阶 / 一阶
+    划分 (rcsfgzerofirst_csfg 及 rangular/rci 的非默认提问)，逐块 CI (`rci_block_csfg_mpi`) 的程序页，查看器容忍逐块写出的
     混合系数文件。
   - **QED** (暂缓，先做 GRASPG)：[compas/grasp-rci-qed](https://github.com/compas/grasp-rci-qed) 的 `rci-qed` (改写的 `rci_mpi`，单独安装到
     `$GRASP/bin`；自能可选不同模型，包括 Shabaev 等的模型算符 QEDMOD、Flambaum–Ginges、Pyykkö–Zhao 和原来的氢样估计；设置另存为
