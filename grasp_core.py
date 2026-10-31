@@ -430,6 +430,30 @@ EN = {
     "确定用 {a} 组的参数覆盖 {b} 组吗？": "Overwrite the {b} parameters with those of {a}?",
     "已载入此目录上次的记录": "Loaded the last session of this directory",
     "此目录还没有记录，沿用当前参数": "No session in this directory yet; keeping the current parameters",
+    # 示例
+    "导入示例…": "Import example…",
+    "导入示例": "Import example",
+    "导入到目录": "Import into directory",
+    "导入": "Import",
+    "示例来自 GRASP2018 手册的算例，只包含各程序的参数和计算流程。导入到一个空目录后，点“▶ 运行全部”即可从头计算；"
+    "各程序页显示该程序在流程中最后一次使用的参数。":
+        "The examples are the cases of the GRASP2018 manual; they contain only the parameters of the programs and "
+        "the pipeline. After importing one into an empty directory, press “▶ Run all” to compute it from scratch; "
+        "each program tab shows the parameters of the last run of that program in the pipeline.",
+    "预计时间": "Estimated time",
+    "{n} 步": "{n} steps",
+    "用到的程序": "Programs used",
+    "在 bin 目录和 PATH 中找不到": "Not found in the bin directory or PATH",
+    "流程运行到这些程序时会出错。": "The pipeline will stop with an error when it reaches them.",
+    "参考结果": "Reference results",
+    "手册脚本算出的能量，可与自己的结果对照": "energies from the manual's scripts, to compare with your results",
+    "{n} 个能级": "{n} level(s)",
+    "最低": "lowest",
+    "找不到示例文件 ({p})": "No example files found ({p})",
+    "已导入示例“{t}”到 {p}；点“▶ 运行全部”开始计算":
+        "Imported the example “{t}” into {p}; press “▶ Run all” to start",
+    "目录不是空的：{p}": "The directory is not empty: {p}",
+    "无法写入 {p}": "Cannot write {p}",
 }
 
 
@@ -487,6 +511,19 @@ def yn(flag):
 
 def nonblank_lines(s):
     return [ln.strip() for ln in s.splitlines() if ln.strip()]
+
+
+def count_levels(lines):
+    """各块能级号 (如 1,2,3 或 1-3) 的总个数；无法解析的项按 1 个计。"""
+    n = 0
+    for ln in lines:
+        for item in re.split(r"[\s,]+", ln):
+            a, _, b = item.partition("-")
+            try:
+                n += int(b) - int(a) + 1 if b else 1
+            except ValueError:
+                n += 1 if item else 0
+    return n
 
 
 # ---------------------------------------------------------------------------
@@ -784,9 +821,12 @@ class RMcdhf(Step):
     ]
 
     def stdin(self, v):
-        lines = ["y"] + nonblank_lines(v["levels"]) + [v["weights"]]
-        if v["weights"] == "9":
-            lines.append(v["uweights"])
+        levels = nonblank_lines(v["levels"])
+        lines = ["y"] + levels
+        if count_levels(levels) > 1:        # 只优化一个能级时 rmcdhf 不询问权重
+            lines.append(v["weights"])
+            if v["weights"] == "9":
+                lines.append(v["uweights"])
         return answers(lines + [v["vary"], v["spec"], v["nscf"]])
 
     def program(self, v):
@@ -1132,6 +1172,85 @@ def save_session(workdir, data):
         return True
     except OSError:
         return False
+
+
+# ---------------------------------------------------------------------------
+#  示例：GRASP2018 手册中的算例
+#
+#  demos/<id>.json 只保存各步的表单参数，不含计算结果：
+#    demo_format, id, order, title / summary / runtime: {zh, en}
+#    jobs: [dict(step, vals, group)]    按顺序组成流程；vals 是该程序页的完整参数
+#    reference: [dict(file, energies)]  手册算例的能级能量 (Hartree)，供对照
+#  导入时在空目录中写入目录记录 (SESSION_FILE)，打开该目录即载入参数和流程。
+# ---------------------------------------------------------------------------
+
+DEMO_FORMAT = 1
+DEMO_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "demos")
+
+
+def list_demos(path=DEMO_DIR):
+    """全部示例，按 order 排序；格式版本不认识或无法读取的文件跳过。"""
+    out = []
+    for name in sorted(os.listdir(path)) if os.path.isdir(path) else []:
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(path, name), encoding="utf-8") as f:
+                demo = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if demo.get("demo_format") == DEMO_FORMAT:
+            out.append(demo)
+    return sorted(out, key=lambda d: (d.get("order", 99), d["id"]))
+
+
+def demo_text(demo, key):
+    """title / summary / runtime 按当前界面语言取值。"""
+    d = demo.get(key, "")
+    return (d.get(LANG) or d.get("zh", "")) if isinstance(d, dict) else d
+
+
+def demo_session(demo):
+    """示例对应的目录记录：流程，以及各程序页显示该程序最后一次使用的参数。"""
+    steps = {s.key: s for s in STEPS}
+    forms, groups = {}, {g: {} for g in GROUPS}
+    pipeline = []
+    for j in demo["jobs"]:
+        step = steps[j["step"]]
+        vals = {f.key: normalize(f, j["vals"].get(f.key, f.default)) for f in step.fields if isinstance(f, Field)}
+        pipeline.append(step.job(vals))
+        if step.key in GROUP_STEPS:
+            groups[j.get("group") or GROUPS[0]][step.key] = vals
+        else:
+            forms[step.key] = vals
+    first = demo["jobs"][0]
+    return dict(steps=forms, groups=groups, group=first.get("group") or GROUPS[0],
+                pipeline=pipeline, tab=first["step"])
+
+
+def demo_programs(demo):
+    """示例用到的程序 (不含 cp)。"""
+    progs = []
+    for job in demo_session(demo)["pipeline"]:
+        for p in [job["prog"]] + [a[1][0] for a in job["pre"] + job["post"] if a[0] == "run"]:
+            if p not in progs and p != "cp":
+                progs.append(p)
+    return progs
+
+
+def missing_programs(demo, bindir):
+    """示例用到、但在 bin 目录和 PATH 中都找不到的程序。"""
+    return [p for p in demo_programs(demo)
+            if not os.path.isfile(os.path.join(bindir, p)) and not shutil.which(p)]
+
+
+def install_demo(demo, workdir):
+    """在 workdir (不存在或为空) 中写入示例的目录记录；目录非空时抛出 FileExistsError。"""
+    if os.path.isdir(workdir) and os.listdir(workdir):
+        raise FileExistsError(T("目录不是空的：{p}", p=workdir))
+    os.makedirs(workdir, exist_ok=True)
+    if not save_session(workdir, demo_session(demo)):
+        raise OSError(T("无法写入 {p}", p=os.path.join(workdir, SESSION_FILE)))
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,11 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 
 ## Features / 功能
 
+- **Examples** (*File → Import example…*): the examples of the GRASP2018 manual (example1–5, 8, 9, case1 and
+  case4) as ready-made pipelines. An example is imported into an empty directory with all parameters and the
+  whole pipeline; press *▶ Run all* to compute it from scratch. The dialog shows what each example does, its
+  running time, the programs it needs and the reference energies of the manual's results.
+
 - One tab per program: `rnucleus`, `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`, `rangular`, `rwfnestimate`,
   `rmcdhf`, `rsave`, `rci`, `jj2lsj`, `rhfs` (optionally followed by `rhfs_lsj`), `ris4`, `rlevels`,
   `rtablevels`, `rtabtrans1`, `rtabtrans2`, `rbiotransform`, `rtransition`, plus a *Custom* tab (grouped as *Nucleus & CSFs*, *SCF & CI*,
@@ -46,6 +51,9 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   The matching `.c` and `.lsj.lbl` files are found by content (number of orbitals, CSFs and J^π of each block;
   energies of the levels), so they need not share the name of the mixing file.
 
+**示例**（“文件 → 导入示例…”）：GRASP2018 手册中的算例 (example1–5、8、9，case1、case4) 做成现成的流程，
+导入到一个空目录后带有全部参数和计算流程，点“▶ 运行全部”即可从头计算。对话框中有各示例的说明、所需时间、
+用到的程序，以及手册算例结果的参考能量，便于对照。
 **态组 odd / even**：上述 11 个程序页按态组分别保存参数，文件名自动对应，其余程序页两组共用；
 “复制到 …”把当前组的参数复制到另一组并替换名称。
 **工作目录记录**：参数、态组和流程自动保存在 `工作目录/.grasp_gui.json`，再次打开该目录时自动恢复；
@@ -129,6 +137,8 @@ Fonts are bundled, so the GUI also works on machines without (Chinese) fonts: No
 | `wfn_viewer.py` | Wave function viewer window (plots drawn with QPainter) |
 | `grasp_mix.py` | Reads mixing coefficient files (`.m`, `.cm`), CSF lists (`.c`) and `jj2lsj` labels (`.lsj.lbl`) (standard library only) |
 | `level_viewer.py` | Energy level diagram and ASF composition window |
+| `demos/*.json` | The examples: parameters and pipeline of each manual example, reference energies |
+| `tools/make_demos.py` | Generates `demos/*.json`; `--check` compares the generated input with the manual's input files |
 | `build.sh` | Builds a standalone executable with PyInstaller |
 
 ## License / 许可证

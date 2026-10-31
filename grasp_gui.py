@@ -84,7 +84,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
                                QDialog, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QListWidget, QMainWindow, QMenu, QMessageBox,
                                QPlainTextEdit, QPushButton, QScrollArea, QSpinBox,
-                               QSplitter, QTabWidget, QVBoxLayout, QWidget)
+                               QSplitter, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import grasp_core as core                                           # noqa: E402
@@ -323,6 +323,101 @@ class SlurmDialog(QDialog):
 
 
 # ---------------------------------------------------------------------------
+#  示例对话框
+# ---------------------------------------------------------------------------
+
+DEMO_ROOT = os.path.join(os.path.expanduser("~"), "grasp_demos")
+
+
+def free_dir(path):
+    """path 不存在或为空时原样返回，否则依次尝试 path_2, path_3 …"""
+    cand, k = path, 2
+    while os.path.isdir(cand) and os.listdir(cand):
+        cand, k = f"{path}_{k}", k + 1
+    return cand
+
+
+class DemoDialog(QDialog):
+    """选择 GRASP2018 手册中的算例，导入到一个空目录。"""
+
+    def __init__(self, parent, demos, bindir):
+        super().__init__(parent)
+        self.setWindowTitle(T("导入示例"))
+        self.resize(900, 560)
+        self.demos, self.bindir = demos, bindir
+        lay = QVBoxLayout(self)
+        note = QLabel(T("示例来自 GRASP2018 手册的算例，只包含各程序的参数和计算流程。导入到一个空目录后，"
+                        "点“▶ 运行全部”即可从头计算；各程序页显示该程序在流程中最后一次使用的参数。"))
+        note.setWordWrap(True)
+        lay.addWidget(note)
+        split = QSplitter()
+        self.list = QListWidget()
+        self.list.setWordWrap(True)             # 标题较长：换行显示，不出现横向滚动条
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list.setSpacing(2)
+        self.list.addItems([core.demo_text(d, "title") for d in demos])
+        split.addWidget(self.list)
+        self.info = QTextBrowser()
+        split.addWidget(self.info)
+        split.setStretchFactor(1, 2)
+        split.setSizes([300, 600])
+        lay.addWidget(split, 1)
+        row = QHBoxLayout()
+        row.addWidget(QLabel(T("导入到目录")))
+        self.dir = QLineEdit()
+        self.dir.textEdited.connect(lambda: setattr(self, "dir_edited", True))
+        row.addWidget(self.dir, 1)
+        row.addWidget(button("浏览…", self.pick))
+        lay.addLayout(row)
+        bar = QHBoxLayout()
+        bar.addStretch()
+        ok = button("导入", self.accept)
+        ok.setDefault(True)
+        bar.addWidget(ok)
+        bar.addWidget(button("取消", self.reject))
+        lay.addLayout(bar)
+        self.dir_edited = False
+        self.list.currentRowChanged.connect(self.show_demo)
+        self.list.itemDoubleClicked.connect(lambda _: self.accept())
+        self.list.setCurrentRow(0)
+
+    def demo(self):
+        return self.demos[max(self.list.currentRow(), 0)]
+
+    def show_demo(self, row):
+        d = self.demos[row]
+        esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")     # noqa: E731
+        html = [f"<h3>{esc(core.demo_text(d, 'title'))}</h3>", f"<p>{esc(core.demo_text(d, 'summary'))}</p>",
+                f"<p><b>{T('预计时间')}:</b> {esc(core.demo_text(d, 'runtime'))}<br>"
+                f"<b>{T('流程')}:</b> {T('{n} 步', n=len(d['jobs']))}<br>"
+                f"<b>{T('用到的程序')}:</b> {esc(', '.join(core.demo_programs(d)))}</p>"]
+        missing = core.missing_programs(d, self.bindir)
+        if missing:
+            html.append(f"<p style='color:#c00000'><b>{T('在 bin 目录和 PATH 中找不到')}:</b> "
+                        f"{esc(', '.join(missing))}<br>{T('流程运行到这些程序时会出错。')}</p>")
+        refs = d.get("reference", [])
+        if refs:
+            html.append(f"<p><b>{T('参考结果')}</b> ({T('手册脚本算出的能量，可与自己的结果对照')}):</p><ul>")
+            for r in refs:
+                e = r["energies"]
+                html.append(f"<li>{esc(r['file'])}: {T('{n} 个能级', n=len(e))}, "
+                            f"{T('最低')} {min(e):.8f} Eh</li>")
+            html.append("</ul>")
+        self.info.setHtml("".join(html))
+        if not self.dir_edited:
+            self.dir.setText(free_dir(os.path.join(DEMO_ROOT, d["id"])))
+
+    def pick(self):
+        d = QFileDialog.getExistingDirectory(self, "", os.path.dirname(self.dir.text()) or os.path.expanduser("~"))
+        if d:
+            self.dir.setText(d)
+            self.dir_edited = True
+
+    def target(self):
+        return os.path.abspath(os.path.expanduser(self.dir.text().strip()))
+
+
+# ---------------------------------------------------------------------------
 #  程序页：上层按功能分组，下层是组内的程序 (每层都能一行放下，无需滚动)
 # ---------------------------------------------------------------------------
 
@@ -433,7 +528,8 @@ class MainWindow(QMainWindow):
         mb = self.menuBar()
         mb.clear()
         fm = mb.addMenu(T("文件"))
-        for item in [("保存参数…", self.save_params), ("载入参数…", self.load_params), None,
+        for item in [("导入示例…", self.import_demo), None,
+                     ("保存参数…", self.save_params), ("载入参数…", self.load_params), None,
                      ("导出流程为 shell 脚本…", self.export_script),
                      ("导出 Slurm 作业脚本…", self.export_slurm), None, ("退出", self.close)]:
             if item is None:
@@ -999,6 +1095,31 @@ class MainWindow(QMainWindow):
             for f in self.forms:
                 if f.step.key == tab:
                     self.nav.setCurrentWidget(f)
+
+    def import_demo(self):
+        if self.busy:
+            QMessageBox.information(self, T("运行中"), T("已有任务在运行，请等待或先停止。"))
+            return
+        demos = core.list_demos()
+        if not demos:
+            QMessageBox.warning(self, T("导入示例"), T("找不到示例文件 ({p})", p=core.DEMO_DIR))
+            return
+        dlg = DemoDialog(self, demos, self.bindir.text())
+        if dlg.exec() != QDialog.Accepted:
+            return
+        demo, path = dlg.demo(), dlg.target()
+        try:
+            core.install_demo(demo, path)
+        except OSError as e:
+            QMessageBox.warning(self, T("导入示例"), str(e))
+            return
+        if path == self.cur_workdir:
+            self.open_workdir(path)
+        else:
+            self.workdir.setText(path)
+            self.workdir_changed()
+        self.statusBar().showMessage(T("已导入示例“{t}”到 {p}；点“▶ 运行全部”开始计算",
+                                       t=core.demo_text(demo, "title"), p=path))
 
     def save_params(self):
         path, _ = QFileDialog.getSaveFileName(self, T("保存参数"), self.workdir.text(), "JSON (*.json)")

@@ -1,0 +1,403 @@
+{
+ "demo_format": 1,
+ "id": "case4",
+ "order": 11,
+ "title": {
+  "zh": "算例 4：Nd LVIII 1s²2s 和 1s²2p，同位素场移",
+  "en": "Case 4: Nd LVIII 1s²2s and 1s²2p, field shift"
+ },
+ "summary": {
+  "zh": "Li 样 Nd 的 2s 和 2p：Dirac-Fock 后逐层做 n = 3、4 的 MCDHF，含 Breit 和 QED 的 CI，ris4 计算同位素移位参数，最后用 fical 计算 142Nd–150Nd 的 2s–2p 跃迁场移 (球形核与形变核两种情形)。",
+  "en": "2s and 2p of Li-like Nd: Dirac-Fock, MCDHF layer by layer for n = 3 and 4, CI with Breit and QED, isotope shift parameters with ris4, and finally the 142Nd–150Nd field shift of the 2s–2p transitions with fical (spherical and deformed nucleus)."
+ },
+ "runtime": {
+  "zh": "约 1 分钟",
+  "en": "about 1 minute"
+ },
+ "jobs": [
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(1,i)",
+      "active": "2s",
+      "jmin": "1",
+      "jmax": "1",
+      "nexc": "0"
+     },
+     {
+      "configs": "1s(2,i)2p(1,i)",
+      "active": "1s,2p",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "DF.c"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2s(1,*)",
+      "active": "4s,4p,4d,4f",
+      "jmin": "1",
+      "jmax": "1",
+      "nexc": "3"
+     }
+    ],
+    "saveas": "even.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfsplit",
+   "vals": {
+    "state": "even",
+    "splits": "3s,3p,3d 3\n4s,4p,4d,4f 4"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2p(1,*)",
+      "active": "4s,4p,4d,4f",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "3"
+     }
+    ],
+    "saveas": "odd.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rcsfsplit",
+   "vals": {
+    "state": "odd",
+    "splits": "3s,3p,3d 3\n4s,4p,4d,4f 4"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rnucleus",
+   "vals": {
+    "z": "60",
+    "a": "150",
+    "revise": false,
+    "rms": "",
+    "skin": "2.3",
+    "mass": "150",
+    "spin": "1",
+    "mu": "1",
+    "q": "1"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "DF.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": false,
+    "wfile": "",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "out_rmcdhf_DF",
+    "save": "DF"
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "DF.w even2.w",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "DF.w odd2.w",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "even3.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "even2.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outeven_rmcdhf_3",
+    "save": "even3"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "even4.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "even3.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outeven_rmcdhf_4",
+    "save": "even4"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "evenCI4",
+    "copyfrom": "even4",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "4",
+    "levels": "1",
+    "log": "outeven_rci"
+   },
+   "group": "even"
+  },
+  {
+   "step": "ris4",
+   "vals": {
+    "state": "evenCI4",
+    "ci": true,
+    "higher": true,
+    "save": false,
+    "log": "outeven_ris4"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "odd3.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd2.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outodd_rmcdhf_3",
+    "save": "odd3"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "odd4.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "odd3.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "4*",
+    "spec": "",
+    "nscf": "100",
+    "log": "outodd_rmcdhf_4",
+    "save": "odd4"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "oddCI4",
+    "copyfrom": "odd4",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "4",
+    "levels": "1\n1",
+    "log": "outodd_rci"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "ris4",
+   "vals": {
+    "state": "oddCI4",
+    "ci": true,
+    "higher": true,
+    "save": false,
+    "log": "outodd_ris4"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "fical",
+    "args": "",
+    "stdin": "n\nevenCI4\noddCI4\ny\ny\nboth\nmeV\ny\ny\n141.907719d0,4.9123d0,2.3d0,0.d0,0.d0,0.d0\n149.920887d0,5.0400d0,2.3d0,0.d0,0.d0,0.d0\n",
+    "log": "out_fical_spherical"
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "evenCI4.oddCI4.cfi spherical_150Nd.fci",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "fical",
+    "args": "",
+    "stdin": "n\nevenCI4\noddCI4\ny\ny\nboth\nmeV\ny\ny\n141.907719d0,4.9123d0,2.3d0,0.d0,0.d0,0.d0\n149.920887d0,5.0400d0,2.3d0,0.d0,0.28d0,0.d0\n",
+    "log": "out_fical_deformed"
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "evenCI4.oddCI4.cfi deformed_150Nd.fci",
+    "stdin": "",
+    "log": ""
+   }
+  }
+ ],
+ "reference": [
+  {
+   "file": "evenCI4.cm",
+   "energies": [
+    -4196.6496661767
+   ]
+  },
+  {
+   "file": "oddCI4.cm",
+   "energies": [
+    -4191.5215116146,
+    -4169.8174756793
+   ]
+  }
+ ]
+}

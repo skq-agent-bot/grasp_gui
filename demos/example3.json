@@ -1,0 +1,215 @@
+{
+ "demo_format": 1,
+ "id": "example3",
+ "order": 3,
+ "title": {
+  "zh": "例 3：Si VIII 2s²2p³ 和 2p⁵，rcsfinteract 与 M1 跃迁",
+  "en": "Example 3: Si VIII 2s²2p³ and 2p⁵, rcsfinteract and M1 transitions"
+ },
+ "summary": {
+  "zh": "2s²2p³ 与 2p⁵ 的多参考 Dirac-Fock，到 n = 3 的单、双激发 (用 rcsfinteract 只保留与参考组态有相互作用的 CSF)，MCDHF 和 CI，计算同一组能级之间的 M1 跃迁 (同一个计算，不需要双正交变换)。手册中换到 LK、JK 耦合的部分没有收录。",
+  "en": "Multireference Dirac-Fock for 2s²2p³ and 2p⁵, single and double excitations to n = 3 (with rcsfinteract keeping only the CSFs that interact with the reference), MCDHF and CI, and M1 transitions between the levels of this one calculation (no biorthogonal transformation is needed). The part of the manual on LK and JK coupling is not included."
+ },
+ "runtime": {
+  "zh": "约半分钟",
+  "en": "about half a minute"
+ },
+ "jobs": [
+  {
+   "step": "rnucleus",
+   "vals": {
+    "z": "14",
+    "a": "28",
+    "revise": false,
+    "rms": "",
+    "skin": "2.3",
+    "mass": "27.9769271",
+    "spin": "1",
+    "mu": "1",
+    "q": "1"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(2,i)2p(3,i)\n1s(2,i)2p(5,i)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "2s22p3_2p5_DF.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "2s22p3_2p5_DF.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": false,
+    "wfile": "",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1-2\n1-4\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "",
+    "save": "2s22p3_2p5_DF"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2s(2,*)2p(3,*)\n1s(2,*)2p(5,*)",
+      "active": "3s,3p,3d",
+      "jmin": "1",
+      "jmax": "5",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "2s22p3_2p5_3.c"
+   }
+  },
+  {
+   "step": "rcsfinteract",
+   "vals": {
+    "mr": "2s22p3_2p5_DF.c",
+    "full": "2s22p3_2p5_3.c",
+    "ham": "1",
+    "saveas": "2s22p3_2p5_3.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "2s22p3_2p5_3.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "2s22p3_2p5_DF.w",
+    "forbs": "*",
+    "method": "3",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": false,
+    "levels": "1-2\n1-4\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "",
+    "save": "2s22p3_2p5_3"
+   }
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "2s22p3_2p5_3",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "3",
+    "levels": "1-2\n1-4\n1",
+    "log": ""
+   }
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "2s22p3_2p5_3",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   }
+  },
+  {
+   "step": "rlevels",
+   "vals": {
+    "files": "2s22p3_2p5_3.cm",
+    "log": "energy3_LSJ"
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "2s22p3_2p5_3.w 2s22p3_2p5_3.bw",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "cp",
+    "args": "2s22p3_2p5_3.cm 2s22p3_2p5_3.cbm",
+    "stdin": "",
+    "log": ""
+   }
+  },
+  {
+   "step": "rtransition",
+   "vals": {
+    "ci": true,
+    "init": "2s22p3_2p5_3",
+    "final": "2s22p3_2p5_3",
+    "kind": "M1",
+    "m1_diffj": false,
+    "e2_diffj": false,
+    "log": "out_transition"
+   }
+  }
+ ],
+ "reference": [
+  {
+   "file": "2s22p3_2p5_3.cm",
+   "energies": [
+    -262.7906338757,
+    -259.497939898,
+    -263.2797840719,
+    -262.9550555465,
+    -262.7882742325,
+    -259.5241179046,
+    -262.9538205946
+   ]
+  }
+ ]
+}

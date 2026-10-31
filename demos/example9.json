@@ -1,0 +1,301 @@
+{
+ "demo_format": 1,
+ "id": "example9",
+ "order": 9,
+ "title": {
+  "zh": "例 9：Ni XXV 2s² ¹S 和 2s2p ³P，超精细与塞曼效应",
+  "en": "Example 9: Ni XXV 2s² ¹S and 2s2p ³P, hyperfine and Zeeman effects"
+ },
+ "summary": {
+  "zh": "2s²、2p² 和 2s2p 的多参考 Dirac-Fock，分别到 n = 3 的价电子关联、MCDHF 和 CI，然后用 rhfszeeman95 计算超精细和塞曼相互作用的矩阵元，用 rtransition_phase 计算带相位的 E1、M2 跃迁矩阵元 (用于超精细诱导跃迁等后续计算)。",
+  "en": "Multireference Dirac-Fock for 2s², 2p² and 2s2p, valence correlation to n = 3 for each parity (MCDHF and CI), hyperfine and Zeeman matrix elements with rhfszeeman95, and E1 and M2 transition matrix elements with phases from rtransition_phase (for hyperfine-induced transitions and similar calculations)."
+ },
+ "runtime": {
+  "zh": "几秒钟",
+  "en": "a few seconds"
+ },
+ "jobs": [
+  {
+   "step": "rnucleus",
+   "vals": {
+    "z": "28",
+    "a": "61",
+    "revise": false,
+    "rms": "",
+    "skin": "2.3",
+    "mass": "58.6934",
+    "spin": "1.5",
+    "mu": "-0.75002",
+    "q": "0.162"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(2,i)\n1s(2,i)2p(2,i)",
+      "active": "2s,2p",
+      "jmin": "0",
+      "jmax": "0",
+      "nexc": "0"
+     },
+     {
+      "configs": "1s(2,i)2s(1,i)2p(1,i)",
+      "active": "2s,2p",
+      "jmin": "0",
+      "jmax": "4",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "mr.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "mr.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": false,
+    "wfile": "",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1\n1\n1,2\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "",
+    "save": "mr"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(2,*)",
+      "active": "3s,3p,3d",
+      "jmin": "0",
+      "jmax": "0",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "even_n3.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "even_n3.c"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "mr.w",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "",
+    "save": "even_n3"
+   },
+   "group": "even"
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "even_n3",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "3",
+    "levels": "1",
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "even_n3",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   },
+   "group": "even"
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(1,*)2p(1,*)",
+      "active": "3s,3p,3d",
+      "jmin": "0",
+      "jmax": "4",
+      "nexc": "2"
+     }
+    ],
+    "saveas": "odd_n3.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "odd_n3.c"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "mr.w",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1\n1,2\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "",
+    "save": "odd_n3"
+   },
+   "group": "odd"
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "odd_n3",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "3",
+    "levels": "1\n1,2\n1",
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "odd_n3",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   },
+   "group": "odd"
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "rhfszeeman95",
+    "args": "",
+    "stdin": "y\neven_n3\ny\ny\n",
+    "log": ""
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "rhfszeeman95",
+    "args": "",
+    "stdin": "y\nodd_n3\ny\ny\n",
+    "log": ""
+   }
+  },
+  {
+   "step": "rbiotransform",
+   "vals": {
+    "ci": true,
+    "init": "even_n3",
+    "final": "odd_n3",
+    "log": "out_rbiotransform"
+   }
+  },
+  {
+   "step": "custom",
+   "vals": {
+    "prog": "rtransition_phase",
+    "args": "",
+    "stdin": "y\ny\neven_n3\nodd_n3\nE1,M2\n",
+    "log": "out_transition_phase"
+   }
+  }
+ ],
+ "reference": [
+  {
+   "file": "even_n3.cm",
+   "energies": [
+    -946.6067547853
+   ]
+  },
+  {
+   "file": "odd_n3.cm",
+   "energies": [
+    -944.8770564982,
+    -944.6948521209,
+    -942.7232828248,
+    -944.0994554451
+   ]
+  }
+ ]
+}

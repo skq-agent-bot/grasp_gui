@@ -1,0 +1,346 @@
+{
+ "demo_format": 1,
+ "id": "example1",
+ "order": 1,
+ "title": {
+  "zh": "例 1：Li I 2s ²S 和 2p ²P",
+  "en": "Example 1: Li I 2s ²S and 2p ²P"
+ },
+ "summary": {
+  "zh": "入门示例。先做 2s 和 2p 的 Dirac-Hartree-Fock 计算，再分别加入到 n = 3 的单、双、三重激发做 MCDHF，接着做含 Breit 和 QED 修正的 CI、变换到 LSJ 耦合，计算超精细常数、同位素移位、2s–2p 的 E1 跃迁，最后生成能级表和跃迁表 (rtablevels、rtabtrans1/2)。",
+  "en": "A first example. Dirac-Hartree-Fock for 2s and 2p, then MCDHF with single, double and triple excitations to n = 3 for each state, CI with Breit and QED corrections, transformation to LSJ coupling, hyperfine constants, isotope shifts, the 2s–2p E1 transition, and energy and transition tables (rtablevels, rtabtrans1/2)."
+ },
+ "runtime": {
+  "zh": "几秒钟",
+  "en": "a few seconds"
+ },
+ "jobs": [
+  {
+   "step": "rnucleus",
+   "vals": {
+    "z": "3",
+    "a": "7",
+    "revise": false,
+    "rms": "",
+    "skin": "2.3",
+    "mass": "6.941",
+    "spin": "1.5",
+    "mu": "3.2564268",
+    "q": "-0.040"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,i)2s(1,i)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "1",
+      "nexc": "0"
+     },
+     {
+      "configs": "1s(2,i)2p(1,i)",
+      "active": "2s,2p",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "0"
+     }
+    ],
+    "saveas": "2s_2p_DF.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "2s_2p_DF.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": false,
+    "wfile": "",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1\n1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "*",
+    "spec": "*",
+    "nscf": "100",
+    "log": "",
+    "save": "2s_2p_DF"
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2s(1,*)",
+      "active": "3s,3p,3d",
+      "jmin": "1",
+      "jmax": "1",
+      "nexc": "3"
+     }
+    ],
+    "saveas": "2s_3.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "2s_3.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "2s_2p_DF.w",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "",
+    "save": "2s_3"
+   }
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "2s_3",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "3",
+    "levels": "1",
+    "log": ""
+   }
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "2s_3",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   }
+  },
+  {
+   "step": "rcsfgenerate",
+   "vals": {
+    "order": "*",
+    "core": "0",
+    "lists": [
+     {
+      "configs": "1s(2,*)2p(1,*)",
+      "active": "3s,3p,3d",
+      "jmin": "1",
+      "jmax": "3",
+      "nexc": "3"
+     }
+    ],
+    "saveas": "2p_3.c"
+   }
+  },
+  {
+   "step": "rangular",
+   "vals": {
+    "csf": "2p_3.c"
+   }
+  },
+  {
+   "step": "rwfnestimate",
+   "vals": {
+    "use_file": true,
+    "wfile": "2s_2p_DF.w",
+    "forbs": "*",
+    "method": "2",
+    "orbs": "*",
+    "delz": "0"
+   }
+  },
+  {
+   "step": "rmcdhf",
+   "vals": {
+    "mem": true,
+    "levels": "1\n1",
+    "weights": "5",
+    "uweights": "",
+    "vary": "3*",
+    "spec": "",
+    "nscf": "100",
+    "log": "",
+    "save": "2p_3"
+   }
+  },
+  {
+   "step": "rci",
+   "vals": {
+    "state": "2p_3",
+    "copyfrom": "",
+    "trans": true,
+    "modfreq": true,
+    "factor": "1.d-6",
+    "vp": true,
+    "nms": false,
+    "sms": false,
+    "se": true,
+    "nqed": "3",
+    "levels": "1\n1",
+    "log": ""
+   }
+  },
+  {
+   "step": "jj2lsj",
+   "vals": {
+    "state": "2p_3",
+    "ci": true,
+    "unique": true,
+    "log": ""
+   }
+  },
+  {
+   "step": "rhfs",
+   "vals": {
+    "state": "2s_3",
+    "ci": true,
+    "lsj": false,
+    "sort": true,
+    "log": ""
+   }
+  },
+  {
+   "step": "rhfs",
+   "vals": {
+    "state": "2p_3",
+    "ci": true,
+    "lsj": false,
+    "sort": true,
+    "log": ""
+   }
+  },
+  {
+   "step": "ris4",
+   "vals": {
+    "state": "2s_3",
+    "ci": true,
+    "higher": true,
+    "save": true,
+    "log": ""
+   }
+  },
+  {
+   "step": "ris4",
+   "vals": {
+    "state": "2p_3",
+    "ci": true,
+    "higher": true,
+    "save": true,
+    "log": ""
+   }
+  },
+  {
+   "step": "rbiotransform",
+   "vals": {
+    "ci": true,
+    "init": "2s_3",
+    "final": "2p_3",
+    "log": "out_rbiotransform"
+   }
+  },
+  {
+   "step": "rtransition",
+   "vals": {
+    "ci": true,
+    "init": "2s_3",
+    "final": "2p_3",
+    "kind": "E1",
+    "m1_diffj": false,
+    "e2_diffj": false,
+    "log": "out_transition"
+   }
+  },
+  {
+   "step": "rlevels",
+   "vals": {
+    "files": "2s_3.cm 2p_3.cm",
+    "log": "energy3"
+   }
+  },
+  {
+   "step": "rtablevels",
+   "vals": {
+    "nskip": "0",
+    "files": "energy3"
+   }
+  },
+  {
+   "step": "rtabtrans1",
+   "vals": {
+    "files": "2s_3.cm\n2p_3.cm",
+    "nskip": "0",
+    "fmt": "0"
+   }
+  },
+  {
+   "step": "rtabtrans2",
+   "vals": {
+    "tfile": "2s_3.2p_3.ct",
+    "fmt": "0",
+    "ion": "",
+    "cutoff": "0",
+    "frac": "0",
+    "sorted": true,
+    "digits": "3"
+   }
+  }
+ ],
+ "reference": [
+  {
+   "file": "2s_3.cm",
+   "energies": [
+    -7.4719739834
+   ]
+  },
+  {
+   "file": "2p_3.cm",
+   "energies": [
+    -7.404260995,
+    -7.4042596827
+   ]
+  }
+ ]
+}
