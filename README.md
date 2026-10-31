@@ -7,6 +7,58 @@ The interface is available in Chinese and English.
 GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动生成交互输入 (stdin)，并在工作目录中运行。
 界面支持中文和 English。
 
+**Download / 下载**: standalone Linux executables (no Python needed) on the
+[Releases page](https://github.com/skq1998/grasp_gui/releases/latest): `grasp_gui-linux-x86_64` for desktops
+(glibc ≥ 2.35), `grasp_gui-legacy-linux-x86_64` for old servers and `ssh -X` (glibc ≥ 2.17).
+在 [Releases 页面](https://github.com/skq1998/grasp_gui/releases/latest) 下载独立可执行文件 (不需要 Python)：
+桌面电脑用 `grasp_gui-linux-x86_64` (glibc ≥ 2.35)，旧服务器和 `ssh -X` 用 `grasp_gui-legacy-linux-x86_64` (glibc ≥ 2.17)。
+
+## Screenshots / 截图
+
+The screenshots show example 4 of the GRASP2018 manual (Fe XV), imported with *File → Import example…* and run
+with *▶ Run all*. / 截图为 GRASP2018 手册的算例 4 (Fe XV)：用“文件 → 导入示例…”导入，点“▶ 运行全部”计算。
+
+**Calculation** — one form per program, odd / even state groups, the pipeline and the generated input (here
+`rmcdhf`, followed by `rsave`):
+
+![Calculation tab](docs/images/en_calculation.png)
+
+**Levels** — drag from one level to another to compute the transition (`rbiotransform` and `rtransition` run
+automatically); the result is drawn as an arrow with its wavelength, with A, gf, S, branching ratio and lifetime:
+
+![Levels tab with a computed E1 transition](docs/images/en_levels_transition.png)
+
+**Radial wave functions** — P(r), Q(r) and P² + Q² of several `.w` files overlaid, with orbital properties:
+
+![Radial wave functions tab](docs/images/en_wavefunctions.png)
+
+**Examples and shared configurations** — what a configuration does, the programs it needs, every custom command
+(highlighted) and reference energies, before importing:
+
+![Import example dialog](docs/images/en_examples.png)
+
+<details>
+<summary>中文界面 (Chinese interface)</summary>
+
+**计算**：每个程序一个参数页，odd / even 态组，计算流程和自动生成的输入 (这里是 `rmcdhf`，之后运行 `rsave`)：
+
+![计算页](docs/images/zh_calculation.png)
+
+**能级图**：从一个能级拖到另一个能级即可计算跃迁 (自动运行 `rbiotransform` 和 `rtransition`)，结果画成标有波长的箭头，
+并列出 A、gf、S、分支比和寿命：
+
+![能级图页与已算的 E1 跃迁](docs/images/zh_levels_transition.png)
+
+**径向波函数**：叠加多个 `.w` 文件的 P(r)、Q(r) 和 P² + Q²，并列出轨道性质：
+
+![径向波函数页](docs/images/zh_wavefunctions.png)
+
+**示例与共享配置**：导入前显示配置的说明、所需的程序、全部自定义命令 (醒目标出) 和参考能量：
+
+![导入示例对话框](docs/images/zh_examples.png)
+
+</details>
+
 ## Features / 功能
 
 - **Main window**: the working directory and the run settings (GRASP `bin`, MPI) at the top, below three tabs:
