@@ -77,9 +77,9 @@ def fix_fontconfig():
 fix_wsl_display()
 fix_fontconfig()
 
-from PySide6.QtCore import QByteArray, Qt, QTimer                   # noqa: E402
+from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFont,    # noqa: E402
-                           QFontDatabase, QKeySequence, QTextCharFormat, QTextCursor)
+                           QFontDatabase, QKeySequence, QPalette, QTextCharFormat, QTextCursor)
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,  # noqa: E402
                                QDialog, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QListWidget, QMainWindow, QMenu, QMessageBox,
@@ -1140,6 +1140,32 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(T("已载入 {p}", p=path))
 
 
+class WindowFrames(QObject):
+    """在 Wayland 下 (如 WSLg) 窗口的标题栏和边框由 Qt 自己绘制 (bradient 装饰)，颜色取自程序调色板的
+    窗口背景色，与窗口内容相同，又没有窗口阴影，对话框叠在主窗口上时分不清边界。因此把程序调色板的
+    窗口背景色换成 FRAME_COLOR (只有标题栏和边框直接使用程序调色板)，各窗口在显示前恢复原来的调色板。"""
+    FRAME_COLOR = QColor("#c3cede")
+
+    def __init__(self, app):
+        super().__init__(app)
+        framed = app.palette()
+        # 每种颜色都显式设置：复制来的调色板不带“已设置”标记，设给窗口后仍会沿用程序调色板
+        self.normal = QPalette()
+        for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+            for role in range(QPalette.NColorRoles.value):
+                role = QPalette.ColorRole(role)
+                self.normal.setBrush(group, role, framed.brush(group, role))
+        for group in (QPalette.Active, QPalette.Inactive):
+            framed.setColor(group, QPalette.Window, self.FRAME_COLOR)
+        app.setPalette(framed)
+        app.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Polish and obj.isWidgetType() and obj.isWindow():
+            obj.setPalette(self.normal)
+        return False
+
+
 def main():
     args = sys.argv[1:]
     if "--lang" in args and args.index("--lang") + 1 < len(args):
@@ -1154,6 +1180,8 @@ def main():
     global DEFAULT_PT
     DEFAULT_PT = app.font().pointSizeF() if app.font().pointSizeF() > 0 else DEFAULT_PT
     load_fonts()
+    if app.platformName().startswith("wayland"):
+        app.frames = WindowFrames(app)
     win = MainWindow(args[0] if args else None)     # 可选参数：要打开的工作目录
     win.show()
     rc = app.exec()
