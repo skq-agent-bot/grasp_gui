@@ -23,6 +23,7 @@ import grasp_mix as mix
 import grasp_wfn as wfn
 
 CACHE_DIR = os.path.join(".grasp_gui", "tr")
+MANIFEST_VERSION = 1        # 缓存格式的版本：格式改变时加 1，旧缓存即视为失效并重算
 MPI_PATH_MAX = 128          # GRASP 的 MPI 库 (lib/mpi90) 中目录和文件路径的字符长度
 KINDS = ["E1", "M1", "E2", "M2"]
 GAUGES = {"B": "Babushkin", "C": "Coulomb", "M": ""}
@@ -158,9 +159,10 @@ class Workspace:
             current = self.stamp()
         except OSError:
             return {}
-        return m if m.get("inputs") == current and "runs" in m else {}
+        return m if m.get("inputs") == current and m.get("version") == MANIFEST_VERSION else {}
 
     def save_manifest(self, m):
+        m["version"] = MANIFEST_VERSION
         m["inputs"] = self.stamp()
         with open(self.manifest_path, "w") as f:
             json.dump(m, f, indent=1)
@@ -304,7 +306,7 @@ def computed(workdir):
         except (OSError, ValueError):
             continue
         inputs = m.get("inputs") or {}
-        if not inputs or not all(unchanged(st) for side in inputs.values() for st in side.values()):
+        if m.get("version") != MANIFEST_VERSION or not inputs or not all(unchanged(st) for side in inputs.values() for st in side.values()):
             continue
         roles = {role: side["mix"][0] for role, side in inputs.items()}
         out.append((roles, read_results(os.path.join(root, name), m)))
@@ -335,6 +337,8 @@ class Transition:
 
     def __init__(self, kind, upper, lower, energy_cm, values):
         self.kind, self.upper, self.lower, self.energy_cm, self.values = kind, upper, lower, energy_cm, values
+        self.raw = []              # rtransition 输出中的原始行 (导出 GRASP 文件时原样写回)
+        self.section = ()          # 所在段的段头 (类型、分隔线、空行、列标题两行)
 
     @property
     def wavelength(self):
@@ -387,11 +391,12 @@ def parse_ct(path):
             roles[m.group(1)] = m.group(2)
     if not roles:
         raise ValueError("not an rtransition output file")
-    out, kind, cur = [], None, None
-    for ln in lines:
+    out, kind, cur, section = [], None, None, ()
+    for i, ln in enumerate(lines):
         m = KIND_RE.search(ln)
         if m:
             kind = ("E" if m.group(1) == "Electric" else "M") + m.group(2)
+            section = tuple(lines[i:i + 5])
             continue
         tag = ln[42:44].strip() if len(ln) >= 83 else ""
         if not kind or tag not in ("C", "B", "M"):
@@ -401,7 +406,31 @@ def parse_ct(path):
             upper = parse_level(ln[1:3], ln[3:6], ln[7:11], ln[11:15], roles)
             lower = parse_level(ln[15:17], ln[17:20], ln[21:25], ln[25:29], roles)
             cur = Transition(kind, upper, lower, fnum(ln[29:42]), {tag: vals})
+            cur.raw, cur.section = [ln], section
             out.append(cur)
         elif cur:                            # 同一跃迁的另一种规范
             cur.values[tag] = vals
+            cur.raw.append(ln)
     return out
+
+
+def kind_key(kind):
+    """段的顺序：按多极阶数，同阶时电跃迁在前 (E1, M1, E2, M2, ...)。"""
+    return int(kind[1:]), 0 if kind[0] == "E" else 1
+
+
+def write_grasp(path, transitions, names):
+    """把已算的跃迁写成 rtransition 的输出格式，供 rtabtrans1 / rtabtrans2 使用。各行沿用 rtransition 的原始输出，
+    只把文件头中计算时用的名称 a、b 换成 names ({角色: 名称}，如 {"a": "even4", "b": "odd4"})：
+    rtabtrans1 靠这些名称与输入的态文件 (如 even4.cm) 对应。"""
+    if list(names) == ["a"]:
+        out = [" Transition in file:", f" f = {names['a']}"]
+    else:
+        out = [" Transition between files:", f" f1 = {names['a']}", f" f2 = {names['b']}"]
+    for kind in sorted({t.kind for t in transitions}, key=kind_key):
+        group = [t for t in transitions if t.kind == kind]
+        out += ["", ""] + list(group[0].section)
+        for t in group:
+            out += t.raw
+    with open(path, "w") as f:
+        f.write("\n".join(out) + "\n")

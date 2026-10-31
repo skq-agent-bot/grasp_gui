@@ -10,11 +10,12 @@ set -e
 cd "$(dirname "$0")"
 
 ENV=${GRASP_BUILD_ENV:-build/venv}
-if [ ! -x "$ENV/bin/pyinstaller" ]; then
-    python3 -m venv "$ENV"
-    # only the essential Qt modules: keeps the executable much smaller than the full PySide6
-    "$ENV/bin/pip" install -q "pyside6-essentials>=6.5" "pyinstaller>=6"
-fi
+[ -x "$ENV/bin/pip" ] || python3 -m venv "$ENV"
+# Only the essential Qt modules: keeps the executable much smaller than the full PySide6.
+# Qt 6.8 is a long-term support release; 6.8.0-6.8.2 write PDF files with a broken document information
+# dictionary (exported level diagrams), hence >= 6.8.3. Checked on every build, so that an existing
+# environment is brought to this version; nothing is downloaded when it is already satisfied.
+"$ENV/bin/pip" install -q "pyside6-essentials>=6.8.3,<6.9" "pyinstaller>=6"
 
 MODE=--onefile
 [ "$1" = "--onedir" ] && MODE=--onedir

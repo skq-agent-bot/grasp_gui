@@ -55,7 +55,14 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   process count set next to it. All levels within the computed symmetries are done at once, so other pairs
   there are shown immediately; the results (A, gf, S in the Babushkin and Coulomb gauges) are kept in
   `<working directory>/.grasp_gui/tr/` and reused until an input file changes.
-  The selected level shows all its computed transitions in the diagram and in a table with branching ratios.
+  Each computed transition you connect is drawn as an arrow labelled with its wavelength (right-click an
+  arrow to remove it); the arrows are kept per working directory. A table lists all computed transitions of
+  the selected level with branching ratios (optionally also drawn in the diagram).
+- **Export** (level viewer): the level diagram as PDF (fonts embedded), SVG or PNG, labelled with configuration
+  and term (e.g. [Ne]3s3p ¹P°₁; J^π when there is no jj2lsj result) and the marked transitions; level data
+  and transitions as CSV (UTF-8, NIST-style configurations such as `[Ne]3s.3p` and terms such as `1P*`); the
+  computed transitions as a GRASP file (`even4.odd4.ct`) for `rtabtrans1` / `rtabtrans2`. Configuration
+  abbreviations (default: noble-gas cores [He] … [Rn]) can be edited; core orbitals of the CSF file are included.
 
 **态组 odd / even**：上述 11 个程序页按态组分别保存参数，文件名自动对应，其余程序页两组共用；
 “复制到 …”把当前组的参数复制到另一组并替换名称。
@@ -71,7 +78,10 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 跃迁类型按两个能级的 J 和宇称选择 (E1，E1 禁戒时为 M2；同宇称为 M1 和 E2)。默认只算两个能级所在的 J^π
 (界面写出只含这些块的 `.c`、`.cm`)，进程数沿用主窗口；“计算全部 J (MPI)”算两个文件之间的全部跃迁 (用于寿命和分支比)，
 用 MPI 版本和旁边设置的进程数。计算范围内的所有能级一次算完，之后点其中其他能级对可直接显示；结果 (Babushkin 和 Coulomb 两种规范下的
-A、gf、S) 保存在 `工作目录/.grasp_gui/tr/` 中，输入文件不变就一直沿用。选中的能级在能级图和表格中显示它的全部已算跃迁及分支比。
+A、gf、S) 保存在 `工作目录/.grasp_gui/tr/` 中，输入文件不变就一直沿用。连上并算好的跃迁画成带波长的箭头 (右键点箭头移除)，按工作目录保存；表格列出选中能级的全部已算跃迁及分支比 (也可在图上显示)。
+**导出**（能级查看器）：能级图导出为 PDF (嵌入字体)、SVG 或 PNG，标注组态和谱项 (如 [Ne]3s3p ¹P°₁；没有 jj2lsj 结果时标 J^π) 以及图上标注的跃迁；
+能级数据和跃迁导出为 CSV (UTF-8，组态用 NIST 写法如 `[Ne]3s.3p`，谱项如 `1P*`)；已算跃迁可保存为 GRASP 文件 (如 `even4.odd4.ct`)，
+直接交给 `rtabtrans1` / `rtabtrans2`。组态缩写规则可编辑 (默认为惰性气体原子实 [He] … [Rn])，CSF 文件中的核心轨道计入组态。
 
 ## Requirements / 依赖
 

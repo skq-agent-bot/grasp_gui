@@ -5,6 +5,7 @@ jj 耦合下的 CSF 混合系数 (配合 name.c)，以及 jj2lsj 给出的 LSJ �
 把一个能级连到另一个能级即可计算两者之间的跃迁 (自动运行 rbiotransform 和 rtransition，见 grasp_trans.py)。
 """
 
+import json
 import math
 import os
 import queue
@@ -13,9 +14,11 @@ import shutil
 import struct
 import threading
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QPolygonF, QTextCursor
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel, QSpinBox,
+from PySide6.QtCore import QMarginsF, QPointF, QRect, QRectF, QSize, QSizeF, Qt, QTimer, Signal
+from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetricsF, QImage, QPainter, QPen, QPolygonF,
+                           QTextCursor)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
+                               QFormLayout, QHBoxLayout, QLabel, QMenu, QMessageBox, QSpinBox,
                                QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPlainTextEdit,
                                QPushButton, QSplitter,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QTabWidget, QToolTip,
@@ -48,11 +51,39 @@ ARROW = QColor("#d35400")          # 选中的一对能级之间的跃迁
 LINK = QColor("#6c3483")           # 选中能级的其他已算跃迁
 
 
+def rich_width(p, segs):
+    """富文本 [(文字, "n" | "sup" | "sub")] 的宽度。"""
+    base = p.font()
+    small = QFont(base)
+    small.setPointSizeF(base.pointSizeF() * 0.72)
+    w = 0.0
+    for text, mode in segs:
+        w += QFontMetricsF(base if mode == "n" else small).horizontalAdvance(text)
+    return w
+
+
+def draw_rich(p, x, baseline, segs):
+    """画富文本：上标、下标用小号字并上下移动 (不依赖字体中的上下标字符，导出 SVG 时也正确)。"""
+    base = QFont(p.font())
+    small = QFont(base)
+    small.setPointSizeF(base.pointSizeF() * 0.72)
+    asc = QFontMetricsF(base).ascent()
+    for text, mode in segs:
+        font = base if mode == "n" else small
+        dy = {"n": 0.0, "sup": -asc * 0.42, "sub": asc * 0.22}[mode]
+        p.setFont(font)
+        p.drawText(QPointF(x, baseline + dy), text)
+        x += QFontMetricsF(font).horizontalAdvance(text)
+    p.setFont(base)
+    return x
+
+
 class LevelDiagram(QWidget):
     """能级图：每个 (文件, J^π) 一列，横线为能级；滚轮缩放、拖动平移、双击复位，点击选中能级。
     从一个能级拖到另一个能级 (或按住 Shift 点击第二个能级) 选中一对能级，用于计算跃迁。"""
     levelClicked = Signal(object)
     pairSelected = Signal(object, object)
+    arrowRemoved = Signal(object, object)
 
     MARGIN = (78, 12, 46, 30)      # 左、右、上 (列标题)、下
 
@@ -65,8 +96,10 @@ class LevelDiagram(QWidget):
         self.drag = None
         self.press = None          # (能级, 按下位置)：拖动超过几个像素即开始连线
         self.linking = None        # 连线时鼠标的位置
-        self.pair = None           # (上能级, 下能级)：画一条箭头
-        self.links = []            # [(能级, 能级, 强度 0..1)]：选中能级的已算跃迁
+        self.pair = None           # (上能级, 下能级)：选中的一对，未标注时画虚线箭头
+        self.arrows = []           # [(上能级, 下能级, 文字)]：图上标注的跃迁 (实线箭头，文字如波长)
+        self.arrow_segments = []   # [(上能级, 下能级, 起点, 终点)]：绘制时更新，用于右键移除
+        self.links = []            # [(能级, 能级, 强度 0..1)]：选中能级的全部已算跃迁 (可选)
         self.centers = {}          # 能级 -> (x, y)，绘制时更新
         self.setMouseTracking(True)
         self.setMinimumHeight(240)
@@ -88,24 +121,57 @@ class LevelDiagram(QWidget):
     def y_range(self):
         return self.yr or self.auto_y()
 
-    def plot_rect(self):
+    def plot_rect(self, width=None, height=None):
         l, r, t, b = self.MARGIN
-        return QRectF(l, t, max(self.width() - l - r, 10), max(self.height() - t - b, 10))
+        width = self.width() if width is None else width
+        height = self.height() if height is None else height
+        return QRectF(l, t, max(width - l - r, 10), max(height - t - b, 10))
 
     def to_py(self, y, rect, yr):
         return rect.bottom() - (y - yr[0]) / (yr[1] - yr[0]) * rect.height()
 
-    def geometry_of(self, rect):
-        """各列的 (左边界 x, 宽度)：所有列等宽。"""
+    def geometry_of(self, rect, widths=None):
+        """各列的 (左边界 x, 宽度)：屏幕上所有列等宽；导出时按 widths (各列所需宽度) 的比例分配。"""
         n = max(len(self.columns), 1)
-        w = rect.width() / n
-        return [(rect.left() + i * w, w) for i in range(n)]
+        widths = widths or [1.0] * n
+        scale = rect.width() / (sum(widths) or 1)
+        out, x = [], rect.left()
+        for w in widths:
+            out.append((x, w * scale))
+            x += w * scale
+        return out
 
     def paintEvent(self, _event):
         p = QPainter(self)
+        self.draw(p, self.width(), self.height())
+
+    # ---- 导出时的标注 ----
+    LINE_LEN = 46                  # 导出图中能级线的长度 (像素)
+
+    def label_widths(self, p, labels):
+        """导出时各列所需的宽度：能级线 + 最宽的标注。"""
+        out = []
+        for col in self.columns:
+            w = max((rich_width(p, labels[lv["key"]]) for lv in col["levels"] if lv["key"] in labels), default=0)
+            out.append(self.LINE_LEN + 16 + (w + 14 if w else 0))
+        return out
+
+    def export_size(self, height, labels):
+        """导出图的大小：宽度由各列标注的宽度决定 (至少与屏幕上一样宽)。"""
+        img = QImage(1, 1, QImage.Format_ARGB32)
+        p = QPainter(img)
+        p.setFont(self.font())
+        need = sum(self.label_widths(p, labels)) + self.MARGIN[0] + self.MARGIN[1]
+        p.end()
+        return int(max(need, self.width())), int(height)
+
+    def draw(self, p, width, height, export=None):
+        """画能级图。export 为 None 时画屏幕上的交互视图；导出时为
+        dict(labels={能级: 富文本}, transitions=是否画选中的跃迁, axis=纵轴标题)。"""
         p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), QColor("white"))
-        rect = self.plot_rect()
+        p.setFont(self.font())
+        p.fillRect(QRectF(0, 0, width, height), QColor("white"))
+        rect = self.plot_rect(width, height)
         yr = self.y_range()
         fm = p.fontMetrics()
 
@@ -120,53 +186,121 @@ class LevelDiagram(QWidget):
         p.save()
         p.translate(14, rect.center().y())
         p.rotate(-90)
-        text = T("相对能量 ({u})", u=self.unit)
+        text = export["axis"] if export else T("相对能量 ({u})", u=self.unit)
         p.drawText(QPointF(-fm.horizontalAdvance(text) / 2, 0), text)
         p.restore()
         p.setPen(QColor("#999"))
         p.drawRect(rect)
 
-        geo = self.geometry_of(rect)
+        labels = export["labels"] if export else {}
+        geo = self.geometry_of(rect, self.label_widths(p, labels) if labels else None)
         self.draw_headers(p, rect, geo)
-        self.centers = {lv["key"]: (x0 + w / 2, self.to_py(lv["y"], rect, yr))
-                        for (x0, w), col in zip(geo, self.columns) for lv in col["levels"]}
+        # 导出带标注时能级线画在列的左侧，标注写在右侧；否则居中
+        span = (lambda x0, w: (x0 + 8, x0 + 8 + self.LINE_LEN)) if labels else \
+            (lambda x0, w: (x0 + w * 0.15, x0 + w * 0.85))
+        centers = {lv["key"]: ((span(x0, w)[0] + span(x0, w)[1]) / 2, self.to_py(lv["y"], rect, yr))
+                   for (x0, w), col in zip(geo, self.columns) for lv in col["levels"]}
+        if not export:
+            self.centers = centers
+        arrows = export.get("arrows", []) if export else self.arrows
+        marked = {(a, b) for a, b, _ in arrows}
         p.save()
         p.setClipRect(rect)
-        for k1, k2, strength in self.links:          # 选中能级的已算跃迁，越强越粗越深
-            if k1 in self.centers and k2 in self.centers:
+        for k1, k2, strength in ([] if export else self.links):   # 选中能级的已算跃迁，越强越粗越深
+            if k1 in centers and k2 in centers:
                 c = QColor(LINK)
                 c.setAlphaF(0.25 + 0.6 * strength)
                 p.setPen(QPen(c, 0.8 + 2.4 * strength))
-                p.drawLine(QPointF(*self.centers[k1]), QPointF(*self.centers[k2]))
+                p.drawLine(QPointF(*centers[k1]), QPointF(*centers[k2]))
         p.restore()
         for (x0, w), col in zip(geo, self.columns):
             p.save()
             p.setClipRect(rect)
-            # 能级只画横线，组成等信息在鼠标悬停时显示
-            lx0, lx1 = x0 + w * 0.15, x0 + w * 0.85
+            # 屏幕上能级只画横线，组成等信息在鼠标悬停时显示
+            lx0, lx1 = span(x0, w)
             for lv in col["levels"]:
                 py = self.to_py(lv["y"], rect, yr)
                 key = lv["key"]
-                in_pair = self.pair and key in self.pair
-                color = SELECTED if key == self.selected or in_pair else lv["color"]
-                width = 3.2 if key in (self.selected, self.hover) or in_pair else 1.6
+                in_pair = bool(self.pair and key in self.pair and not export)
+                color = SELECTED if (key == self.selected and not export) or in_pair else lv["color"]
+                width = 3.2 if (key in (self.selected, self.hover) and not export) or in_pair else 1.6
                 p.setPen(QPen(color, width))
                 p.drawLine(QPointF(lx0, py), QPointF(lx1, py))
+            if labels:
+                self.draw_labels(p, rect, yr, col, labels, lx1)
             p.restore()
         p.save()
         p.setClipRect(rect)
-        if self.pair and all(k in self.centers for k in self.pair):
-            self.draw_arrow(p, QPointF(*self.centers[self.pair[0]]), QPointF(*self.centers[self.pair[1]]))
-        if self.linking and self.press and self.press[0] in self.centers:
+        segments = []
+        for ku, kl, text in arrows:
+            if ku in centers and kl in centers:
+                a, b = QPointF(*centers[ku]), QPointF(*centers[kl])
+                bold = not export and self.pair == (ku, kl)
+                self.draw_arrow(p, a, b, 3.4 if bold else 2.2)
+                segments.append((ku, kl, a, b))
+                if text:
+                    self.draw_arrow_text(p, a, b, text)
+        if not export:
+            self.arrow_segments = segments
+            if self.pair and self.pair not in marked and all(k in centers for k in self.pair):
+                self.draw_arrow(p, QPointF(*centers[self.pair[0]]), QPointF(*centers[self.pair[1]]), 2.0, dashed=True)
+        if not export and self.linking and self.press and self.press[0] in self.centers:
             p.setPen(QPen(SELECTED, 2, Qt.DashLine))
             p.drawLine(QPointF(*self.centers[self.press[0]]), self.linking)
         p.restore()
 
+    def draw_labels(self, p, rect, yr, col, labels, x):
+        """一列能级的标注：写在能级线右侧；挨得太近时上下错开 (保持顺序)，用细线连回能级。"""
+        fm = p.fontMetrics()
+        h = fm.height() * 1.05
+        items = sorted(((self.to_py(lv["y"], rect, yr), labels[lv["key"]]) for lv in col["levels"]
+                        if lv["key"] in labels and rect.top() <= self.to_py(lv["y"], rect, yr) <= rect.bottom()),
+                       key=lambda t: -t[0])                    # 自下而上
+        ys = [py for py, _ in items]
+        for i in range(1, len(ys)):                            # 向上推开
+            ys[i] = min(ys[i], ys[i - 1] - h)
+        if ys and ys[-1] < rect.top() + h / 2:                 # 顶部放不下时整体下移
+            ys[-1] = rect.top() + h / 2
+            for i in range(len(ys) - 2, -1, -1):
+                ys[i] = max(ys[i], ys[i + 1] + h)
+        for (py, segs), y in zip(items, ys):
+            if abs(y - py) > 1:
+                p.setPen(QPen(QColor("#aaa"), 0.6))
+                p.drawLine(QPointF(x + 2, py), QPointF(x + 10, y))
+            # 白色底，跃迁连线从文字下面经过
+            p.fillRect(QRectF(x + 10, y - fm.height() / 2, rich_width(p, segs) + 4, fm.height()), QColor(255, 255, 255, 225))
+            p.setPen(QColor("#222"))
+            draw_rich(p, x + 12, y + fm.ascent() / 2 - 1, segs)
+
     @staticmethod
-    def draw_arrow(p, a, b):
+    def draw_arrow_text(p, a, b, text):
+        """箭头中点处的文字 (如波长)，白底。"""
+        fm = p.fontMetrics()
+        m = (a + b) / 2
+        w = fm.horizontalAdvance(text)
+        p.fillRect(QRectF(m.x() + 4, m.y() - fm.height() / 2, w + 4, fm.height()), QColor(255, 255, 255, 225))
+        p.setPen(ARROW)
+        p.drawText(QPointF(m.x() + 6, m.y() + fm.ascent() / 2 - 1), text)
+
+    def arrow_at(self, pos, tol=6.0):
+        """鼠标附近的标注箭头 (上能级, 下能级)，没有时为 None。"""
+        best = None
+        for ku, kl, a, b in self.arrow_segments:
+            d = b - a
+            n2 = d.x() ** 2 + d.y() ** 2
+            t = 0.0 if n2 == 0 else max(0.0, min(1.0, ((pos.x() - a.x()) * d.x() + (pos.y() - a.y()) * d.y()) / n2))
+            q = a + d * t
+            dist = ((pos.x() - q.x()) ** 2 + (pos.y() - q.y()) ** 2) ** 0.5
+            if dist < tol and (best is None or dist < best[0]):
+                best = (dist, (ku, kl))
+        return best[1] if best else None
+
+    @staticmethod
+    def draw_arrow(p, a, b, width=2.4, dashed=False):
         """从上能级 a 指向下能级 b 的箭头。"""
-        p.setPen(QPen(ARROW, 2.4))
+        p.setPen(QPen(ARROW, width, Qt.DashLine if dashed else Qt.SolidLine))
         p.drawLine(a, b)
+        p.setPen(QPen(ARROW, width))
         d = b - a
         length = (d.x() ** 2 + d.y() ** 2) ** 0.5
         if length < 1:
@@ -255,6 +389,11 @@ class LevelDiagram(QWidget):
             self.unsetCursor()
 
     def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:          # 右键点标注的箭头：移除
+            hit = self.arrow_at(event.position())
+            if hit:
+                self.arrowRemoved.emit(*hit)
+            return
         if event.button() != Qt.LeftButton:
             return
         lv = self.level_at(event.position())
@@ -328,6 +467,177 @@ def item(value, color=None, align=None):
     return it
 
 
+def abbrev_rules():
+    """组态缩写规则 [[缩写, 完整组态], ...]，默认为惰性气体原子实 ([He]、[Ne] …)。"""
+    rules = core.load_config().get("config_abbrev")
+    return mix.NOBLE_GAS_CORES if rules is None else rules
+
+
+def config_text(d):
+    """CSV 中的组态：缩写 + NIST 写法，如 [Ne]3s.3p"""
+    return d["prefix"] + mix.config_ascii(d["config"])
+
+
+class AbbrevDialog(QDialog):
+    """编辑组态缩写规则：每行一个缩写和它代表的完整组态 (子壳层用 . 或空格分隔，如 1s2.2s2.2p6)。"""
+
+    @classmethod
+    def edit(cls, parent, preview=None):
+        dlg = cls(parent, preview)
+        if dlg.exec() == QDialog.Accepted:
+            core.save_config(config_abbrev=dlg.rules())
+            return True
+        return False
+
+    def __init__(self, parent, preview):
+        super().__init__(parent)
+        self.setWindowTitle(T("组态缩写"))
+        self.resize(640, 420)
+        self.preview_fn = preview
+        lay = QVBoxLayout(self)
+        note = QLabel(T("组态中含有右列的全部子壳层 (占据数相同) 时，把它们换成左列的缩写，写在组态最前面；"
+                        "缩写可以留空，表示省略这些子壳层。子壳层多的规则先用。核心轨道 (CSF 文件中的 Core) 已计入组态。"))
+        note.setWordWrap(True)
+        lay.addWidget(note)
+        self.table = QTableWidget(0, 2)
+        self.table.setHorizontalHeaderLabels([T("缩写"), T("完整组态")])
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.itemChanged.connect(self.update_preview)
+        lay.addWidget(self.table, 1)
+        row = QHBoxLayout()
+        for text, slot in [("添加", self.add_row), ("删除", self.remove_row), ("恢复默认", self.reset)]:
+            b = QPushButton(T(text))
+            b.clicked.connect(slot)
+            row.addWidget(b)
+        row.addStretch()
+        lay.addLayout(row)
+        self.preview = QLabel()
+        self.preview.setTextFormat(Qt.PlainText)
+        lay.addWidget(self.preview)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        lay.addWidget(self.buttons)
+        self.fill(abbrev_rules())
+
+    def fill(self, rules):
+        self.table.blockSignals(True)
+        self.table.setRowCount(0)
+        for abbr, full in rules:
+            self.add_row(abbr, full)
+        self.table.blockSignals(False)
+        self.table.resizeColumnToContents(0)
+        self.update_preview()
+
+    def add_row(self, abbr="", full=""):
+        r = self.table.rowCount()
+        self.table.insertRow(r)
+        self.table.setItem(r, 0, QTableWidgetItem(abbr if isinstance(abbr, str) else ""))
+        self.table.setItem(r, 1, QTableWidgetItem(full))
+
+    def remove_row(self):
+        r = self.table.currentRow()
+        if r >= 0:
+            self.table.removeRow(r)
+            self.update_preview()
+
+    def reset(self):
+        self.fill(mix.NOBLE_GAS_CORES)
+
+    def rules(self):
+        out = []
+        for r in range(self.table.rowCount()):
+            abbr = (self.table.item(r, 0).text() if self.table.item(r, 0) else "").strip()
+            full = (self.table.item(r, 1).text() if self.table.item(r, 1) else "").strip()
+            if full:
+                out.append([abbr, full])
+        return out
+
+    def update_preview(self, *_):
+        bad = []
+        for r in range(self.table.rowCount()):
+            it = self.table.item(r, 1)
+            if it is None:
+                continue
+            ok = not it.text().strip() or mix.parse_config(it.text()) is not None
+            it.setForeground(QColor("black") if ok else QColor("#c00"))
+            if not ok:
+                bad.append(r + 1)
+        self.buttons.button(QDialogButtonBox.Ok).setEnabled(not bad)
+        if bad:
+            self.preview.setText(T("第 {r} 行的完整组态无法识别 (应写成 1s2.2s2.2p6 这样)", r=", ".join(map(str, bad))))
+        elif self.preview_fn:
+            d = self.preview_fn()
+            prefix, rest = mix.abbreviate(d["full"], self.rules())
+            self.preview.setText(T("预览：{a}  →  {b}", a=mix.config_ascii(d["full"]),
+                                   b=prefix + mix.config_ascii(rest)))
+
+
+class DiagramExportDialog(QDialog):
+    """导出能级图的选项 (上次的选择会被记住)。"""
+
+    DEFAULTS = dict(labels=True, energy=False, transitions=True, arrow_text="nm", english=True, height=900, scale=3)
+    ARROW_TEXT = [("none", "不标注"), ("nm", "波长 (nm)"), ("A", "波长 (Å)")]
+
+    @classmethod
+    def ask(cls, parent, has_transitions):
+        dlg = cls(parent, has_transitions)
+        if dlg.exec() != QDialog.Accepted:
+            return None
+        opts = dict(labels=dlg.labels.isChecked(), energy=dlg.energy.isChecked(),
+                    transitions=dlg.transitions.isChecked(), arrow_text=cls.ARROW_TEXT[dlg.arrow_text.currentIndex()][0],
+                    english=dlg.lang.currentIndex() == 0,
+                    height=dlg.height.value(), scale=dlg.scale.value())
+        core.save_config(level_export=opts)
+        return opts
+
+    def __init__(self, parent, has_transitions):
+        super().__init__(parent)
+        self.setWindowTitle(T("导出能级图"))
+        o = dict(self.DEFAULTS, **(core.load_config().get("level_export") or {}))
+        form = QFormLayout(self)
+        self.labels = QCheckBox(T("标注组态、谱项 (或 J^π)"))
+        self.labels.setChecked(o["labels"])
+        self.energy = QCheckBox(T("标注能量"))
+        self.energy.setChecked(o["energy"])
+        self.transitions = QCheckBox(T("画出图上标注的跃迁"))
+        self.transitions.setChecked(o["transitions"] and has_transitions)
+        self.transitions.setEnabled(has_transitions)
+        self.arrow_text = QComboBox()
+        self.arrow_text.addItems([T(label) for _, label in self.ARROW_TEXT])
+        self.arrow_text.setCurrentIndex(next((i for i, (k, _) in enumerate(self.ARROW_TEXT) if k == o["arrow_text"]), 1))
+        self.lang = QComboBox()
+        self.lang.addItems(["English", "中文"])
+        self.lang.setCurrentIndex(0 if o["english"] else 1)
+        self.height = QSpinBox()
+        self.height.setRange(300, 6000)
+        self.height.setSuffix(" px")
+        self.height.setValue(o["height"])
+        self.scale = QSpinBox()
+        self.scale.setRange(1, 6)
+        self.scale.setPrefix("× ")
+        self.scale.setValue(o["scale"])
+        for w in (self.labels, self.energy, self.transitions):
+            form.addRow(w)
+        form.addRow(T("箭头上的文字"), self.arrow_text)
+        abbr = QPushButton(T("组态缩写…"))
+        abbr.clicked.connect(lambda: AbbrevDialog.edit(self, getattr(parent, "preview_desc", lambda: None)()))
+        form.addRow(T("组态"), abbr)
+        form.addRow(T("坐标轴文字"), self.lang)
+        form.addRow(T("图的高度"), self.height)
+        form.addRow(T("PNG 分辨率"), self.scale)
+        note = QLabel(T("范围与屏幕上一致 (先缩放到需要的部分)；宽度按标注自动确定。PDF 嵌入字体，适合论文；"
+                        "SVG 可在 Inkscape 等软件中编辑。"))
+        note.setWordWrap(True)
+        note.setStyleSheet("color: gray;")
+        form.addRow(note)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+
+
 def saved_settings():
     """单独打开查看器时的运行设置：主窗口保存的 GRASP bin 目录和 MPI 设置。"""
     cfg = core.load_config()
@@ -348,6 +658,7 @@ class LevelViewer(QMainWindow):
         self.key_by_id = {}        # (绝对路径, 2J, 宇称, 序号) -> key
         self.current = None
         self.pair = None           # (上能级, 下能级)
+        self.marked = []           # 图上标注的跃迁 [(上能级, 下能级)]，保存在 工作目录/.grasp_gui/marked.json
         self.plan = None           # (Workspace, 要算的跃迁类型)
         self.tr_by_pair = {}       # frozenset(能级, 能级) -> [Transition]
         self.tr_by_level = {}      # 能级 -> [(另一能级, Transition, 本能级是否为上能级)]
@@ -377,6 +688,14 @@ class LevelViewer(QMainWindow):
         self.unit.setCurrentIndex(min(max(core.load_config().get("level_unit", 0), 0), len(UNITS) - 1))
         self.unit.currentIndexChanged.connect(self.unit_changed)
         top.addWidget(self.unit)
+        export = QPushButton(T("导出"))
+        menu = QMenu(export)
+        menu.addAction(T("能级图 (PNG / SVG / PDF)…")).triggered.connect(self.export_diagram)
+        menu.addAction(T("能级数据 (CSV)…")).triggered.connect(self.export_levels)
+        menu.addSeparator()
+        menu.addAction(T("组态缩写…")).triggered.connect(lambda: AbbrevDialog.edit(self, self.preview_desc()))
+        export.setMenu(menu)
+        top.addWidget(export)
         lay.addLayout(top)
 
         split = QSplitter(Qt.Horizontal)
@@ -397,14 +716,21 @@ class LevelViewer(QMainWindow):
         dw = QWidget()
         dl = QVBoxLayout(dw)
         dl.setContentsMargins(0, 0, 0, 0)
-        hint = QLabel(T("鼠标停在能级上显示信息，点击查看组成；从一个能级拖到另一个能级计算跃迁 (或按住 Shift 点击)；"
-                        "滚轮缩放，拖动空白处平移，双击复位。"))
+        hint = QLabel(T("鼠标停在能级上显示信息，点击查看组成；从一个能级拖到另一个能级 (或按住 Shift 点击) 计算跃迁，"
+                        "算好的跃迁会画成箭头，右键点箭头可移除；滚轮缩放，拖动空白处平移，双击复位。"))
         hint.setWordWrap(True)
         hint.setStyleSheet("color: gray;")
-        dl.addWidget(hint)
+        hrow = QHBoxLayout()
+        hrow.addWidget(hint, 1)
+        self.show_links = QCheckBox(T("显示选中能级的全部已算跃迁"))
+        self.show_links.setChecked(bool(core.load_config().get("level_links", False)))
+        self.show_links.toggled.connect(self.links_toggled)
+        hrow.addWidget(self.show_links)
+        dl.addLayout(hrow)
         self.diagram = LevelDiagram()
         self.diagram.levelClicked.connect(self.select)
-        self.diagram.pairSelected.connect(self.select_pair)
+        self.diagram.pairSelected.connect(self.connect_pair)
+        self.diagram.arrowRemoved.connect(self.unmark)
         dl.addWidget(self.diagram, 1)
         middle.addWidget(dw)
         self.level_table = table([T("文件"), "J^π", T("序号"), T("能量"), T("总能量 (a.u.)"), T("纯度"),
@@ -573,6 +899,7 @@ class LevelViewer(QMainWindow):
         self.diagram.selected = self.current
         self.diagram.pair = self.pair
         self.load_transitions()
+        self.load_marked()
         self.show_composition()
 
     @staticmethod
@@ -695,10 +1022,29 @@ class LevelViewer(QMainWindow):
         row.addWidget(QLabel(T("进程数")))
         row.addWidget(self.tr_np)
         row.addWidget(self.tr_stop)
+        tr_export = QPushButton(T("导出"))
+        menu = QMenu(tr_export)
+        menu.addAction(T("当前能级的跃迁 (CSV)…")).triggered.connect(lambda: self.export_transitions(False))
+        menu.addAction(T("这两个文件之间的全部已算跃迁 (CSV)…")).triggered.connect(lambda: self.export_transitions(True))
+        menu.addAction(T("保存为 GRASP 跃迁文件 (供 rtabtrans1 / rtabtrans2 使用)…")).triggered.connect(self.export_grasp)
+        tr_export.setMenu(menu)
+        row.addWidget(tr_export)
         row.addStretch()
         lay.addLayout(row)
         self.pair_table = table([T("类型"), T("规范"), "A (s⁻¹)", "gf", "S (a.u.)"])
         lay.addWidget(self.pair_table, 1)
+        mrow = QHBoxLayout()
+        mrow.addWidget(QLabel(T("图上标注的跃迁")))
+        mrow.addStretch()
+        for text, slot in [("移除", self.unmark_selected), ("全部清除", self.clear_marked)]:
+            b = QPushButton(T(text))
+            b.clicked.connect(slot)
+            mrow.addWidget(b)
+        lay.addLayout(mrow)
+        self.marked_list = QListWidget()
+        self.marked_list.setMaximumHeight(96)
+        self.marked_list.itemClicked.connect(lambda it: self.select_pair(*it.data(Qt.UserRole)))
+        lay.addWidget(self.marked_list)
         self.level_tr_label = QLabel()
         self.level_tr_label.setWordWrap(True)
         lay.addWidget(self.level_tr_label)
@@ -715,9 +1061,318 @@ class LevelViewer(QMainWindow):
         lay.addWidget(self.tr_log, 1)
         return w
 
+    # ---- 导出 ----
+    def level_desc(self, key):
+        """导出用的能级信息：组态 [(nl, 占据数)]、谱项 (有 jj2lsj 结果时)、J、宇称等。组态和谱项取自
+        权重最大的 LSJ 成分；没有 LSJ 结果时组态由权重最大的 CSF 合并 2p-、2p 等得到，没有谱项。"""
+        fname, path, lv, csfs, lsj, csf_path, lsj_path = self.levels[key]
+        label, purity = self.leading(lv, csfs, lsj)
+        config = term = None
+        lsj_label = ""
+        if lsj and lsj[1]:
+            lsj_label = max(lsj[1], key=lambda t: t[1])[2]
+            config, term = mix.parse_lsj_label(lsj_label)
+        jj = csfs[lv.block.nb - 1][lv.leading() - 1][0] if csfs else ""
+        if config is None and jj:
+            config = mix.nonrel_config(jj)
+        # LSJ 标记和 CSF 中不含核心轨道，补上后再按规则缩写 (如 1s2.2s2.2p6 -> [Ne])
+        core_orbs = self.cached(csf_path, mix.csf_core) if csf_path else []
+        core_orbs = [] if isinstance(core_orbs, Exception) else core_orbs
+        full = [x for x in core_orbs if x[0] not in {nl for nl, _ in config or []}] + list(config or [])
+        prefix, rest = mix.abbreviate(full, abbrev_rules())
+        return dict(file=fname, J=lv.block.J, twoj=tr.two_j(lv.block), parity=lv.parity, pos=lv.pos, energy=lv.energy,
+                    config=rest, prefix=prefix, full=full, term=term, purity=purity, lsj_label=lsj_label, jj=jj)
+
+    def preview_desc(self):
+        """缩写设置对话框中用来预览的能级：当前选中的，否则能量最低的。"""
+        key = self.current or (min(self.levels, key=lambda k: self.levels[k][2].energy) if self.levels else None)
+        return (lambda: self.level_desc(key)) if key else None
+
+    @staticmethod
+    def rich_label(d, energy=None):
+        """能级图上的标注，如 2s²2p⁶3s3p ¹P°₁；没有谱项时写 J^π，如 2s²2p⁶3s3p  1⁻。"""
+        segs = [(d["prefix"], "n")] if d["prefix"] else []
+        for nl, occ in d["config"]:
+            segs.append((nl, "n"))
+            if occ > 1:
+                segs.append((str(occ), "sup"))
+        if not d["config"] and not d["prefix"]:
+            segs.append((f"#{d['pos']}", "n"))
+        if d["term"]:
+            segs += [(" ", "n"), (d["term"][:-1], "sup"), (d["term"][-1], "n")]
+            if d["parity"] < 0:
+                segs.append(("o", "sup"))
+            segs.append((d["J"], "sub"))
+        else:
+            segs += [("  " + d["J"], "n"), ("−" if d["parity"] < 0 else "+", "sup")]
+        if energy:
+            segs.append(("   " + energy, "n"))
+        return segs
+
+    def export_path(self, title, name, filters):
+        path, filt = QFileDialog.getSaveFileName(self, title, os.path.join(self.dir.text(), name), filters)
+        if path and not os.path.splitext(path)[1]:           # 没写扩展名时按所选的类型补上
+            path += filt[filt.index("*") + 1:filt.index(")")].split()[0]
+        return path
+
+    def export_diagram(self):
+        if not self.levels:
+            return
+        opts = DiagramExportDialog.ask(self, bool(self.marked))
+        if not opts:
+            return
+        path = self.export_path(T("导出能级图…"), "levels.pdf", "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)")
+        if not path:
+            return
+        unit_label, factor, efmt = self.unit_info()
+        e0 = min(v[2].energy for v in self.levels.values())
+        visible = {lv["key"] for c in self.diagram.columns for lv in c["levels"]}
+        labels = {}
+        if opts["labels"] or opts["energy"]:
+            for key in visible:
+                d = self.level_desc(key)
+                e = efmt.format((d["energy"] - e0) * factor) if opts["energy"] else None
+                labels[key] = self.rich_label(d, e) if opts["labels"] else [(e, "n")]
+        axis = (f"Relative energy ({unit_label})" if opts["english"] else T("相对能量 ({u})", u=unit_label))
+        arrows = []
+        if opts["transitions"]:
+            for u, l in self.marked:
+                lam = self.wavelength(u, l)
+                text = {"none": "", "A": f"{lam:.2f} Å", "nm": f"{lam / 10:.3f} nm"}[opts["arrow_text"]]
+                arrows.append((u, l, text))
+        export = dict(labels=labels, arrows=arrows, axis=axis)
+        w, h = self.diagram.export_size(opts["height"], labels)
+        ext = os.path.splitext(path)[1].lower()
+        try:
+            if ext == ".svg":
+                from PySide6.QtSvg import QSvgGenerator
+                gen = QSvgGenerator()
+                gen.setFileName(path)
+                gen.setSize(QSize(w, h))
+                gen.setViewBox(QRect(0, 0, w, h))
+                gen.setTitle("Energy levels")
+                p = QPainter(gen)
+                self.diagram.draw(p, w, h, export)
+                p.end()
+            elif ext == ".pdf":
+                from PySide6.QtCore import qVersion
+                from PySide6.QtGui import QPageSize, QPdfWriter
+                if qVersion().startswith(("6.8.0", "6.8.1", "6.8.2")):
+                    QMessageBox.warning(self, T("导出能级图"), T("Qt {v} 写出的 PDF 文件信息有错，部分阅读器会报错。"
+                                                             "请升级 PySide6 (≥ 6.8.3)，或导出为 SVG / PNG。", v=qVersion()))
+                wr = QPdfWriter(path)
+                wr.setResolution(96)                  # 1 像素 = 1/96 英寸，与屏幕上的字号比例一致
+                wr.setPageSize(QPageSize(QSizeF(w * 72 / 96, h * 72 / 96), QPageSize.Point))
+                wr.setPageMargins(QMarginsF(0, 0, 0, 0))
+                wr.setTitle("Energy levels")
+                p = QPainter(wr)
+                self.diagram.draw(p, w, h, export)
+                p.end()
+            else:
+                scale = opts["scale"]
+                img = QImage(w * scale, h * scale, QImage.Format_ARGB32)
+                img.fill(QColor("white"))
+                p = QPainter(img)
+                p.scale(scale, scale)
+                self.diagram.draw(p, w, h, export)
+                p.end()
+                img.setDotsPerMeterX(round(3779.53 * scale))      # 记录分辨率 (96 dpi × 倍数)
+                img.setDotsPerMeterY(round(3779.53 * scale))
+                if not img.save(path):
+                    raise OSError(path)
+        except OSError as e:
+            QMessageBox.critical(self, T("错误"), T("无法写入 {p}", p=e))
+            return
+        self.statusBar().showMessage(T("已导出 {p}", p=path))
+
+    LEVEL_HEADER = ["file", "J", "2J", "parity", "index", "configuration", "configuration_full", "term", "E_total_au", "E_rel_au",
+                    "E_rel_cm-1", "E_rel_eV", "purity_percent", "leading_component", "lsj_label", "leading_csf_jj"]
+
+    def export_levels(self):
+        if not self.levels:
+            return
+        path = self.export_path(T("导出能级数据…"), "levels.csv", "CSV (*.csv)")
+        if not path:
+            return
+        e0 = min(v[2].energy for v in self.levels.values())
+        rows = []
+        for key in sorted(self.levels, key=lambda k: self.levels[k][2].energy):
+            d = self.level_desc(key)
+            rel = d["energy"] - e0
+            leading = self.leading(self.levels[key][2], self.levels[key][3], self.levels[key][4])[0]
+            rows.append([d["file"], d["J"], d["twoj"], "+" if d["parity"] > 0 else "-", d["pos"],
+                         config_text(d), mix.config_ascii(d["full"]), mix.term_ascii(d["term"], d["parity"]), f"{d['energy']:.10f}",
+                         f"{rel:.10f}", f"{rel * mix.HARTREE_CM:.4f}", f"{rel * mix.HARTREE_EV:.6f}",
+                         f"{d['purity']:.3f}", leading, d["lsj_label"], d["jj"]])
+        self.write_csv(path, self.LEVEL_HEADER, rows)
+
+    def write_csv(self, path, header, rows):
+        try:
+            core.write_csv(path, header, rows)
+        except OSError as e:
+            QMessageBox.critical(self, T("错误"), T("无法写入 {p}", p=e))
+            return
+        self.statusBar().showMessage(T("已导出 {p} ({n} 行)", p=path, n=len(rows)))
+
+    TRANSITION_HEADER = (["type"] + [f"{s}_{c}" for s in ("upper", "lower") for c in
+                                     ("file", "J", "parity", "index", "configuration", "term", "E_total_au")] +
+                         ["delta_E_cm-1", "lambda_vac_A", "gauge", "A_s-1", "gf", "S_au",
+                          "A_Coulomb_s-1", "gf_Coulomb", "S_Coulomb_au", "A_C/A_B", "branching_ratio"])
+
+    def transition_row(self, ku, kl, t):
+        def level(key):
+            d = self.level_desc(key)
+            return [d["file"], d["J"], "+" if d["parity"] > 0 else "-", d["pos"], config_text(d),
+                    mix.term_ascii(d["term"], d["parity"]), f"{d['energy']:.10f}"]
+        a, gf, s = t.main()
+        c = t.values.get("C")
+        decay = sum(abs(x.main()[0]) for _, x, is_up in self.tr_by_level.get(ku, []) if is_up)
+        ratio = t.gauge_ratio()
+        return ([t.kind] + level(ku) + level(kl) +
+                [f"{t.energy_cm:.2f}", f"{t.wavelength:.4f}", "Babushkin" if "B" in t.values else "magnetic",
+                 f"{a:.6e}", f"{gf:.6e}", f"{s:.6e}"] +
+                ([f"{x:.6e}" for x in c] if c else ["", "", ""]) +
+                [f"{ratio:.6f}" if ratio is not None else "", f"{abs(a) / decay:.6f}" if decay else ""])
+
+    def export_transitions(self, both_files):
+        """当前能级的已算跃迁，或选中的一对能级所在的两个文件之间的全部已算跃迁。"""
+        if both_files:
+            if not self.pair:
+                return
+            files = {self.levels[k][1] for k in self.pair}
+            rows = [(ku, kl, t) for ku, items in self.tr_by_level.items() if self.levels[ku][1] in files
+                    for kl, t, is_up in items if is_up and self.levels[kl][1] in files]
+            name = "_".join(os.path.splitext(self.levels[k][0])[0] for k in self.pair) + "_transitions.csv"
+        else:
+            if not self.current:
+                return
+            rows = [((self.current, other) if is_up else (other, self.current)) + (t,)
+                    for other, t, is_up in self.tr_by_level.get(self.current, [])]
+            d = self.level_desc(self.current)
+            name = f"{os.path.splitext(d['file'])[0]}_{d['J'].replace('/', '_')}{'+' if d['parity'] > 0 else '-'}_{d['pos']}.csv"
+        if not rows:
+            QMessageBox.information(self, T("导出"), T("还没有算出的跃迁。"))
+            return
+        path = self.export_path(T("导出跃迁数据…"), name, "CSV (*.csv)")
+        if not path:
+            return
+        rows.sort(key=lambda r: (tr.kind_key(r[2].kind), -self.levels[r[0]][2].energy, -self.levels[r[1]][2].energy))
+        self.write_csv(path, self.TRANSITION_HEADER, [self.transition_row(ku, kl, t) for ku, kl, t in rows])
+
+    def export_grasp(self):
+        """把选中的一对能级所在两个文件之间的已算跃迁写成 GRASP 的 rtransition 输出 (如 even4.odd4.ct)。"""
+        if not self.pair:
+            return
+        ws = self.workspace(self.levels[self.pair[0]][1], self.levels[self.pair[1]][1])
+        transitions = ws.results()
+        if not transitions:
+            QMessageBox.information(self, T("导出"), T("还没有算出的跃迁。"))
+            return
+        names = {r: os.path.splitext(os.path.basename(x.mix))[0] for r, x in ws.sides.items()}
+        ci = all(x.mix.endswith(".cm") for x in ws.sides.values())
+        name = ".".join([names["a"], names.get("b", names["a"])]) + (".ct" if ci else ".t")
+        runs = ws.manifest().get("runs", {})
+        kinds = sorted({t.kind for t in transitions}, key=tr.kind_key)
+        partial = [k for k in kinds if k not in runs.get("all", {}).get("kinds", {})]
+        if partial and QMessageBox.question(
+                self, T("导出"), T("{k} 只算了部分 J，文件中只有这些跃迁；rtabtrans2 算出的寿命只计入它们。"
+                                   "先“计算全部 J”可以得到完整的结果。仍然导出吗？", k=", ".join(partial))) != QMessageBox.Yes:
+            return
+        path, _ = QFileDialog.getSaveFileName(self, T("保存为 GRASP 跃迁文件…"), os.path.join(self.dir.text(), name),
+                                              "GRASP (*.ct *.t);;" + T("所有文件") + " (*)")
+        if not path:
+            return
+        try:
+            tr.write_grasp(path, transitions, names)
+        except OSError as e:
+            QMessageBox.critical(self, T("错误"), T("无法写入 {p}", p=e))
+            return
+        self.statusBar().showMessage(T("已导出 {p} ({n} 条跃迁)", p=path, n=len(transitions)))
+
     def level_name(self, key):
         fname, _, lv, *_ = self.levels[key]
         return f"{fname}  {self.jp(lv.block)}  #{lv.pos}"
+
+    # ---- 图上标注的跃迁 ----
+    def marked_file(self):
+        return os.path.join(self.dir.text(), ".grasp_gui", "marked.json")
+
+    def level_id(self, key):
+        lv = self.levels[key][2]
+        return [os.path.abspath(self.levels[key][1]), tr.two_j(lv.block), lv.parity, lv.pos]
+
+    def load_marked(self):
+        """读取工作目录中保存的标注；对应的能级不在当前勾选的文件中时暂不显示 (仍保留在文件中)。"""
+        try:
+            with open(self.marked_file()) as f:
+                saved = json.load(f)
+        except (OSError, ValueError):
+            saved = []
+        self.marked_saved = saved
+        self.marked = []
+        for u, l in saved:
+            ku, kl = self.key_by_id.get(tuple(u)), self.key_by_id.get(tuple(l))
+            if ku is not None and kl is not None:
+                self.marked.append((ku, kl))
+        self.update_arrows()
+
+    def save_marked(self):
+        shown = [[self.level_id(u), self.level_id(l)] for u, l in self.marked]
+        hidden = [x for x in getattr(self, "marked_saved", []) if tuple(x[0]) not in self.key_by_id
+                  or tuple(x[1]) not in self.key_by_id]
+        self.marked_saved = shown + hidden
+        try:
+            os.makedirs(os.path.dirname(self.marked_file()), exist_ok=True)
+            with open(self.marked_file(), "w") as f:
+                json.dump(self.marked_saved, f)
+        except OSError:
+            pass
+
+    def wavelength(self, ku, kl):
+        """真空波长 (Å)：有计算结果时用 rtransition 的跃迁能量，否则用两个能级的能量差。"""
+        ts = self.tr_by_pair.get(frozenset((ku, kl)))
+        if ts:
+            return ts[0].wavelength
+        de = (self.levels[ku][2].energy - self.levels[kl][2].energy) * mix.HARTREE_CM
+        return 1e8 / de if de > 0 else float("inf")
+
+    def update_arrows(self):
+        self.diagram.arrows = [(u, l, f"{self.wavelength(u, l):.2f} Å") for u, l in self.marked]
+        self.diagram.update()
+        self.marked_list.clear()
+        for u, l in self.marked:
+            it = QListWidgetItem(f"{self.level_name(u)}  →  {self.level_name(l)}   λ = {self.wavelength(u, l):.3f} Å")
+            it.setData(Qt.UserRole, (u, l))
+            self.marked_list.addItem(it)
+
+    def mark(self, ku, kl):
+        if (ku, kl) not in self.marked:
+            self.marked.append((ku, kl))
+            self.save_marked()
+            self.update_arrows()
+
+    def unmark(self, ku, kl):
+        if (ku, kl) in self.marked:
+            self.marked.remove((ku, kl))
+            self.save_marked()
+            self.update_arrows()
+            self.statusBar().showMessage(T("已从图上移除 {u} → {l}", u=self.level_name(ku), l=self.level_name(kl)))
+
+    def unmark_selected(self):
+        it = self.marked_list.currentItem()
+        if it:
+            self.unmark(*it.data(Qt.UserRole))
+
+    def clear_marked(self):
+        self.marked = []
+        self.save_marked()
+        self.update_arrows()
+
+    def connect_pair(self, k1, k2):
+        """在图上用鼠标连了两个能级：选中这一对；已经算好时直接在图上画出箭头。"""
+        self.select_pair(k1, k2)
+        if self.tr_by_pair.get(frozenset(self.pair)):
+            self.mark(*self.pair)
 
     def select_pair(self, k1, k2):
         """连上两个能级：能量高者为上能级。"""
@@ -748,8 +1403,16 @@ class LevelViewer(QMainWindow):
         self.diagram.links = self.links_of(self.current)
         self.diagram.update()
 
+    def links_toggled(self, on):
+        core.save_config(level_links=on)
+        self.diagram.links = self.links_of(self.current)
+        self.diagram.update()
+
     def links_of(self, key):
-        """能级图上要画的已算跃迁：线的粗细按 A 的对数 (最强的为 1，弱 6 个量级以上的为 0)。"""
+        """能级图上要画的已算跃迁 (勾选“显示全部已算跃迁”时)：线的粗细按 A 的对数
+        (最强的为 1，弱 6 个量级以上的为 0)。"""
+        if not self.show_links.isChecked():
+            return []
         items = self.tr_by_level.get(key, [])
         best = {}
         for other, t, _ in items:
@@ -961,6 +1624,8 @@ class LevelViewer(QMainWindow):
                 self.tr_log.appendPlainText(T("\n*** 错误: {e}\n", e=e))
         self.statusBar().showMessage(T("跃迁计算完成") if ok else T("跃迁计算失败，见下方的程序输出"))
         self.load_transitions()
+        if ok and self.pair and self.tr_by_pair.get(frozenset(self.pair)):
+            self.mark(*self.pair)               # 算好后在图上画出这条跃迁
         self.show_transitions()
 
     def closeEvent(self, event):

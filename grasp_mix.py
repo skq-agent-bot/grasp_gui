@@ -360,6 +360,111 @@ def match_lsj(blocks, lsj_levels, tol=1e-6):
     return out
 
 
+# ---------------------------------------------------------------------------
+#  能级的组态和谱项 (用于导出)
+# ---------------------------------------------------------------------------
+
+L_LETTERS = "SPDFGHIKLMNOQRTUV"
+LSJ_SEGMENT = re.compile(r"^(\d+[a-z])(?:\((\d+)\))?(?:\d[A-Z]\d?)?(?:_(\d+[A-Z]))?$")
+JJ_SUBSHELL = re.compile(r"(\d+[a-z])-?\((\d+)\)")
+
+
+def parse_lsj_label(label):
+    """jj2lsj 的 LSJ 标记，如 2s(2).2p(6).3s_2S.3p_1P、1s(2).2s(2).2p(3)2D3_2D：
+    返回 ([(nl, 占据数)], 总谱项如 "1P")；格式不认识时返回 (None, None)。
+    各段之间以 "." 分隔：nl、(占据数)、子壳层谱项 (2S+1、L、辛弱数)、"_" 后为耦合到此的谱项。"""
+    config, term = [], None
+    for seg in label.split("."):
+        m = LSJ_SEGMENT.match(seg)
+        if not m:
+            return None, None
+        config.append((m.group(1), int(m.group(2) or 1)))
+        term = m.group(3) or term
+    return config, term
+
+
+def nonrel_config(jj_orbitals):
+    """jj 耦合的 CSF 组态 (如 "2s(2) 2p-(2) 2p(4) 3s(1)") 合并为非相对论组态 [(nl, 占据数)]，如 2p- 与 2p 相加。"""
+    out = {}
+    for nl, occ in JJ_SUBSHELL.findall(jj_orbitals):
+        out[nl] = out.get(nl, 0) + int(occ)
+    return [(nl, occ) for nl, occ in out.items() if occ > 0]
+
+
+def csf_core(path):
+    """CSF 文件中的核心轨道 (Core subshells，全部占满)，合并为非相对论组态 [(nl, 占据数)]：
+    nl- (j = l - 1/2) 可容纳 2l 个电子，nl (j = l + 1/2) 可容纳 2l + 2 个。"""
+    lines = []
+    with open(path) as f:                    # 只读文件头 (CSF 列表可能很大)
+        for ln in f:
+            if ln.startswith("CSF(s):"):
+                break
+            lines.append(ln.rstrip())
+    try:
+        start = lines.index("Core subshells:") + 1
+        end = next(i for i in range(start, len(lines)) if lines[i].endswith(":"))
+    except (ValueError, StopIteration):
+        return []
+    out = {}
+    for tok in " ".join(lines[start:end]).split():
+        m = re.match(r"(\d+)([a-z])(-?)$", tok)
+        if not m:
+            continue
+        l = "spdfghiklmnoqrtuv".index(m.group(2))
+        nl = m.group(1) + m.group(2)
+        out[nl] = out.get(nl, 0) + (2 * l if m.group(3) else 2 * l + 2)
+    return list(out.items())
+
+
+# 默认的组态缩写：惰性气体原子实
+NOBLE_GAS_CORES = [
+    ["[He]", "1s2"],
+    ["[Ne]", "1s2.2s2.2p6"],
+    ["[Ar]", "1s2.2s2.2p6.3s2.3p6"],
+    ["[Kr]", "1s2.2s2.2p6.3s2.3p6.3d10.4s2.4p6"],
+    ["[Xe]", "1s2.2s2.2p6.3s2.3p6.3d10.4s2.4p6.4d10.5s2.5p6"],
+    ["[Rn]", "1s2.2s2.2p6.3s2.3p6.3d10.4s2.4p6.4d10.5s2.5p6.4f14.5d10.6s2.6p6"],
+]
+
+
+def parse_config(text):
+    """组态文字 (如 1s2.2s2.2p6、1s2 2s2 2p6、1s(2)) -> [(nl, 占据数)]；看不懂时返回 None。"""
+    out = []
+    for tok in re.split(r"[\s.]+", text.strip()):
+        if not tok:
+            continue
+        m = re.match(r"^(\d+[a-z])(?:\((\d+)\)|(\d*))$", tok)
+        if not m:
+            return None
+        out.append((m.group(1), int(m.group(2) or m.group(3) or 1)))
+    return out
+
+
+def abbreviate(config, rules):
+    """按规则 [[缩写, 完整组态], ...] 缩写组态：组态中含有规则的全部子壳层 (占据数相同) 时，
+    把它们换成缩写写在最前面 (与子壳层的书写顺序无关)；缩写可以为空，表示省略。
+    子壳层多的规则先用，用过的子壳层不再参与。返回 (缩写文字, 剩余组态)。"""
+    rest = list(config)
+    prefix = ""
+    parsed = [(abbr, parse_config(full)) for abbr, full in rules]
+    for abbr, need in sorted((r for r in parsed if r[1]), key=lambda r: -len(r[1])):
+        if all(rest.count(x) >= need.count(x) for x in need):
+            for x in need:
+                rest.remove(x)
+            prefix += abbr
+    return prefix, rest
+
+
+def config_ascii(config):
+    """NIST 原子光谱数据库的写法：2s2.2p6.3s"""
+    return ".".join(f"{nl}{occ if occ > 1 else ''}" for nl, occ in config)
+
+
+def term_ascii(term, parity):
+    """NIST 的写法：奇宇称的谱项加 *，如 3P*"""
+    return f"{term}{'*' if parity < 0 else ''}" if term else ""
+
+
 def natural_key(name):
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", name)]
 

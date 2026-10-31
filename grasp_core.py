@@ -8,6 +8,7 @@ GRASP 图形界面的核心逻辑（与界面库无关）：
 """
 
 import codecs
+import csv
 import json
 import os
 import re
@@ -119,10 +120,33 @@ EN = {
     "Babushkin (长度)": "Babushkin (length)",
     "Coulomb (速度)": "Coulomb (velocity)",
     "GRASP 程序的输出": "Output of the GRASP programs",
-    "鼠标停在能级上显示信息，点击查看组成；从一个能级拖到另一个能级计算跃迁 (或按住 Shift 点击)；滚轮缩放，拖动空白处平移，双击复位。":
+    "鼠标停在能级上显示信息，点击查看组成；从一个能级拖到另一个能级 (或按住 Shift 点击) 计算跃迁，算好的跃迁会画成箭头，右键点箭头可移除；滚轮缩放，拖动空白处平移，双击复位。":
         "Hover a level for details, click it to see its composition; drag from one level to another (or "
-        "Shift-click) to compute the transition between them; wheel zooms, drag empty space to pan, "
-        "double-click resets.",
+        "Shift-click) to compute the transition, which is then drawn as an arrow (right-click an arrow to remove "
+        "it); wheel zooms, drag empty space to pan, double-click resets.",
+    "显示选中能级的全部已算跃迁": "Show all computed transitions of the selected level",
+    "图上标注的跃迁": "Transitions drawn in the diagram",
+    "移除": "Remove",
+    "全部清除": "Clear all",
+    "已从图上移除 {u} → {l}": "Removed {u} → {l} from the diagram",
+    "画出图上标注的跃迁": "Draw the transitions marked in the diagram",
+    "箭头上的文字": "Text on arrows",
+    "组态缩写…": "Configuration abbreviations…",
+    "组态缩写": "Configuration abbreviations",
+    "组态": "Configuration",
+    "缩写": "Abbreviation",
+    "完整组态": "Full configuration",
+    "添加": "Add",
+    "恢复默认": "Restore defaults",
+    "组态中含有右列的全部子壳层 (占据数相同) 时，把它们换成左列的缩写，写在组态最前面；缩写可以留空，表示省略这些子壳层。子壳层多的规则先用。核心轨道 (CSF 文件中的 Core) 已计入组态。":
+        "When a configuration contains all subshells of the right column (with the same occupations), they are "
+        "replaced by the abbreviation on the left, written first; an empty abbreviation omits them. Rules with "
+        "more subshells are applied first. The core orbitals (Core in the CSF file) are part of the configuration.",
+    "第 {r} 行的完整组态无法识别 (应写成 1s2.2s2.2p6 这样)": "Row {r}: configuration not understood (write it like 1s2.2s2.2p6)",
+    "预览：{a}  →  {b}": "Preview: {a}  →  {b}",
+    "不标注": "None",
+    "波长 (nm)": "Wavelength (nm)",
+    "波长 (Å)": "Wavelength (Å)",
     "从一个能级拖到另一个能级 (或选中一个能级后按住 Shift 点击另一个)，计算两者之间的跃迁。":
         "Drag from one level to another (or select a level and Shift-click another) to compute the transition "
         "between them.",
@@ -147,6 +171,36 @@ EN = {
         "Total computed decay rate {a:.4e} s⁻¹, lifetime {tau:.4e} s (computed transitions only).",
     "跃迁计算完成": "Transition calculation finished",
     "跃迁计算失败，见下方的程序输出": "Transition calculation failed; see the program output below",
+    # 能级查看器中的导出
+    "能级图 (PNG / SVG / PDF)…": "Level diagram (PNG / SVG / PDF)…",
+    "能级数据 (CSV)…": "Level data (CSV)…",
+    "当前能级的跃迁 (CSV)…": "Transitions of the current level (CSV)…",
+    "这两个文件之间的全部已算跃迁 (CSV)…": "All computed transitions between these two files (CSV)…",
+    "保存为 GRASP 跃迁文件 (供 rtabtrans1 / rtabtrans2 使用)…": "Save as GRASP transition file (for rtabtrans1 / rtabtrans2)…",
+    "保存为 GRASP 跃迁文件…": "Save as GRASP transition file…",
+    "导出能级图": "Export level diagram",
+    "导出能级图…": "Export level diagram…",
+    "导出能级数据…": "Export level data…",
+    "导出跃迁数据…": "Export transition data…",
+    "标注组态、谱项 (或 J^π)": "Label configuration and term (or J^π)",
+    "标注能量": "Label energies",
+    "坐标轴文字": "Axis text",
+    "图的高度": "Height",
+    "PNG 分辨率": "PNG resolution",
+    "范围与屏幕上一致 (先缩放到需要的部分)；宽度按标注自动确定。PDF 嵌入字体，适合论文；SVG 可在 Inkscape 等软件中编辑。":
+        "The energy range is the one on screen (zoom in first if needed); the width follows from the labels. PDF "
+        "embeds the fonts and suits papers; SVG can be edited in Inkscape and similar programs.",
+    "已导出 {p} ({n} 行)": "Exported {p} ({n} rows)",
+    "已导出 {p} ({n} 条跃迁)": "Exported {p} ({n} transitions)",
+    "无法写入 {p}": "Cannot write {p}",
+    "还没有算出的跃迁。": "No transitions computed yet.",
+    "所有文件": "All files",
+    "Qt {v} 写出的 PDF 文件信息有错，部分阅读器会报错。请升级 PySide6 (≥ 6.8.3)，或导出为 SVG / PNG。":
+        "Qt {v} writes a faulty document information dictionary into PDF files, which some readers report as an "
+        "error. Upgrade PySide6 (≥ 6.8.3) or export as SVG / PNG.",
+    "{k} 只算了部分 J，文件中只有这些跃迁；rtabtrans2 算出的寿命只计入它们。先“计算全部 J”可以得到完整的结果。仍然导出吗？":
+        "{k} was computed for some J only, and the file contains only those transitions; lifetimes from rtabtrans2 "
+        "include only them. Use \"Compute all J\" first for complete results. Export anyway?",
     "轨道": "Orbitals",
     "全选": "All",
     "全不选": "None",
@@ -505,6 +559,15 @@ def load_config():
             return json.load(f)
     except (OSError, ValueError):
         return {}
+
+
+def write_csv(path, header, rows):
+    """导出 CSV：UTF-8 带 BOM (Excel 能正确识别中文和 ⁺⁻ 等字符；pandas、Origin 等也能读)，逗号分隔，
+    数值用点作小数点、不加千位分隔符。"""
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(header)
+        w.writerows(rows)
 
 
 def save_config(**kw):
