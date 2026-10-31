@@ -78,7 +78,7 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
 ```
 
 * **Program tabs**, two levels (top: group, bottom: program):
-  * *Nucleus & CSFs (核与组态)*: `rnucleus`, `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`
+  * *Nucleus & CSFs (核与组态)*: `rnucleus`, `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`, `rcsfzerofirst`
   * *SCF & CI (自洽场与 CI)*: `rangular`, `rwfnestimate`, `rmcdhf`, `rsave`, `rci`
   * *Properties & transitions (性质与跃迁)*: `rhfs` (optionally followed by `rhfs_lsj`), `ris4`, `rbiotransform`,
     `rtransition`
@@ -89,9 +89,19 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use
   *Custom*). `rcsfgenerate` has several CSF lists (*+ Add list*, *− Delete current list*, *Reference configurations
   (one per line)*). `rmcdhf` can use the in-memory version `rmcdhf_mem` / `rmcdhf_mem_mpi`.
+* **Zero/first-order partition (零阶 / 一阶划分)**: `rcsfzerofirst` (*CSF list of the zero-order space*, *CSF list to
+  partition*, *Save the result rcsf.out as*) puts the zero-order CSFs at the top of each block. `rangular` and `rci`
+  have the check box *Zero/first-order partition: CSFs outside the zero-order space treated as first-order
+  perturbations* with *CSF list of the zero-order space*: they then answer the non-default questions (`rangular`: `n`
+  + ICCUT per block; `rci`: `n`, name, no restart, no speed-of-light change, `y`, ICCUT per block). The ICCUT of each
+  block is the number of CSFs in that block of the zero-order list; the input holds the placeholder line
+  `@ICCUT <zero list> <CSF list>`, which the run replaces by the numbers (checking that the J/parity blocks match, and
+  1 < ICCUT < ncf for `rangular_mpi`); the preview and exported scripts compute them with `awk` in an unquoted
+  here-document. `rmcdhf` needs no change. Configurations from 2.1.0 without these fields import without warnings
+  (partition off).
 * **Built-in file steps**: save `rcsf.out` as `name.c`, copy a `.c` file to `rcsf.inp` before `rangular`, run
   `rsave` after `rmcdhf` (*rsave afterwards as*), copy `.c/.w` before `rci`.
-* **State groups odd / even (态组)**: `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`, `rangular`, `rwfnestimate`,
+* **State groups odd / even (态组)**: `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`, `rcsfzerofirst`, `rangular`, `rwfnestimate`,
   `rmcdhf`, `rsave`, `rci`, `jj2lsj`, `rhfs`, `ris4` keep separate parameters per group (tab labels show
   `· odd`); file names such as `odd2.c` / `even2.c`, `outodd_rci` / `outeven_rci` correspond automatically. The
   other tabs are shared. *Copy to even/odd (rename files) (复制到 …（替换名称）)* copies the current group to the
