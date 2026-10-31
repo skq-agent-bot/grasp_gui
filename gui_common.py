@@ -10,8 +10,8 @@ import os
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QMainWindow, QMenu, QPlainTextEdit, QPushButton, QSpinBox, QToolButton, QVBoxLayout,
-                               QWidget)
+                               QMainWindow, QMenu, QPlainTextEdit, QPushButton, QSpinBox, QToolButton, QToolTip,
+                               QVBoxLayout, QWidget)
 
 import grasp_core as core
 import grasp_mix as mix
@@ -58,6 +58,16 @@ def text_edit(text="", lines=4):
 def button(text, slot):
     b = QPushButton(T(text))
     b.clicked.connect(slot)
+    return b
+
+
+def help_button(text, label="操作提示"):
+    """说明文字不占界面空间：鼠标停在按钮上或点击按钮时显示 (按分号分行)。text 已翻译。"""
+    tip = "<p>" + text.replace("；", "；<br>").replace("; ", ";<br>") + "</p>"
+    b = QToolButton()
+    b.setText(T(label) if label else "?")
+    b.setToolTip(tip)
+    b.clicked.connect(lambda: QToolTip.showText(b.mapToGlobal(b.rect().bottomLeft()), tip, b))
     return b
 
 

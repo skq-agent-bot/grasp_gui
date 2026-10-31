@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout, Q
 
 import grasp_wfn as wfn
 from grasp_core import T
-from gui_common import Panel
+from gui_common import Panel, help_button
 
 # 轨道配色 (同一轨道在各图中颜色相同)，文件用线型区分
 COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd", "#8c564b", "#e377c2", "#17becf",
@@ -378,10 +378,8 @@ class WfnPanel(Panel):
             b = QPushButton(T(text))
             b.clicked.connect(slot)
             ctl.addWidget(b)
+        ctl.addWidget(help_button(T("滚轮缩放横轴，Shift + 滚轮缩放纵轴，拖动平移，双击复位；鼠标停在曲线上显示数值。")))
         pl.addLayout(ctl)
-        hint = QLabel(T("滚轮缩放横轴，Shift + 滚轮缩放纵轴，拖动平移，双击复位；鼠标停在曲线上显示数值。"))
-        hint.setStyleSheet("color: gray;")
-        pl.addWidget(hint)
         self.canvas = QWidget()
         self.canvas_lay = QVBoxLayout(self.canvas)
         self.canvas_lay.setContentsMargins(0, 0, 0, 0)

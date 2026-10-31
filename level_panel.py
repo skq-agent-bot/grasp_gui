@@ -27,7 +27,7 @@ import grasp_core as core
 import grasp_mix as mix
 import grasp_trans as tr
 from grasp_core import T
-from gui_common import Panel, saved_settings
+from gui_common import Panel, help_button, saved_settings
 from wfn_panel import fmt, nice_ticks
 
 # (下拉框中的名称 (用时再翻译), 表头和坐标轴中的简写, 1 a.u. 折合多少, 显示格式)；第一个为默认单位
@@ -679,38 +679,35 @@ class LevelPanel(Panel):
         menu.addAction(T("组态缩写…")).triggered.connect(lambda: AbbrevDialog.edit(self, self.preview_desc()))
         export.setMenu(menu)
         top.addWidget(export)
+        top.addSpacing(12)
+        self.show_links = QCheckBox(T("显示选中能级的全部已算跃迁"))
+        self.show_links.setChecked(bool(core.load_config().get("level_links", False)))
+        self.show_links.toggled.connect(self.links_toggled)
+        top.addWidget(self.show_links)
         top.addStretch()
+        top.addWidget(help_button(T("鼠标停在能级上显示信息，点击查看组成；从一个能级拖到另一个能级 (或按住 Shift 点击) 计算跃迁，"
+                                    "算好的跃迁会画成箭头，右键点箭头可移除；滚轮缩放，拖动空白处平移，双击复位。")))
         lay.addLayout(top)
 
         split = QSplitter(Qt.Horizontal)
         left = QWidget()
         ll = QVBoxLayout(left)
         ll.setContentsMargins(0, 0, 0, 0)
-        ll.addWidget(QLabel(T("混合系数文件")))
+        fl = QHBoxLayout()
+        fl.addWidget(QLabel(T("混合系数文件")))
+        fl.addStretch()
+        fl.addWidget(help_button(T("文件按内容识别，与文件名无关：组态取自 CSF 数和 J^π 都对应的 CSF 文件，"
+                                   "LSJ 组成取自能量对应的 jj2lsj 结果。"), None))
+        ll.addLayout(fl)
         self.files = QListWidget()
         self.files.itemChanged.connect(self.redraw)
         ll.addWidget(self.files)
-        note = QLabel(T("文件按内容识别，与文件名无关：组态取自 CSF 数和 J^π 都对应的 CSF 文件，LSJ 组成取自能量对应的 jj2lsj 结果。"))
-        note.setWordWrap(True)
-        note.setStyleSheet("color: gray;")
-        ll.addWidget(note)
         split.addWidget(left)
 
         middle = QSplitter(Qt.Vertical)
         dw = QWidget()
         dl = QVBoxLayout(dw)
         dl.setContentsMargins(0, 0, 0, 0)
-        hint = QLabel(T("鼠标停在能级上显示信息，点击查看组成；从一个能级拖到另一个能级 (或按住 Shift 点击) 计算跃迁，"
-                        "算好的跃迁会画成箭头，右键点箭头可移除；滚轮缩放，拖动空白处平移，双击复位。"))
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color: gray;")
-        hrow = QHBoxLayout()
-        hrow.addWidget(hint, 1)
-        self.show_links = QCheckBox(T("显示选中能级的全部已算跃迁"))
-        self.show_links.setChecked(bool(core.load_config().get("level_links", False)))
-        self.show_links.toggled.connect(self.links_toggled)
-        hrow.addWidget(self.show_links)
-        dl.addLayout(hrow)
         self.diagram = LevelDiagram()
         self.diagram.levelClicked.connect(self.select)
         self.diagram.pairSelected.connect(self.connect_pair)

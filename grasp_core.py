@@ -599,6 +599,7 @@ EN = {
 A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
   ln -s /path/to/grasp_gui ~/.local/bin/grasp_levels
   ln -s /path/to/grasp_gui ~/.local/bin/grasp_wfn""",
+    "操作提示": "Tips",
 }
 
 
