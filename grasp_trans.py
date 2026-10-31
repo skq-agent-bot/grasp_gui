@@ -8,8 +8,9 @@ name1.name2.(c)t。两组轨道来自不同的计算时互不正交，先用 rbi
 
 为了不依赖文件名 (改过名的文件、.m 与 .cm 混用) 也不覆盖用户的文件，计算在工作目录下的
 .grasp_gui/tr/<编号>/ 中进行 (目录名尽量短：GRASP 的 MPI 版本只能处理 128 个字符以内的路径)：输入文件以软链接 a.* (和 b.*) 放入，混合系数一律按
-CI 结果 (.cm) 处理 (两者格式相同)。rtransition 一次算出两个文件之间所有能级的跃迁，结果按
-(文件对, 跃迁类型) 缓存；输入文件改变后自动重算。只用 Python 标准库。
+CI 结果 (.cm) 处理 (两者格式相同)。默认只算选中的两个能级所在的 J^π 块 (把这些块写成新的 .c 和 .cm)，也可以算两个文件的全部 J^π；
+rtransition 一次算出范围内所有能级之间的跃迁，结果按 (文件对, 范围, 跃迁类型) 缓存，
+输入文件改变后自动重算。只用 Python 标准库。
 """
 
 import hashlib
@@ -104,7 +105,12 @@ class Side:
 
 class Workspace:
     """两个混合系数文件 (可以是同一个) 之间的跃迁计算目录。角色 a、b 按文件名排序，
-    因此 (A, B) 与 (B, A) 共用一个目录。"""
+    因此 (A, B) 与 (B, A) 共用一个目录。
+
+    每次计算 (run) 有自己的子目录和对称性范围 subset：{角色: [[2J, 宇称], ...]}，为 None 时包含
+    全部 J^π。只算部分 J^π 时把 .c 和 .cm 中的对应块写成新文件再计算 (双正交变换按块进行，
+    结果与全部计算时相同)；rbiotransform 自带的 J 选项不能用：它把没选的块原样写进 .cbm，
+    rtransition 仍会全部计算。"""
 
     def __init__(self, workdir, path1, path2):
         self.workdir = os.path.abspath(workdir)
@@ -152,42 +158,81 @@ class Workspace:
             current = self.stamp()
         except OSError:
             return {}
-        return m if m.get("inputs") == current else {}
+        return m if m.get("inputs") == current and "runs" in m else {}
 
     def save_manifest(self, m):
         m["inputs"] = self.stamp()
         with open(self.manifest_path, "w") as f:
             json.dump(m, f, indent=1)
 
-    def mpi_ok(self, mpitmp):
+    # ---- 对称性范围 ----
+    def subset_for(self, levels):
+        """只包含给定能级所在块的范围；levels 为 [(角色, 2J, 宇称)]。"""
+        sub = {role: set() for role in self.sides}
+        for role, twoj, parity in levels:
+            sub[role].add((twoj, parity))
+        return {role: sorted([list(x) for x in v]) for role, v in sub.items()}
+
+    @staticmethod
+    def run_id(subset):
+        if subset is None:
+            return "all"
+        return hashlib.sha1(json.dumps(subset, sort_keys=True).encode()).hexdigest()[:6]
+
+    def missing_kinds(self, upper, lower, kinds):
+        """upper / lower 为 (角色, 2J, 宇称)：返回这对能级还没有算的跃迁类型。"""
+        runs = self.manifest().get("runs", {})
+
+        def covers(run, level):
+            sub = run["subset"]
+            return sub is None or [level[1], level[2]] in sub.get(level[0], [])
+        return [k for k in kinds if not any(k in r["kinds"] and covers(r, upper) and covers(r, lower)
+                                            for r in runs.values())]
+
+    def mpi_ok(self, mpitmp, subset=None):
         """MPI 版本能否处理这里的路径 (计算目录、MPI_TMP 下各进程的子目录和其中的文件名)。"""
-        longest = max(len(self.dir), len(os.path.join(self.dir, mpitmp)) + 4) + len("/a.cbm")
+        d = os.path.join(self.dir, self.run_id(subset))
+        longest = max(len(d), len(os.path.join(d, mpitmp)) + 4) + len("/a.cbm")
         return longest < MPI_PATH_MAX
 
-    def done_kinds(self):
-        return set(self.manifest().get("kinds", {}))
-
-    def prepare(self):
-        """建立计算目录和输入文件的软链接；输入文件改变后清空旧结果。返回是否还需要双正交变换。"""
+    # ---- 计算 ----
+    def prepare(self, subset=None):
+        """建立一次计算的子目录：全部 J^π 时链接原文件，否则写出只含所需块的 .c 和 .cm。
+        输入文件改变后先清空旧结果。返回子目录名。"""
         m = self.manifest()
-        if not m and os.path.isdir(self.dir):
-            shutil.rmtree(self.dir)          # 只删除本程序自己的计算目录
-        os.makedirs(self.dir, exist_ok=True)
-        links = {"isodata": os.path.join(self.workdir, "isodata")}
-        for role, side in self.sides.items():
-            links.update({f"{role}.c": side.csf, f"{role}.w": side.w, f"{role}.cm": side.mix})
-        if self.same:                        # 同一组轨道：不需要变换
-            links.update({"a.bw": self.sides["a"].w, "a.cbm": self.sides["a"].mix})
-        for name, target in links.items():
-            link(target, os.path.join(self.dir, name))
         if not m:
-            self.save_manifest({"kinds": {}, "bio": self.same})
-        return not self.manifest().get("bio")
+            if os.path.isdir(self.dir):
+                shutil.rmtree(self.dir)      # 只删除本程序自己的计算目录
+            m = {"runs": {}}
+        rid = self.run_id(subset)
+        rdir = os.path.join(self.dir, rid)
+        os.makedirs(rdir, exist_ok=True)
+        link(os.path.join(self.workdir, "isodata"), os.path.join(rdir, "isodata"))
+        for role, side in self.sides.items():
+            link(side.w, os.path.join(rdir, f"{role}.w"))
+            keep = {tuple(x) for x in subset[role]} if subset else None
+            sym = mix.mix_symmetries(side.mix)
+            if keep is None or keep >= set(sym):
+                link(side.csf, os.path.join(rdir, f"{role}.c"))
+                link(side.mix, os.path.join(rdir, f"{role}.cm"))
+            else:
+                for name in (f"{role}.c", f"{role}.cm"):
+                    if os.path.lexists(os.path.join(rdir, name)):
+                        os.remove(os.path.join(rdir, name))
+                mix.write_mix_subset(side.mix, os.path.join(rdir, f"{role}.cm"), keep)
+                mix.write_csf_subset(side.csf, os.path.join(rdir, f"{role}.c"),
+                                     [i for i, x in enumerate(sym) if x in keep])
+        if self.same:                        # 同一组轨道：不需要变换
+            link(self.sides["a"].w, os.path.join(rdir, "a.bw"))
+            link(os.path.join(rdir, "a.cm"), os.path.join(rdir, "a.cbm"))
+        m["runs"].setdefault(rid, {"subset": subset, "bio": self.same, "kinds": {}})
+        self.save_manifest(m)
+        return rid
 
-    def jobs(self, kinds, steps):
+    def jobs(self, rid, kinds, steps):
         """运行所需的任务 (grasp_core 的任务格式)；steps 为 {键: Step}。"""
         out = []
-        if not self.manifest().get("bio"):
+        if not self.manifest()["runs"][rid]["bio"]:
             bio = steps["rbiotransform"]
             out.append(bio.job(dict(bio.defaults(), ci=True, init="a", final="b", log="rbiotransform.log")))
         tr = steps["rtransition"]
@@ -195,38 +240,45 @@ class Workspace:
                                m1_diffj=False, e2_diffj=False, log="rtransition.log")))
         return out
 
-    def finish(self, kinds):
+    def run_dir(self, rid):
+        return os.path.join(self.dir, rid)
+
+    def finish(self, rid, kinds):
         """计算成功后：rtransition 的输出改名为 <类型>.ct 并记录。"""
-        m = self.manifest() or {"kinds": {}}
+        m = self.manifest()
+        run = m["runs"][rid]
+        rdir = self.run_dir(rid)
         # GRASP 出错停止时退出码也可能是 0 (如 MPI 版本)，因此检查输出文件是否真的生成
         bio = [f"{r}.{x}" for r in self.sides for x in ("bw", "cbm")]
-        missing = [f for f in bio if not os.path.isfile(os.path.join(self.dir, f))]
+        missing = [f for f in bio if not os.path.isfile(os.path.join(rdir, f))]
         if missing:
             raise RuntimeError(f"rbiotransform: {', '.join(missing)} not written; see rbiotransform.log")
-        m["bio"] = True
-        out = os.path.join(self.dir, f"a.{self.final}.ct")
+        run["bio"] = True
+        out = os.path.join(rdir, f"a.{self.final}.ct")
         if not os.path.isfile(out):
             self.save_manifest(m)
             raise RuntimeError(f"rtransition: {os.path.basename(out)} not written; see rtransition.log")
         name = "_".join(kinds) + ".ct"
-        os.replace(out, os.path.join(self.dir, name))
+        os.replace(out, os.path.join(rdir, name))
         for k in kinds:
-            m["kinds"][k] = name
+            run["kinds"][k] = name
         self.save_manifest(m)
 
     def results(self):
-        """已算出的全部跃迁 [Transition]。"""
+        """已算出的全部跃迁 [Transition] (各次计算合并，同一跃迁只保留一个)。"""
         return read_results(self.dir, self.manifest())
 
 
 def read_results(directory, manifest):
-    out = []
-    for name in sorted(set(manifest.get("kinds", {}).values())):
-        try:
-            out += parse_ct_cached(os.path.join(directory, name))
-        except (OSError, ValueError):
-            pass
-    return out
+    out = {}
+    for rid, run in sorted(manifest.get("runs", {}).items(), key=lambda kv: kv[0] != "all"):
+        for name in sorted(set(run["kinds"].values())):
+            try:
+                for t in parse_ct_cached(os.path.join(directory, rid, name)):
+                    out.setdefault((t.kind, t.upper, t.lower), t)
+            except (OSError, ValueError):
+                pass
+    return list(out.values())
 
 
 def unchanged(stamp):

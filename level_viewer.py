@@ -8,12 +8,14 @@ jj 耦合下的 CSF 混合系数 (配合 name.c)，以及 jj2lsj 给出的 LSJ �
 import math
 import os
 import queue
+import shlex
+import shutil
 import struct
 import threading
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QPolygonF, QTextCursor
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel, QSpinBox,
                                QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPlainTextEdit,
                                QPushButton, QSplitter,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QTabWidget, QToolTip,
@@ -674,11 +676,24 @@ class LevelViewer(QMainWindow):
         self.tr_plan.setWordWrap(True)
         lay.addWidget(self.tr_plan)
         row = QHBoxLayout()
-        self.tr_run = QPushButton(T("计算跃迁"))
-        self.tr_run.clicked.connect(self.compute)
+        self.tr_run = QPushButton(T("计算跃迁 (所选 J)"))
+        self.tr_run.setToolTip(T("只算两个能级所在的 J^π，较快"))
+        self.tr_run.clicked.connect(lambda: self.compute(full=False))
+        self.tr_all = QPushButton(T("计算全部 J (MPI)"))
+        self.tr_all.setToolTip(T("计算两个文件中全部 J^π 之间的跃迁 (用于寿命、分支比)，用 MPI 并行"))
+        self.tr_all.clicked.connect(lambda: self.compute(full=True))
+        self.tr_np = QSpinBox()
+        self.tr_np.setRange(1, max(os.cpu_count() or 1, 1) * 4)
+        cfg = core.load_config()
+        self.tr_np.setValue(int(cfg.get("tr_np") or max(int(cfg.get("np", 1)), min(4, os.cpu_count() or 1))))
+        self.tr_np.setToolTip(T("计算全部 J 时的 MPI 进程数"))
+        self.tr_np.valueChanged.connect(lambda n: core.save_config(tr_np=n))
         self.tr_stop = QPushButton(T("停止"))
         self.tr_stop.clicked.connect(self.runner.stop)
         row.addWidget(self.tr_run)
+        row.addWidget(self.tr_all)
+        row.addWidget(QLabel(T("进程数")))
+        row.addWidget(self.tr_np)
         row.addWidget(self.tr_stop)
         row.addStretch()
         lay.addLayout(row)
@@ -759,6 +774,7 @@ class LevelViewer(QMainWindow):
             self.tr_title.setText(T("从一个能级拖到另一个能级 (或选中一个能级后按住 Shift 点击另一个)，计算两者之间的跃迁。"))
             self.tr_plan.setText("")
             self.tr_run.setEnabled(False)
+            self.tr_all.setEnabled(False)
             return
         up, low = self.pair
         lu, ll = self.levels[up][2], self.levels[low][2]
@@ -772,16 +788,17 @@ class LevelViewer(QMainWindow):
                       if t.kind in tr.KINDS else 99)
         self.fill_pair(rows)
         self.tr_run.setEnabled(False)
+        self.tr_all.setEnabled(False)
         if not kinds:
             self.tr_plan.setText(T("J = 0 → J = 0：单光子跃迁严格禁戒。"))
             return
+        self.tr_all.setEnabled(False)
         ws = self.workspace(self.levels[up][1], self.levels[low][1])
-        done = ws.done_kinds()
-        missing = [k for k in kinds if k not in done]
-        if not missing:
-            self.tr_plan.setText(T("已算出 {k}。结果保存在 {d}", k=", ".join(kinds), d=ws.dir))
-            return
-        problems = ws.problems()
+        ids = [(ws.role_of(self.levels[k][1]), tr.two_j(lv.block), lv.parity) for k, lv in ((up, lu), (low, ll))]
+        missing = ws.missing_kinds(ids[0], ids[1], kinds)
+        all_run = ws.manifest().get("runs", {}).get("all", {}).get("kinds", {})
+        missing_all = [k for k in kinds if k not in all_run]
+        problems = ws.problems() if missing or missing_all else []
         if problems:
             text = []
             for what, where in problems:
@@ -797,17 +814,21 @@ class LevelViewer(QMainWindow):
                                   what=".c" if what == "CSF" else ".w"))
             self.tr_plan.setText("\n".join(text))
             return
-        progs = "rtransition" if ws.manifest().get("bio") or ws.same else "rbiotransform → rtransition"
-        note = T("两个能级来自同一个文件，轨道相同，不需要双正交变换。") if ws.same else \
-            T("两个能级来自不同的计算，先用 rbiotransform 做双正交变换。")
-        files = "; ".join(f"{os.path.basename(s.mix)}: {os.path.basename(s.csf)}, {os.path.basename(s.w)}"
-                          for s in ws.sides.values())
-        self.tr_plan.setText(T("需要计算 {k} ({p})。", k=", ".join(missing), p=progs) + " " + note + "\n" +
-                             T("使用的文件：{f}", f=files) + "\n" +
-                             T("rtransition 一次算出这两个文件中所有能级之间的 {k} 跃迁，之后点其他能级对可直接显示。",
-                               k=", ".join(missing)))
-        self.plan = (ws, missing)
-        self.tr_run.setEnabled(not busy)
+        jps = sorted({self.jp(lu.block), self.jp(ll.block)})
+        if not missing:
+            text = T("已算出 {k}。结果保存在 {d}", k=", ".join(kinds), d=ws.dir)
+        else:
+            note = T("两个能级来自同一个文件，轨道相同，不需要双正交变换。") if ws.same else \
+                T("两个能级来自不同的计算，先用 rbiotransform 做双正交变换。")
+            files = "; ".join(f"{os.path.basename(x.mix)}: {os.path.basename(x.csf)}, {os.path.basename(x.w)}"
+                              for x in ws.sides.values())
+            text = (T("需要计算 {k}。", k=", ".join(missing)) + " " + note + "\n" + T("使用的文件：{f}", f=files) + "\n" +
+                    T("“所选 J”只算 {j} 这些对称性之间的跃迁；“全部 J”算两个文件中所有能级之间的跃迁，用于寿命和分支比。",
+                      j=", ".join(jps)))
+        self.tr_plan.setText(text)
+        self.plan = (ws, kinds, ws.subset_for(ids), missing, missing_all)
+        self.tr_run.setEnabled(bool(missing) and not busy)
+        self.tr_all.setEnabled(bool(missing_all) and not busy)
 
     def fill_pair(self, rows):
         t = self.pair_table
@@ -865,25 +886,47 @@ class LevelViewer(QMainWindow):
         if self.current and other in self.levels:
             self.select_pair(self.current, other)
 
-    def compute(self):
+    def mpi_programs(self, cfg):
+        """MPI 版本能用时返回 None，否则返回原因。"""
+        launcher = shlex.split(cfg["mpirun"] or "mpirun")[:1]
+        if not launcher or not shutil.which(launcher[0]):
+            return T("找不到 {p}", p=cfg["mpirun"] or "mpirun")
+        for prog in ("rbiotransform_mpi", "rtransition_mpi"):
+            if not (os.access(os.path.join(cfg["bindir"], prog), os.X_OK) or shutil.which(prog)):
+                return T("找不到 {p}", p=prog)
+        return None
+
+    def compute(self, full=False):
+        """计算选中的一对能级之间的跃迁：默认只算两个能级所在的 J^π (用主窗口的进程数)；
+        full 时算两个文件的全部 J^π，用 MPI (进程数见跃迁页)。"""
         if not self.plan or self.running:
             return
-        ws, kinds = self.plan
+        ws, kinds, subset, missing, missing_all = self.plan
+        if full:
+            subset, kinds = None, missing_all
+        else:
+            kinds = missing
         cfg = dict(self.settings())
+        if full:
+            cfg["np"] = self.tr_np.value()
+        self.tr_log.clear()
         try:
-            ws.prepare()
-        except OSError as e:
+            rid = ws.prepare(subset)
+        except (OSError, ValueError) as e:
             self.tr_log.appendPlainText(T("\n*** 错误: {e}\n", e=e))
             return
-        cfg["cwd"] = ws.dir
-        self.tr_log.clear()
-        if cfg["np"] > 1 and not ws.mpi_ok(cfg["mpitmp"]):
-            cfg["np"] = 1
-            self.tr_log.appendPlainText(T("计算目录的路径超过 {n} 个字符，GRASP 的 MPI 版本无法处理，改用串行版本。",
-                                          n=tr.MPI_PATH_MAX))
-        jobs = ws.jobs(kinds, {s.key: s for s in core.STEPS})
-        self.running = (ws, kinds)
-        self.statusBar().showMessage(T("正在计算 {k} 跃迁 …", k=", ".join(kinds)))
+        cfg["cwd"] = ws.run_dir(rid)
+        if cfg["np"] > 1:
+            why = None if ws.mpi_ok(cfg["mpitmp"], subset) else \
+                T("计算目录的路径超过 {n} 个字符，GRASP 的 MPI 版本无法处理", n=tr.MPI_PATH_MAX)
+            why = why or self.mpi_programs(cfg)
+            if why:
+                cfg["np"] = 1
+                self.tr_log.appendPlainText(why + T("，改用串行版本。"))
+        jobs = ws.jobs(rid, kinds, {x.key: x for x in core.STEPS})
+        self.running = (ws, rid, kinds)
+        what = T("全部 J") if subset is None else T("所选 J")
+        self.statusBar().showMessage(T("正在计算 {k} 跃迁 ({w}，{n} 个进程) …", k=", ".join(kinds), w=what, n=cfg["np"]))
         self.show_pair()
         threading.Thread(target=self.runner.run_all, daemon=True,
                          args=(jobs, cfg, lambda ok: self.q.put((ok, "done")))).start()
@@ -908,11 +951,11 @@ class LevelViewer(QMainWindow):
             self.tr_log.ensureCursorVisible()
 
     def finished(self, ok):
-        ws, kinds = self.running
+        ws, rid, kinds = self.running
         self.running = None
         if ok:
             try:
-                ws.finish(kinds)
+                ws.finish(rid, kinds)
             except (OSError, RuntimeError) as e:
                 ok = False
                 self.tr_log.appendPlainText(T("\n*** 错误: {e}\n", e=e))

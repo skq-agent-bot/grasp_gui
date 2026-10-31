@@ -93,7 +93,24 @@ EN = {
     "字体大小 {pt} 磅": "Font size {pt} pt",
     # 能级查看器中的跃迁计算
     "跃迁": "Transitions",
-    "计算跃迁": "Compute transitions",
+    "计算跃迁 (所选 J)": "Compute (selected J)",
+    "计算全部 J (MPI)": "Compute all J (MPI)",
+    "只算两个能级所在的 J^π，较快": "Only the J^π symmetries of the two levels; faster",
+    "计算两个文件中全部 J^π 之间的跃迁 (用于寿命、分支比)，用 MPI 并行":
+        "All J^π symmetries of both files (for lifetimes and branching ratios), in parallel with MPI",
+    "计算全部 J 时的 MPI 进程数": "Number of MPI processes when computing all J",
+    "进程数": "Processes",
+    "需要计算 {k}。": "{k} to be computed.",
+    "“所选 J”只算 {j} 这些对称性之间的跃迁；“全部 J”算两个文件中所有能级之间的跃迁，用于寿命和分支比。":
+        "\"Selected J\" computes only the transitions between {j}; \"all J\" computes those between all levels of "
+        "both files, for lifetimes and branching ratios.",
+    "找不到 {p}": "{p} not found",
+    "计算目录的路径超过 {n} 个字符，GRASP 的 MPI 版本无法处理": "The path of the calculation directory exceeds {n} "
+        "characters, which GRASP's MPI programs cannot handle",
+    "，改用串行版本。": "; using the serial programs.",
+    "全部 J": "all J",
+    "所选 J": "selected J",
+    "正在计算 {k} 跃迁 ({w}，{n} 个进程) …": "Computing {k} transitions ({w}, {n} processes) …",
     "停止": "Stop",
     "类型": "Type",
     "规范": "Gauge",
@@ -121,21 +138,13 @@ EN = {
     "两个能级来自不同的计算，先用 rbiotransform 做双正交变换。":
         "The levels come from different calculations: rbiotransform first performs the biorthogonal "
         "transformation.",
-    "需要计算 {k} ({p})。": "{k} to be computed ({p}).",
     "使用的文件：{f}": "Files used: {f}",
-    "rtransition 一次算出这两个文件中所有能级之间的 {k} 跃迁，之后点其他能级对可直接显示。":
-        "rtransition computes the {k} transitions between all levels of these files at once; other pairs are "
-        "then shown immediately.",
     "两种规范之比接近 1 说明计算较可靠。": "A ratio of the two gauges close to 1 indicates a reliable calculation.",
     "能级 {l} 还没有算出的跃迁。": "No transitions computed yet for level {l}.",
     "能级 {l} 的已算跃迁 ({n} 条；↓ 衰变到更低能级，↑ 从更低能级激发)。":
         "Computed transitions of level {l} ({n}; ↓ decay to a lower level, ↑ excitation from a lower level).",
     "已算衰变的总速率 {a:.4e} s⁻¹，对应寿命 {tau:.4e} s (只计入已算的跃迁)。":
         "Total computed decay rate {a:.4e} s⁻¹, lifetime {tau:.4e} s (computed transitions only).",
-    "计算目录的路径超过 {n} 个字符，GRASP 的 MPI 版本无法处理，改用串行版本。":
-        "The path of the calculation directory exceeds {n} characters, which GRASP's MPI programs cannot "
-        "handle; using the serial programs.",
-    "正在计算 {k} 跃迁 …": "Computing {k} transitions …",
     "跃迁计算完成": "Transition calculation finished",
     "跃迁计算失败，见下方的程序输出": "Transition calculation failed; see the program output below",
     "轨道": "Orbitals",

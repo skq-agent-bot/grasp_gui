@@ -94,6 +94,62 @@ def read_mix(path):
     return blocks
 
 
+def mix_symmetries(path):
+    """混合系数文件中各块的 (2J, 宇称)，按块的顺序。"""
+    return [(b.twoj1 - 1, b.parity) for b in read_mix(path)]
+
+
+def _record(body):
+    n = struct.pack("<i", len(body))
+    return n + body + n
+
+
+def write_mix_subset(src, dst, keep):
+    """只保留 (2J, 宇称) 在 keep 中的块，写出新的混合系数文件；块号重新从 1 编起，
+    文件头中的 CSF 总数、能级总数、混合系数总数 (Σ ncf·nev) 和块数随之更新。"""
+    with open(src, "rb") as f:
+        recs = list(_records(f.read()))
+    nelec, ncftot, nw, nvectot, nvecsiz, nblock = struct.unpack("<6i", recs[1][:24])
+    blocks, i = [], 2
+    for _ in range(nblock):
+        nb, ncf, nev, twoj1, parity = struct.unpack("<5i", recs[i][:20])
+        n = 4 if nev > 0 else 1
+        if (twoj1 - 1, parity) in keep:
+            blocks.append((ncf, nev, recs[i:i + n]))
+        i += n
+    out = [recs[0], struct.pack("<6i", nelec, sum(b[0] for b in blocks), nw, sum(b[1] for b in blocks),
+                                sum(b[0] * b[1] for b in blocks), len(blocks)) + recs[1][24:]]
+    for nb, (_, _, rs) in enumerate(blocks, 1):
+        out.append(struct.pack("<i", nb) + rs[0][4:])
+        out += rs[1:]
+    with open(dst, "wb") as f:
+        f.write(b"".join(_record(r) for r in out))
+    return len(blocks)
+
+
+def write_csf_subset(src, dst, positions):
+    """只保留 CSF 文件中第 positions 个块 (从 0 开始，与混合系数文件的块顺序一致)，块之间仍以 " *" 分隔。"""
+    with open(src) as f:
+        lines = f.read().splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("CSF(s):")) + 1
+    blocks, cur = [], []
+    for ln in lines[start:]:
+        if ln.strip() == "*":
+            blocks.append(cur)
+            cur = []
+        else:
+            cur.append(ln)
+    blocks.append(cur)
+    kept = [blocks[i] for i in sorted(positions)]
+    body = []
+    for k, b in enumerate(kept):
+        if k:
+            body.append(" *")
+        body += b
+    with open(dst, "w") as f:
+        f.write("\n".join(lines[:start] + body) + "\n")
+
+
 def read_csfs(path):
     """读取 CSF 文件，返回各块的 CSF 列表 [[(组态, 耦合)]]，与混合系数文件的块一一对应。"""
     with open(path) as f:

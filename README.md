@@ -46,12 +46,15 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
   The matching `.c` and `.lsj.lbl` files are found by content (number of orbitals, CSFs and J^π of each block;
   energies of the levels), so they need not share the name of the mixing file.
 - **Transitions on demand** (in the level viewer): drag from one level to another (or Shift-click a second level)
-  and press *Compute transitions*. Nothing has to be prepared beforehand: the GUI runs `rbiotransform` (the
+  and press *Compute (selected J)*. Nothing has to be prepared beforehand: the GUI runs `rbiotransform` (the
   biorthogonal transformation, skipped when both levels come from the same file) and `rtransition` for the
   multipoles allowed between the two levels (E1, or M2 when E1 is forbidden; M1 and E2 between levels of the
-  same parity), using the GRASP and MPI settings of the main window. rtransition computes all transitions
-  between the two files at once, so other pairs are shown immediately; the results (A, gf, S in the Babushkin
-  and Coulomb gauges) are kept in `<working directory>/.grasp_gui/tr/` and reused until an input file changes.
+  same parity). By default only the J^π symmetries of the two levels are computed (the GUI writes `.c` / `.cm`
+  files with just those blocks), using the process count of the main window; *Compute all J (MPI)* computes
+  all transitions between the two files (for lifetimes and branching ratios) with the MPI programs and the
+  process count set next to it. All levels within the computed symmetries are done at once, so other pairs
+  there are shown immediately; the results (A, gf, S in the Babushkin and Coulomb gauges) are kept in
+  `<working directory>/.grasp_gui/tr/` and reused until an input file changes.
   The selected level shows all its computed transitions in the diagram and in a table with branching ratios.
 
 **态组 odd / even**：上述 11 个程序页按态组分别保存参数，文件名自动对应，其余程序页两组共用；
@@ -63,10 +66,11 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 **能级与组成查看器**（“工具 → 能级与组成查看器…”或“能级…”按钮）：读取混合系数文件 (`.m`、`.cm`) 画出能级图，
 每个 J^π 一列；鼠标停在能级上显示信息，点击能级 (或能级列表中的一行) 显示该原子态的组成：jj 耦合下的 CSF
 混合系数 (组态来自 `.c` 文件) 以及 jj2lsj 给出的 LSJ 组成 (`.lsj.lbl`)。能量相对于最低能级，默认用 eV，可切换为 cm⁻¹ 或原子单位，并记住选择。对应的 `.c` 和 `.lsj.lbl` 文件按内容匹配 (轨道数、各块的 CSF 数与 J^π，以及能级能量)，不要求与混合系数文件同名。
-**计算跃迁**（在能级与组成查看器中）：从一个能级拖到另一个能级 (或按住 Shift 点击第二个能级)，再点“计算跃迁”。
+**计算跃迁**（在能级与组成查看器中）：从一个能级拖到另一个能级 (或按住 Shift 点击第二个能级)，再点“计算跃迁 (所选 J)”。
 不需要事先准备：界面自动运行 `rbiotransform` (双正交变换；两个能级来自同一个文件时跳过) 和 `rtransition`，
-跃迁类型按两个能级的 J 和宇称选择 (E1，E1 禁戒时为 M2；同宇称为 M1 和 E2)，使用主窗口的 GRASP 和 MPI 设置。
-rtransition 一次算出两个文件之间的全部跃迁，之后点其他能级对可直接显示；结果 (Babushkin 和 Coulomb 两种规范下的
+跃迁类型按两个能级的 J 和宇称选择 (E1，E1 禁戒时为 M2；同宇称为 M1 和 E2)。默认只算两个能级所在的 J^π
+(界面写出只含这些块的 `.c`、`.cm`)，进程数沿用主窗口；“计算全部 J (MPI)”算两个文件之间的全部跃迁 (用于寿命和分支比)，
+用 MPI 版本和旁边设置的进程数。计算范围内的所有能级一次算完，之后点其中其他能级对可直接显示；结果 (Babushkin 和 Coulomb 两种规范下的
 A、gf、S) 保存在 `工作目录/.grasp_gui/tr/` 中，输入文件不变就一直沿用。选中的能级在能级图和表格中显示它的全部已算跃迁及分支比。
 
 ## Requirements / 依赖
