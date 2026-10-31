@@ -262,6 +262,7 @@ Debian 9 及更新的系统) 用 Qt 5 构建的同一程序，服务器上不需
 | `grasp_config.py` | Shared configurations: format, conversion of older versions, checks, import and export (standard library only) |
 | `demos/*.json` | The examples (shared configurations): parameters and pipeline of each manual example, reference energies |
 | `tools/make_demos.py` | Generates `demos/*.json`; `--check` compares the generated input with the manual's input files |
+| `tools/make_screenshots.py` | Makes the screenshots in `docs/images/` (runs example 4 through the GUI; needs a GRASP `bin` directory) |
 | `build.sh` | Builds a standalone executable with PyInstaller |
 
 ## License / 许可证
