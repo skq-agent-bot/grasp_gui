@@ -6,12 +6,17 @@ GRASP 图形界面 (Qt / PySide6)。主窗口上方是工作目录和运行设�
   能级图  level_panel.py  能级图、组成和跃迁
 共用的控件在 gui_common.py 中，与界面无关的部分在 grasp_*.py 中。界面支持中文 / English。
 
-用法:  python3 grasp_gui.py [--lang en] [目录 | levels [目录] | wfn [目录] | 文件]   (见 --help)
+用法:  python3 grasp_gui.py [--lang en] [目录 | levels [目录] | wfn [目录] | 文件 | check|script|steps|reference …]   (见 --help)
 依赖:  pip install pyside6
 """
 
 import os
 import sys
+
+if __name__ == "__main__" and sys.argv[1:2] == ["_run"] and len(sys.argv) == 3:
+    # 后台运行进程 (见 grasp_bg.py)：不加载 Qt
+    import grasp_bg
+    sys.exit(grasp_bg.serve(sys.argv[2]))
 
 
 def fix_wsl_display():
@@ -86,6 +91,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, Q
                                QVBoxLayout, QWidget)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import grasp_bg                                                     # noqa: E402
 import grasp_core as core                                           # noqa: E402
 import gui_common as gc                                             # noqa: E402
 from calc_panel import CalcPanel                                    # noqa: E402
@@ -256,12 +262,33 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         panels = list(self.panels.values()) + [w.panel for w in gc.PANEL_WINDOWS]
-        if self.calc.busy or any(p.busy() for p in panels):
+        others = any(p.busy() for p in panels)
+        stop = False
+        if self.calc.busy:
+            # 计算由后台运行进程执行 (grasp_bg)：可以留在后台继续，以后打开该目录时接上
+            box = QMessageBox(QMessageBox.Question, T("运行中"),
+                              T("计算正在运行。可以让它在后台继续，以后再打开这个工作目录即可接上并查看结果。"), parent=self)
+            notes = [T("能级图中正在进行的跃迁计算会结束。")] if others else []
+            if grasp_bg.logout_kills():
+                notes.append(T("注意：本机的 systemd 设置 (KillUserProcesses=yes) 会在这次登录结束 (ssh 断开或退出登录) 时"
+                               "结束其中的全部进程，包括后台计算。解决办法见 docs/INTERFACE.md 的“后台运行”一节。"))
+            if notes:
+                box.setInformativeText("\n\n".join(notes))
+            bg = box.addButton(T("后台继续"), QMessageBox.AcceptRole)
+            halt = box.addButton(T("停止计算并退出"), QMessageBox.DestructiveRole)
+            box.addButton(T("取消"), QMessageBox.RejectRole)
+            box.setDefaultButton(bg)
+            box.exec()
+            if box.clickedButton() not in (bg, halt):
+                event.ignore()
+                return
+            stop = box.clickedButton() is halt
+        elif others:
             ans = QMessageBox.question(self, T("运行中"), T("有程序正在运行，退出将终止它。确定退出吗？"))
             if ans != QMessageBox.Yes:
                 event.ignore()
                 return
-        self.calc.shutdown()
+        self.calc.shutdown(stop)
         for p in self.panels.values():
             p.shutdown()
         for w in list(gc.PANEL_WINDOWS):
@@ -389,6 +416,7 @@ USAGE = """用法：
   grasp_gui wfn [目录]       打开主界面的径向波函数页 (默认为当前目录)
   grasp_gui 文件             按文件内容打开对应的页并只勾选这个文件：
                              混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 径向波函数
+  grasp_gui check|script|steps|reference …   共享配置的命令行工具 (不打开窗口)，见 grasp_gui check --help
   选项 --lang zh|en          界面语言
 
 以 grasp_levels 或 grasp_wfn 为名的符号链接直接打开对应的页，例如：
@@ -489,6 +517,9 @@ def main():
     if args[:1] in (["-h"], ["--help"]):
         print(T(USAGE))
         return
+    import grasp_config
+    if args[:1] and args[0] in grasp_config.COMMANDS:      # 共享配置的命令行工具，不打开窗口
+        sys.exit(grasp_config.cli(args))
     start = start_window(args)
     if start is None:
         sys.exit(2)
