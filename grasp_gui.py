@@ -6,7 +6,7 @@ GRASP 图形界面 (Qt / PySide6)。主窗口上方是工作目录和运行设�
   能级图  level_panel.py  能级图、组成和跃迁
 共用的控件在 gui_common.py 中，与界面无关的部分在 grasp_*.py 中。界面支持中文 / English。
 
-用法:  python3 grasp_gui.py [--lang en] [目录 | levels [目录] | wfn [目录] | 文件]   (见 --help)
+用法:  python3 grasp_gui.py [--lang en] [目录 | levels [目录] | wfn [目录] | 文件 | check|script|steps|reference …]   (见 --help)
 依赖:  pip install pyside6
 """
 
@@ -389,6 +389,7 @@ USAGE = """用法：
   grasp_gui wfn [目录]       打开主界面的径向波函数页 (默认为当前目录)
   grasp_gui 文件             按文件内容打开对应的页并只勾选这个文件：
                              混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 径向波函数
+  grasp_gui check|script|steps|reference …   共享配置的命令行工具 (不打开窗口)，见 grasp_gui check --help
   选项 --lang zh|en          界面语言
 
 以 grasp_levels 或 grasp_wfn 为名的符号链接直接打开对应的页，例如：
@@ -489,6 +490,9 @@ def main():
     if args[:1] in (["-h"], ["--help"]):
         print(T(USAGE))
         return
+    import grasp_config
+    if args[:1] and args[0] in grasp_config.COMMANDS:      # 共享配置的命令行工具，不打开窗口
+        sys.exit(grasp_config.cli(args))
     start = start_window(args)
     if start is None:
         sys.exit(2)

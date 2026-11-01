@@ -571,6 +571,7 @@ EN = {
   grasp_gui wfn [目录]       打开主界面的径向波函数页 (默认为当前目录)
   grasp_gui 文件             按文件内容打开对应的页并只勾选这个文件：
                              混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 径向波函数
+  grasp_gui check|script|steps|reference …   共享配置的命令行工具 (不打开窗口)，见 grasp_gui check --help
   选项 --lang zh|en          界面语言
 
 以 grasp_levels 或 grasp_wfn 为名的符号链接直接打开对应的页，例如：
@@ -581,12 +582,36 @@ EN = {
   grasp_gui wfn [DIR]        open the main window on the radial wave functions (default: current directory)
   grasp_gui FILE             open the page for the file's contents with only this file checked:
                              mixing coefficient file (.m, .cm) -> levels, radial wave functions (.w) -> wfn
+  grasp_gui check|script|steps|reference …   command-line tools for shared configurations (no window), see grasp_gui check --help
   option --lang zh|en        interface language
 
 A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
   ln -s /path/to/grasp_gui ~/.local/bin/grasp_levels
   ln -s /path/to/grasp_gui ~/.local/bin/grasp_wfn""",
     "操作提示": "Tips",
+    # 共享配置的命令行工具
+    """用法：
+  grasp_gui check 配置.json                   检查配置：列出警告和自定义命令，有错误时返回 1
+  grasp_gui script 配置.json [选项]           输出按配置在当前目录运行整个流程的 shell 脚本
+      --bindir 目录                           GRASP 程序目录 (默认同界面)
+      --mpi "mpirun -np 4"                    有并行版本的程序用 <程序>_mpi 运行
+  grasp_gui steps                             输出各程序页的参数说明 (Markdown)
+  grasp_gui reference 文件.cm …               输出混合系数文件的能级能量 (配置中的 reference，JSON)
+不需要图形界面；源码中也可以用 python3 grasp_config.py 代替 grasp_gui。""": """Usage:
+  grasp_gui check CONFIG.json                 check a configuration: warnings and custom commands; exit code 1 on errors
+  grasp_gui script CONFIG.json [options]      print a shell script that runs the whole pipeline in the current directory
+      --bindir DIR                            GRASP bin directory (default: as in the GUI)
+      --mpi "mpirun -np 4"                    run programs that have a parallel version as <prog>_mpi
+  grasp_gui steps                             print the reference of all program tabs and fields (Markdown)
+  grasp_gui reference FILE.cm …               print the level energies of mixing coefficient files (the "reference" of a configuration, JSON)
+No window is opened; from the sources, python3 grasp_config.py can be used instead of grasp_gui.""",
+    "错误：{e}": "Error: {e}",
+    "警告：{w}": "Warning: {w}",
+    "提示：{w}": "Note: {w}",
+    "{n} 个计算步骤，所需程序：{p}": "{n} steps, programs needed: {p}",
+    "第 {i} 步是自定义命令：": "Step {i} is a custom command:",
+    "配置可以导入": "The configuration can be imported",
+    "组态 (每行一个)": "configurations (one per line)",
     # 共享配置
     "导入配置文件…": "Import configuration file…",
     "导出配置…": "Export configuration…",

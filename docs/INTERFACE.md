@@ -59,7 +59,16 @@ grasp_gui wfn [DIR]        open on the Radial wave functions tab
 grasp_gui FILE             open the tab for this file by content, only this file checked
                            (.m/.cm → Levels, .w → Radial wave functions); unrecognised file → exit code 2
 --lang zh|en               interface language (remembered)
+
+grasp_gui check CONFIG.json             check a shared configuration (exit code 1 if it cannot be imported)
+grasp_gui script CONFIG.json [--bindir DIR] [--mpi "mpirun -np N"]
+                                        print the shell script of its pipeline (runs in the current directory)
+grasp_gui steps                         reference of all program tabs and fields (Markdown, = docs/STEPS.md)
+grasp_gui reference FILE.cm …           level energies of mixing coefficient files as "reference" JSON
 ```
+
+`check`, `script`, `steps` and `reference` open no window; `python3 grasp_config.py …` does the same from the
+sources. They are meant for scripts and AI agents ([AGENT_SPEC.md](AGENT_SPEC.md)).
 
 A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`.
 
