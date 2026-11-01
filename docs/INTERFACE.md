@@ -124,11 +124,65 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   `rmcdhf <<'EOF' … EOF` followed by `rsave odd4`.
 * **Program output (程序输出)**: dark terminal-style pane, last 5000 lines (set a log file in the form for the full
   output); *List files (查看文件)*, *Clear (清屏)*. Errors in red, step headers in blue.
+* **Background runs (后台运行)**: every run (a program or the pipeline) is executed by a separate background process
+  (`grasp_gui _run`); the tab shows its output live and *■ Stop* stops it. The status bar shows *Running: step i/n
+  title (运行中：第 i/n 步 …)*.
+  * Quitting while a run is in progress asks *Continue in background (后台继续)* (default) / *Stop the run and quit
+    (停止计算并退出)* / *Cancel (取消)*; without a run the program quits without asking. If the window disappears
+    unexpectedly (ssh disconnected, crash), the run continues in the background.
+  * Switching to another working directory leaves the run of the old one in the background (noted in the output).
+  * Opening a directory whose run is still going reattaches: the output so far (up to 1 MB) is replayed, then live
+    output follows; *Stop* works again. A run that ended while no window was attached is shown once: the end of its
+    output and *\*\*\* The background run finished / was stopped (step i …) / failed at step i …*.
+  * On machines with systemd-logind `KillUserProcesses=yes`, the end of the login session ends background runs too;
+    see [below](#background-runs-and-logging-out--后台运行与退出登录-killuserprocesses).
+  * Only one run per directory. If the directory's run is on another machine (e.g. another login node of a
+    cluster), its output is read from the log file every 0.2 s and *Stop* explains that it can only be stopped there;
+    starting a new run there asks first.
+  * Files in the working directory: `.grasp_gui_run.json` (process, host, start / end, steps, current step, result),
+    `.grasp_gui_run.log` (the whole output of the last run).
 * **Session (工作目录记录)**: parameters, groups and pipeline are saved in `<workdir>/.grasp_gui.json` on every change
   and restored when the directory is opened again. *Save / Load parameters* write / read the same content as a
   JSON file elsewhere.
 * **Slurm job script (Slurm 作业脚本)** dialog: job name, partition, nodes, tasks, time, memory, modules, e-mail,
   extra `#SBATCH` lines (remembered). Upload the script with the inputs of the working directory and `sbatch` it.
+
+### Background runs and logging out / 后台运行与退出登录 (KillUserProcesses)
+
+Background runs survive closing the window and an ssh disconnect on most systems. On a machine where systemd-logind
+has `KillUserProcesses=yes`, however, everything started in a login session — the GUI, its background run and the GRASP
+programs — is ended when **that session ends** (ssh disconnected, or logout from that session). Most common
+distributions (RHEL / CentOS / Rocky, Debian, Ubuntu, Fedora) set `no`, but the systemd default is `yes` and
+administrators may enable it. When it applies to the current session, the quit dialog says so.
+
+后台运行在多数系统上可以挺过关窗和 ssh 断开。但如果机器上 systemd-logind 设置了 `KillUserProcesses=yes`，在一次登录中启动的
+全部进程 (界面、后台运行进程和 GRASP 程序) 会在**这次登录结束** (ssh 断开或退出登录) 时被结束。常见发行版 (RHEL / CentOS /
+Rocky、Debian、Ubuntu、Fedora) 默认是 `no`，但 systemd 本身的默认值是 `yes`，管理员也可能打开它。对当前登录有影响时，退出对话框会提示。
+
+Check / 检查 (`b true` = enabled; a user listed in `KillExcludeUsers` is not affected / 列在其中的用户不受影响):
+
+```bash
+busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager KillUserProcesses
+busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager KillExcludeUsers
+```
+
+Remedies / 解决办法:
+
+1. Ask the administrator to set `KillUserProcesses=no` in `/etc/systemd/logind.conf` or to add you to
+   `KillExcludeUsers`. 请管理员关闭该设置，或把你加入 `KillExcludeUsers`。
+2. Without the administrator: keep your systemd user manager running after logout (lingering; may need permission)
+   and start the GUI outside the login session, so that it and its background runs belong to the user manager:
+   不需要管理员时：让 systemd 用户管理器在退出登录后继续运行 (lingering，可能需要权限)，并在登录会话之外启动界面，界面和它的
+   后台运行进程就属于用户管理器，不随登录结束：
+
+   ```bash
+   loginctl enable-linger
+   systemd-run --user --scope grasp_gui
+   ```
+
+   `loginctl show-user $USER -p Linger` shows `Linger=yes` when the first step worked. 第一步成功后显示 `Linger=yes`。
+3. For long calculations on clusters, submit the pipeline as a Slurm job (*Export ▾ → Slurm job script*); login nodes
+   often limit long-running processes anyway. 集群上的长时间计算请导出 Slurm 作业脚本提交；登录节点通常本来就限制长时间运行的进程。
 
 ### Import example / configuration (导入示例 / 导入配置)
 
@@ -238,6 +292,7 @@ cannot handle paths longer than 128 characters; the GUI then falls back to the s
 |---|---|
 | `~/.config/grasp_gui.json` | language, font size, last working directory, recent directories, GRASP bin, MPI settings, settings collapsed, window geometry, calculation splitter, last tab, Slurm settings, energy unit, level-export options, configuration abbreviations, transition process count, show-links option, configuration author |
 | `<workdir>/.grasp_gui.json` | session: parameters per group, current group, pipeline |
+| `<workdir>/.grasp_gui_run.json`, `.grasp_gui_run.log` | state and output of the last run (background runs) |
 | `<workdir>/.grasp_gui/tr/` | cached transition calculations |
 | `<workdir>/.grasp_gui/marked.json` | transitions drawn as arrows |
 

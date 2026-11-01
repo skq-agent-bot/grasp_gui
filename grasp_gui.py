@@ -13,6 +13,11 @@ GRASP 图形界面 (Qt / PySide6)。主窗口上方是工作目录和运行设�
 import os
 import sys
 
+if __name__ == "__main__" and sys.argv[1:2] == ["_run"] and len(sys.argv) == 3:
+    # 后台运行进程 (见 grasp_bg.py)：不加载 Qt
+    import grasp_bg
+    sys.exit(grasp_bg.serve(sys.argv[2]))
+
 
 def fix_wsl_display():
     """WSL 启用 systemd 后 $XDG_RUNTIME_DIR 中常缺少 WSLg 的 wayland 套接字；直接指向它并优先用 Wayland。"""
@@ -86,6 +91,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, Q
                                QVBoxLayout, QWidget)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import grasp_bg                                                     # noqa: E402
 import grasp_core as core                                           # noqa: E402
 import gui_common as gc                                             # noqa: E402
 from calc_panel import CalcPanel                                    # noqa: E402
@@ -256,12 +262,33 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         panels = list(self.panels.values()) + [w.panel for w in gc.PANEL_WINDOWS]
-        if self.calc.busy or any(p.busy() for p in panels):
+        others = any(p.busy() for p in panels)
+        stop = False
+        if self.calc.busy:
+            # 计算由后台运行进程执行 (grasp_bg)：可以留在后台继续，以后打开该目录时接上
+            box = QMessageBox(QMessageBox.Question, T("运行中"),
+                              T("计算正在运行。可以让它在后台继续，以后再打开这个工作目录即可接上并查看结果。"), parent=self)
+            notes = [T("能级图中正在进行的跃迁计算会结束。")] if others else []
+            if grasp_bg.logout_kills():
+                notes.append(T("注意：本机的 systemd 设置 (KillUserProcesses=yes) 会在这次登录结束 (ssh 断开或退出登录) 时"
+                               "结束其中的全部进程，包括后台计算。解决办法见 docs/INTERFACE.md 的“后台运行”一节。"))
+            if notes:
+                box.setInformativeText("\n\n".join(notes))
+            bg = box.addButton(T("后台继续"), QMessageBox.AcceptRole)
+            halt = box.addButton(T("停止计算并退出"), QMessageBox.DestructiveRole)
+            box.addButton(T("取消"), QMessageBox.RejectRole)
+            box.setDefaultButton(bg)
+            box.exec()
+            if box.clickedButton() not in (bg, halt):
+                event.ignore()
+                return
+            stop = box.clickedButton() is halt
+        elif others:
             ans = QMessageBox.question(self, T("运行中"), T("有程序正在运行，退出将终止它。确定退出吗？"))
             if ans != QMessageBox.Yes:
                 event.ignore()
                 return
-        self.calc.shutdown()
+        self.calc.shutdown(stop)
         for p in self.panels.values():
             p.shutdown()
         for w in list(gc.PANEL_WINDOWS):

@@ -612,6 +612,29 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "第 {i} 步是自定义命令：": "Step {i} is a custom command:",
     "配置可以导入": "The configuration can be imported",
     "组态 (每行一个)": "configurations (one per line)",
+    # 后台运行
+    "*** 后台运行在第 {i} 步 {t} 出错": "*** The background run failed at step {i} {t}",
+    "*** 后台运行完成": "*** The background run finished",
+    "*** 后台运行已停止 (第 {i} 步 {t})": "*** The background run was stopped (step {i} {t})",
+    "*** 后台运行进程意外结束": "*** The background run process ended unexpectedly",
+    "*** 后台运行进程意外结束 (第 {i} 步 {t})": "*** The background run process ended unexpectedly (step {i} {t})",
+    "[上次在后台运行的计算，{w}，结束于 {e}]": "[Last background run, {w}, ended {e}]",
+    "[原目录 {d} 的计算在后台继续；再次打开该目录即可接上]": "[The run in {d} continues in the background; open that directory again to reattach]",
+    "[接上后台运行的计算，{w}]": "[Attached to the background run, {w}]",
+    "[此目录的计算正在 {h} 上运行，{w}；以下输出读自 {f}]": "[This directory's run is running on {h}, {w}; output below is read from {f}]",
+    "开始于 {t}": "started {t}",
+    "无法启动后台运行进程": "Could not start the background run process",
+    "此目录的计算正在 {h} 上运行 (开始于 {t})。仍要在本机开始新的计算吗？": "A run in this directory is running on {h} (started {t}). Start a new run on this machine anyway?",
+    "计算在 {h} 上运行 (进程 {p})，只能在那台机器上停止。": "The run is on {h} (process {p}); it can only be stopped on that machine.",
+    "运行": "Run",
+    "运行中：第 {i}/{n} 步 {t}": "Running: step {i}/{n} {t}",
+    "此目录已有计算在运行": "A run is already in progress in this directory",
+    "停止计算并退出": "Stop the run and quit",
+    "后台继续": "Continue in background",
+    "注意：本机的 systemd 设置 (KillUserProcesses=yes) 会在这次登录结束 (ssh 断开或退出登录) 时结束其中的全部进程，包括后台计算。解决办法见 docs/INTERFACE.md 的“后台运行”一节。":
+        "Note: this machine's systemd setting (KillUserProcesses=yes) ends all processes of this login when it ends (ssh disconnected or logged out), including background runs. See \"Background runs\" in docs/INTERFACE.md for remedies.",
+    "能级图中正在进行的跃迁计算会结束。": "Transition calculations in progress in the level diagram will be stopped.",
+    "计算正在运行。可以让它在后台继续，以后再打开这个工作目录即可接上并查看结果。": "A run is in progress. It can continue in the background; open this working directory again later to reattach and see the results.",
     # 共享配置
     "导入配置文件…": "Import configuration file…",
     "导出配置…": "Export configuration…",
@@ -1614,6 +1637,23 @@ def check_mcp(cwd, np, mpitmp):
     return None
 
 
+def child_env(**extra):
+    """子进程 (GRASP、mpirun、后台运行进程) 的环境变量。"""
+    env = dict(os.environ, **extra)
+    if getattr(sys, "frozen", False):
+        # PyInstaller 打包的程序把 LD_LIBRARY_PATH 指向自带的库；子进程用回原来的值
+        orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        if orig is None:
+            env.pop("LD_LIBRARY_PATH", None)
+        else:
+            env["LD_LIBRARY_PATH"] = orig
+        # 界面自己设置的 fontconfig 配置 (见 grasp_gui.fix_fontconfig) 也不传给子进程
+        own = env.pop("GRASP_GUI_FONTCONFIG", None)
+        if own and env.get("FONTCONFIG_FILE") == own:
+            env.pop("FONTCONFIG_FILE")
+    return env
+
+
 class Runner:
     """在后台线程中依次执行任务，输出通过 emit(text, tag) 送回界面（tag: "", head, info, err）。
 
@@ -1636,18 +1676,7 @@ class Runner:
 
     def exec_cmd(self, argv, cfg, stdin="", log="", mpi=False):
         bindir, cwd = cfg["bindir"], cfg["cwd"]
-        env = dict(os.environ, PATH=bindir + os.pathsep + os.environ.get("PATH", ""))
-        if getattr(sys, "frozen", False):
-            # PyInstaller 打包的程序把 LD_LIBRARY_PATH 指向自带的库；子进程 (GRASP、mpirun) 用回原来的值
-            orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
-            if orig is None:
-                env.pop("LD_LIBRARY_PATH", None)
-            else:
-                env["LD_LIBRARY_PATH"] = orig
-            # 界面自己设置的 fontconfig 配置 (见 grasp_gui.fix_fontconfig) 也不传给子进程
-            own = env.pop("GRASP_GUI_FONTCONFIG", None)
-            if own and env.get("FONTCONFIG_FILE") == own:
-                env.pop("FONTCONFIG_FILE")
+        env = child_env(PATH=bindir + os.pathsep + os.environ.get("PATH", ""))
         if mpi and cfg["np"] > 1:
             mpitmp = os.path.join(cwd, cfg["mpitmp"])
             os.makedirs(mpitmp, exist_ok=True)
@@ -1724,15 +1753,18 @@ class Runner:
             if rc != 0:
                 raise RuntimeError(T("{p} 退出码 {rc}", p=a[1][0], rc=rc))
 
-    def run_all(self, jobs, cfg, done):
+    def run_all(self, jobs, cfg, done, started=None):
+        """依次执行 jobs，结束后调用 done(ok)；started(i, job)：开始第 i 步 (从 0 起) 时调用。"""
         # 绝对路径：MPI_TMP 由工作目录拼出，程序又在工作目录中启动，相对路径会被解析两次
         cfg = dict(cfg, cwd=os.path.abspath(cfg["cwd"]))
         self.stopped = False
         ok = True
         try:
-            for job in jobs:
+            for i, job in enumerate(jobs):
                 if self.stopped:
                     break
+                if started:
+                    started(i, job)
                 self.run_job(job, cfg)
         except Exception as e:  # noqa: BLE001 - 所有错误都报告给界面
             ok = False
