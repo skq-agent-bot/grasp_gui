@@ -2208,6 +2208,8 @@ class Runner:
         self.proc = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
                                      start_new_session=True)
+        if self.stopped:                # stop() 在程序启动的同时到达 (当时 self.proc 还是 None)
+            self._signal(self.proc, signal.SIGTERM)
         threading.Thread(target=self._feed, args=(self.proc, stdin.encode()), daemon=True).start()
         # 按块读取（而不是逐行），大量输出时显著减少界面刷新次数；
         # 也能显示不以换行结尾的提示
