@@ -19,7 +19,7 @@ import subprocess
 import sys
 import threading
 
-VERSION = "2.1.0"         # 发布时改为发布的版本号 (写入导出的共享配置)
+VERSION = "2.3.1"         # 发布时改为发布的版本号 (写入导出的共享配置)
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".config", "grasp_gui.json")
 
@@ -571,6 +571,7 @@ EN = {
   grasp_gui wfn [目录]       打开主界面的径向波函数页 (默认为当前目录)
   grasp_gui 文件             按文件内容打开对应的页并只勾选这个文件：
                              混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 径向波函数
+  grasp_gui check|script|steps|reference …   共享配置的命令行工具 (不打开窗口)，见 grasp_gui check --help
   选项 --lang zh|en          界面语言
 
 以 grasp_levels 或 grasp_wfn 为名的符号链接直接打开对应的页，例如：
@@ -581,12 +582,59 @@ EN = {
   grasp_gui wfn [DIR]        open the main window on the radial wave functions (default: current directory)
   grasp_gui FILE             open the page for the file's contents with only this file checked:
                              mixing coefficient file (.m, .cm) -> levels, radial wave functions (.w) -> wfn
+  grasp_gui check|script|steps|reference …   command-line tools for shared configurations (no window), see grasp_gui check --help
   option --lang zh|en        interface language
 
 A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
   ln -s /path/to/grasp_gui ~/.local/bin/grasp_levels
   ln -s /path/to/grasp_gui ~/.local/bin/grasp_wfn""",
     "操作提示": "Tips",
+    # 共享配置的命令行工具
+    """用法：
+  grasp_gui check 配置.json                   检查配置：列出警告和自定义命令，有错误时返回 1
+  grasp_gui script 配置.json [选项]           输出按配置在当前目录运行整个流程的 shell 脚本
+      --bindir 目录                           GRASP 程序目录 (默认同界面)
+      --mpi "mpirun -np 4"                    有并行版本的程序用 <程序>_mpi 运行
+  grasp_gui steps                             输出各程序页的参数说明 (Markdown)
+  grasp_gui reference 文件.cm …               输出混合系数文件的能级能量 (配置中的 reference，JSON)
+不需要图形界面；源码中也可以用 python3 grasp_config.py 代替 grasp_gui。""": """Usage:
+  grasp_gui check CONFIG.json                 check a configuration: warnings and custom commands; exit code 1 on errors
+  grasp_gui script CONFIG.json [options]      print a shell script that runs the whole pipeline in the current directory
+      --bindir DIR                            GRASP bin directory (default: as in the GUI)
+      --mpi "mpirun -np 4"                    run programs that have a parallel version as <prog>_mpi
+  grasp_gui steps                             print the reference of all program tabs and fields (Markdown)
+  grasp_gui reference FILE.cm …               print the level energies of mixing coefficient files (the "reference" of a configuration, JSON)
+No window is opened; from the sources, python3 grasp_config.py can be used instead of grasp_gui.""",
+    "错误：{e}": "Error: {e}",
+    "警告：{w}": "Warning: {w}",
+    "提示：{w}": "Note: {w}",
+    "{n} 个计算步骤，所需程序：{p}": "{n} steps, programs needed: {p}",
+    "第 {i} 步是自定义命令：": "Step {i} is a custom command:",
+    "配置可以导入": "The configuration can be imported",
+    "组态 (每行一个)": "configurations (one per line)",
+    # 后台运行
+    "*** 后台运行在第 {i} 步 {t} 出错": "*** The background run failed at step {i} {t}",
+    "*** 后台运行完成": "*** The background run finished",
+    "*** 后台运行已停止 (第 {i} 步 {t})": "*** The background run was stopped (step {i} {t})",
+    "*** 后台运行进程意外结束": "*** The background run process ended unexpectedly",
+    "*** 后台运行进程意外结束 (第 {i} 步 {t})": "*** The background run process ended unexpectedly (step {i} {t})",
+    "[上次在后台运行的计算，{w}，结束于 {e}]": "[Last background run, {w}, ended {e}]",
+    "[原目录 {d} 的计算在后台继续；再次打开该目录即可接上]": "[The run in {d} continues in the background; open that directory again to reattach]",
+    "[接上后台运行的计算，{w}]": "[Attached to the background run, {w}]",
+    "[此目录的计算正在 {h} 上运行，{w}；以下输出读自 {f}]": "[This directory's run is running on {h}, {w}; output below is read from {f}]",
+    "开始于 {t}": "started {t}",
+    "无法启动后台运行进程": "Could not start the background run process",
+    "此目录的计算正在 {h} 上运行 (开始于 {t})。仍要在本机开始新的计算吗？": "A run in this directory is running on {h} (started {t}). Start a new run on this machine anyway?",
+    "计算在 {h} 上运行 (进程 {p})，只能在那台机器上停止。": "The run is on {h} (process {p}); it can only be stopped on that machine.",
+    "运行": "Run",
+    "运行中：第 {i}/{n} 步 {t}": "Running: step {i}/{n} {t}",
+    "此目录已有计算在运行": "A run is already in progress in this directory",
+    "停止计算并退出": "Stop the run and quit",
+    "后台继续": "Continue in background",
+    "注意：本机的 systemd 设置 (KillUserProcesses=yes) 会在这次登录结束 (ssh 断开或退出登录) 时结束其中的全部进程，包括后台计算。解决办法见 docs/INTERFACE.md 的“后台运行”一节。":
+        "Note: this machine's systemd setting (KillUserProcesses=yes) ends all processes of this login when it ends (ssh disconnected or logged out), including background runs. See \"Background runs\" in docs/INTERFACE.md for remedies.",
+    "能级图中正在进行的跃迁计算会结束。": "Transition calculations in progress in the level diagram will be stopped.",
+    "计算正在运行。可以让它在后台继续，以后再打开这个工作目录即可接上并查看结果。": "A run is in progress. It can continue in the background; open this working directory again later to reattach and see the results.",
     # 共享配置
     "导入配置文件…": "Import configuration file…",
     "导出配置…": "Export configuration…",
@@ -714,6 +762,20 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
     "找不到保存的 H 矩阵 (在 {d} 中)：请先用“只构造并保存 H 矩阵”运行 rci_block_csfg。": "No saved H matrix (in {d}): run rci_block_csfg with \"only build and save the H matrix\" first.",
     "保存的 H 矩阵是 {k} 个 MPI 进程的 (在 {d} 中)，重启必须使用相同的进程数：请把 MPI 进程数设为 {k}，或先用 rdistHmatrix_csfg 重新分配给 {np} 个进程。": "The saved H matrix is for {k} MPI processes (in {d}); a restart must use the same number: set the MPI processes to {k}, or first redistribute it to {np} processes with rdistHmatrix_csfg.",
     "文件尚未写完，只显示已完成的块": "The file is not complete yet; only the finished blocks are shown",
+    # 零阶 / 一阶划分
+    "零阶 / 一阶划分：零阶空间以外的 CSF 按一阶微扰处理": "Zero/first-order partition: CSFs outside the zero-order space treated as first-order perturbations",
+    "先用 rcsfzerofirst 把零阶空间的 CSF 排在各块最前面": "first put the zero-order CSFs at the top of each block with rcsfzerofirst",
+    "  零阶空间的 CSF 列表": "  CSF list of the zero-order space",
+    "各块的 ICCUT 取此列表各块的 CSF 数 (运行时读取)": "the ICCUT of each block is the number of CSFs of that block in this list (read when run)",
+    "零阶 / 一阶划分的第一步：把 CSF 列表各块中属于零阶空间的 CSF 排到最前面，输出 rcsf.out。之后在 rangular 和 rci 中勾选“零阶 / 一阶划分”并给出同一个零阶空间列表：各块前 ICCUT 个 CSF 按变分处理，其余按一阶微扰处理 (只算它们与零阶空间的相互作用和对角元)，大规模展开时省时、省内存。": "First step of the zero/first-order partition: moves the CSFs of the zero-order space to the top of each block of a CSF list, writing rcsf.out. Then tick \"Zero/first-order partition\" in rangular and rci with the same zero-order list: the first ICCUT CSFs of each block are treated variationally, the rest as first-order perturbations (only their interaction with the zero-order space and their diagonal elements are computed), which saves time and memory for large expansions.",
+    "零阶空间的 CSF 列表": "CSF list of the zero-order space",
+    "如多参考列表；对称块须与要划分的列表一一对应": "e.g. the multireference list; its symmetry blocks must match those of the list to partition",
+    "要划分的 CSF 列表": "CSF list to partition",
+    "与要划分的列表同名时覆盖原列表；留空则不复制": "the same name as the list to partition overwrites it; empty = no copy",
+    "无法读取零阶空间的 CSF 列表 {z} 或 {f}：{e}": "Cannot read the zero-order CSF list {z} or {f}: {e}",
+    "零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。": "The zero-order CSF list {z} and {f} have different symmetry blocks ({a} / {b}): their J and parity blocks must match one to one.",
+    "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
+    "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
 }
 
 
@@ -1034,15 +1096,87 @@ class RcsfSplit(Step):
         return f"rcsfsplit {v['state']}"
 
 
+# 零阶 / 一阶划分 (rcsfzerofirst 把零阶空间的 CSF 排在各块最前面)：rangular、rci 的非默认设置按块询问 ICCUT，
+# 即各块前 ICCUT 个 CSF 按变分处理，其余按一阶微扰处理 (只保留它们与零阶空间的相互作用和对角元)。ICCUT 取零阶空间
+# CSF 列表各块的 CSF 数；该列表在加入流程时可能还不存在，所以输入中先写占位行 "@ICCUT 零阶列表 CSF 列表"，
+# 运行时由 expand_iccut 换成各块的数 (导出的脚本中用 awk 计算，见 describe)。
+ICCUT = "@ICCUT"
+ICCUT_AWK = "f&&/^ *[*]/{print int(n/3);n=0;next} f&&NF{n++} /^CSF[(]s[)]:/{f=1} END{print int(n/3)}"
+
+
+def zero_first_fields(default_zero):
+    # added=True：2.2.0 新增的字段，旧版本导出的配置中没有时直接用默认值 (不提示)
+    return [Check("zf", "零阶 / 一阶划分：零阶空间以外的 CSF 按一阶微扰处理", False,
+                  "先用 rcsfzerofirst 把零阶空间的 CSF 排在各块最前面", added=True),
+            Entry("zero", "  零阶空间的 CSF 列表", default_zero, "各块的 ICCUT 取此列表各块的 CSF 数 (运行时读取)",
+                  added=True)]
+
+
+def csf_blocks(path):
+    """CSF 列表各块的 (CSF 数, J 和宇称，如 3/2-)。"""
+    import grasp_mix
+    return [(len(b), b[0][1].split()[-1] if b and b[0][1].split() else "") for b in grasp_mix.read_csfs(path)]
+
+
+def expand_iccut(stdin, cwd, strict=False):
+    """把输入中的 ICCUT 占位行换成各块的 ICCUT；零阶列表与 CSF 列表的块不对应时抛出 RuntimeError。
+    strict：rangular_mpi 要求 1 < ICCUT < 块的 CSF 数 (否则反复要求重新输入)。"""
+    out = []
+    for line in stdin.split("\n"):
+        if not line.startswith(ICCUT + " "):
+            out.append(line)
+            continue
+        zero, full = line.split()[1:3]
+        try:
+            zb, fb = csf_blocks(os.path.join(cwd, zero)), csf_blocks(os.path.join(cwd, full))
+        except (OSError, StopIteration, IndexError) as e:
+            raise RuntimeError(T("无法读取零阶空间的 CSF 列表 {z} 或 {f}：{e}", z=zero, f=full, e=e))
+        if [s for _, s in zb] != [s for _, s in fb]:
+            raise RuntimeError(T("零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。",
+                                 z=zero, f=full, a=" ".join(s for _, s in zb), b=" ".join(s for _, s in fb)))
+        for (n, sym), (ncf, _) in zip(zb, fb):
+            if n > ncf or (strict and not 1 < n < ncf):
+                raise RuntimeError(T("块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。"
+                                     if strict else "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。",
+                                     s=sym, n=n, f=full, ncf=ncf))
+            out.append(str(n))
+    return "\n".join(out)
+
+
+class RcsfZeroFirst(Step):
+    key = name = prog = "rcsfzerofirst"
+    fields = [
+        Note("零阶 / 一阶划分的第一步：把 CSF 列表各块中属于零阶空间的 CSF 排到最前面，输出 rcsf.out。之后在 rangular 和 rci "
+             "中勾选“零阶 / 一阶划分”并给出同一个零阶空间列表：各块前 ICCUT 个 CSF 按变分处理，其余按一阶微扰处理 "
+             "(只算它们与零阶空间的相互作用和对角元)，大规模展开时省时、省内存。"),
+        Entry("zero", "零阶空间的 CSF 列表", "odd2.c", "如多参考列表；对称块须与要划分的列表一一对应"),
+        Entry("full", "要划分的 CSF 列表", "odd3.c"),
+        Entry("saveas", "结果 rcsf.out 保存为", "odd3.c", "与要划分的列表同名时覆盖原列表；留空则不复制"),
+    ]
+
+    def stdin(self, v):
+        return answers([v["zero"].strip(), v["full"].strip()])
+
+    def post(self, v):
+        s = v["saveas"].strip()
+        return [("cp", "rcsf.out", s)] if s else []
+
+    def title(self, v):
+        s = v["saveas"].strip()
+        return f"rcsfzerofirst -> {s}" if s else "rcsfzerofirst"
+
+
 class RAngular(Step):
     key = name = prog = "rangular"
     mpi = True
     fields = [
         Note("计算角系数 (mcp.*)。读取 rcsf.inp。"),
         Entry("csf", "复制此 CSF 文件为 rcsf.inp", "odd2.c", "留空则直接用现有 rcsf.inp"),
-    ]
+    ] + zero_first_fields("odd2.c")
 
     def stdin(self, v):
+        if v["zf"]:
+            return answers(["n", f"{ICCUT} {v['zero'].strip()} rcsf.inp"])
         return "y\n"
 
     def pre(self, v):
@@ -1146,11 +1280,18 @@ class RCi(Step):
         Check("se", "估计自能 (Self-energy)", True),
         Entry("nqed", "  自能计算的最大 n (≤8)", "4"),
         Text("levels", "各块计算的能级", "1\n1", "每块一行", lines=3),
+    ] + zero_first_fields("odd2.c") + [
         Entry("log", "输出日志文件", "outodd_rci"),
     ]
 
     def stdin(self, v):
-        lines = ["y", v["state"].strip(), yn(v["trans"]), yn(v["modfreq"])]
+        state = v["state"].strip()
+        if v.get("zf"):
+            # 非默认设置：不重启、不改光速、按一阶微扰处理部分 CSF，再逐块给出 ICCUT
+            lines = ["n", state, "n", "n", "y", f"{ICCUT} {v['zero'].strip()} {state}.c"]
+        else:
+            lines = ["y", state]
+        lines += [yn(v["trans"]), yn(v["modfreq"])]
         if v["modfreq"]:
             lines.append(v["factor"])
         lines += [yn(v["vp"]), yn(v["nms"]), yn(v["sms"]), yn(v["se"])]
@@ -1456,6 +1597,9 @@ class RAngularCsfg(RAngular):
         Entry("csf", "CSFG 列表 (不含扩展名)", "odd2", "复制 name.g / name.l 为 rcsfg.inp / rlabel.inp；留空则用现有文件"),
     ]
 
+    def stdin(self, v):
+        return "y\n"                   # 默认设置 (零阶 / 一阶划分的 CSFG 版本尚未支持)
+
     def pre(self, v):
         return csfg_inputs(v["csf"].strip())
 
@@ -1701,7 +1845,7 @@ class RMixAccumulateCsfg(Step):
         return f"{self.prog} {v['state']} -> {s}.g" if s else f"{self.prog} {v['state']}"
 
 
-STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
+STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RcsfZeroFirst(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
          RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RTabTrans1(), RTabTrans2(),
          RBioTransform(), RTransition(), Custom(),
          RcsfgGenerate(), RcsfgInteract(), RcsfgSplit(), RAngularCsfg(), RWfnEstimateCsfg(), RMcdhfCsfg(), RSaveCsfg(),
@@ -1715,7 +1859,7 @@ PACKAGE_PROBE = {"GRASPG": "rcsfggenerate_csfg"}
 # 界面左侧程序列表的功能分组 (每个程序包中每个程序恰好出现一次)
 STEP_GROUPS = {
     "GRASP2018": [
-        ("核与组态", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit"]),
+        ("核与组态", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst"]),
         ("自洽场与 CI", ["rangular", "rwfnestimate", "rmcdhf", "rsave", "rci"]),
         ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
         ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
@@ -1761,7 +1905,7 @@ def package_of(step_keys):
 # ---------------------------------------------------------------------------
 
 GROUPS = ("odd", "even")
-GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci",
+GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci",
                "jj2lsj", "rhfs", "ris4",
                "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg", "rangular_csfg", "rwfnestimate_csfg",
                "rmcdhf_csfg", "rsave_csfg", "rci_csfg", "jj2lsj_csfg", "rcsfgexpand_csfg", "rcsfgextend_csfg",
@@ -1861,7 +2005,12 @@ def describe(job, mpi_prefix=""):
         cmd = f"{shlex.quote(job['prog'])} {args}".rstrip()
     if job["log"]:
         cmd += f" > {shlex.quote(job['log'])}"
-    if job["stdin"].strip():
+    if any(ln.startswith(ICCUT + " ") for ln in job["stdin"].split("\n")):
+        # 各块的 ICCUT 在运行时由零阶列表算出：不加引号的 here-document，其余各行转义
+        lines = [f"$(awk '{ICCUT_AWK}' {shlex.quote(ln.split()[1])})" if ln.startswith(ICCUT + " ")
+                 else re.sub(r"([\\$`])", r"\\\1", ln) for ln in job["stdin"].split("\n")]
+        out.append(f"{cmd} <<EOF\n" + "\n".join(lines) + "EOF")
+    elif job["stdin"].strip():
         out.append(f"{cmd} <<'EOF'\n{job['stdin']}EOF")
     else:
         out.append(cmd + " < /dev/null")
@@ -1999,6 +2148,21 @@ def csfg_failed(tail):
     "Error!name.l is not found ..."、"Problems with opening the file name.g"，或 Fortran 的 STOP 'Error! …')。"""
     return bool(re.search(r"Stop Error|Error!|Problems with opening|is not found|not exists"
                           r"|^\s*STOP\b.*(error|unexpected|warning)", tail, re.I | re.M))
+def child_env(**extra):
+    """子进程 (GRASP、mpirun、后台运行进程) 的环境变量。"""
+    env = dict(os.environ, **extra)
+    if getattr(sys, "frozen", False):
+        # PyInstaller 打包的程序把 LD_LIBRARY_PATH 指向自带的库；子进程用回原来的值
+        orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        if orig is None:
+            env.pop("LD_LIBRARY_PATH", None)
+        else:
+            env["LD_LIBRARY_PATH"] = orig
+        # 界面自己设置的 fontconfig 配置 (见 grasp_gui.fix_fontconfig) 也不传给子进程
+        own = env.pop("GRASP_GUI_FONTCONFIG", None)
+        if own and env.get("FONTCONFIG_FILE") == own:
+            env.pop("FONTCONFIG_FILE")
+    return env
 
 
 class Runner:
@@ -2023,18 +2187,7 @@ class Runner:
 
     def exec_cmd(self, argv, cfg, stdin="", log="", mpi=False):
         bindir, cwd = cfg["bindir"], cfg["cwd"]
-        env = dict(os.environ, PATH=bindir + os.pathsep + os.environ.get("PATH", ""))
-        if getattr(sys, "frozen", False):
-            # PyInstaller 打包的程序把 LD_LIBRARY_PATH 指向自带的库；子进程 (GRASP、mpirun) 用回原来的值
-            orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
-            if orig is None:
-                env.pop("LD_LIBRARY_PATH", None)
-            else:
-                env["LD_LIBRARY_PATH"] = orig
-            # 界面自己设置的 fontconfig 配置 (见 grasp_gui.fix_fontconfig) 也不传给子进程
-            own = env.pop("GRASP_GUI_FONTCONFIG", None)
-            if own and env.get("FONTCONFIG_FILE") == own:
-                env.pop("FONTCONFIG_FILE")
+        env = child_env(PATH=bindir + os.pathsep + os.environ.get("PATH", ""))
         if mpi and (cfg["np"] > 1 or mpi == "only"):
             mpitmp = os.path.join(cwd, cfg["mpitmp"])
             os.makedirs(mpitmp, exist_ok=True)
@@ -2097,7 +2250,10 @@ class Runner:
             err = check(cfg["cwd"], cfg["np"], cfg["mpitmp"])
             if err:
                 raise RuntimeError(err)
-        rc = self.exec_cmd([job["prog"]] + job["args"], cfg, job["stdin"], job["log"], job.get("mpi"))
+        stdin = job["stdin"]
+        if ICCUT in stdin:
+            stdin = expand_iccut(stdin, cfg["cwd"], strict=job["prog"] == "rangular" and cfg["np"] > 1)
+        rc = self.exec_cmd([job["prog"]] + job["args"], cfg, stdin, job["log"], job.get("mpi"))
         if job["log"]:
             self.emit(T("[输出已写入 {f}]", f=job["log"]) + "\n", "info")
         if rc != 0 or self.stopped:
@@ -2118,15 +2274,18 @@ class Runner:
             if rc != 0:
                 raise RuntimeError(T("{p} 退出码 {rc}", p=a[1][0], rc=rc))
 
-    def run_all(self, jobs, cfg, done):
+    def run_all(self, jobs, cfg, done, started=None):
+        """依次执行 jobs，结束后调用 done(ok)；started(i, job)：开始第 i 步 (从 0 起) 时调用。
+        开始前已调用 stop() 时一步也不执行；再次使用同一个 Runner 时由调用者先把 stopped 设回 False。"""
         # 绝对路径：MPI_TMP 由工作目录拼出，程序又在工作目录中启动，相对路径会被解析两次
         cfg = dict(cfg, cwd=os.path.abspath(cfg["cwd"]))
-        self.stopped = False
         ok = True
         try:
-            for job in jobs:
+            for i, job in enumerate(jobs):
                 if self.stopped:
                     break
+                if started:
+                    started(i, job)
                 self.run_job(job, cfg)
         except Exception as e:  # noqa: BLE001 - 所有错误都报告给界面
             ok = False

@@ -1564,6 +1564,7 @@ class LevelPanel(Panel):
         what = T("全部 J") if subset is None else T("所选 J")
         self.status(T("正在计算 {k} 跃迁 ({w}，{n} 个进程) …", k=", ".join(kinds), w=what, n=cfg["np"]))
         self.show_pair()
+        self.runner.stopped = False
         threading.Thread(target=self.runner.run_all, daemon=True,
                          args=(jobs, cfg, lambda ok: self.q.put((ok, "done")))).start()
 

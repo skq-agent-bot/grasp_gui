@@ -9,6 +9,11 @@ The examples of the GRASP2018 manual shipped with the GUI (`demos/*.json`) use t
 与机器有关的设置 (GRASP `bin` 目录、MPI 进程数、`mpirun`、工作目录)。随程序提供的 GRASP2018 手册算例 (`demos/*.json`)
 也采用这个格式。实现见 `grasp_config.py`。
 
+Programs and AI agents that run GRASP themselves follow the short rules of [AGENT_SPEC.md](AGENT_SPEC.md); the
+fields of every program tab are listed in [STEPS.md](STEPS.md).
+
+自己运行 GRASP 的程序和 AI agent 按 [AGENT_SPEC.md](AGENT_SPEC.md) 的简短规则生成配置；各程序页的参数见 [STEPS.md](STEPS.md)。
+
 ## File / 文件
 
 A UTF-8 JSON object. Current version: **2**.

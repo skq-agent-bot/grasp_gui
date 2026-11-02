@@ -3,12 +3,14 @@
 运行；多个步骤可以加入“流程”后顺序运行 (可选 MPI)，或导出为 shell 脚本 / Slurm 作业脚本。
 """
 
+import codecs
 import datetime
 import json
 import os
 import queue
 import re
 import threading
+import time
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
@@ -16,6 +18,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QFil
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit,
                                QPushButton, QScrollArea, QSplitter, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
+import grasp_bg
 import grasp_config
 import grasp_core as core
 import grasp_mix
@@ -551,7 +554,9 @@ class CalcPanel(QWidget):
         self.run = run
         self.cur_workdir = os.path.abspath(workdir)
         self.q = queue.Queue()
-        self.runner = core.Runner(lambda s, tag: self.q.put((s, tag)))
+        self.client = None             # 与后台运行进程的连接 (见 grasp_bg)；连着时 busy
+        self.titles = []               # 正在运行的各步标题
+        self.remote = None             # 本目录的计算在另一台机器上运行时：读取其 RUN_LOG 的线程的标记
         self.pipeline = []
         self.busy = False
         self.group = core.GROUPS[0]
@@ -657,7 +662,7 @@ class CalcPanel(QWidget):
         bar.addWidget(button("▶ 运行当前程序", self.run_current))
         bar.addWidget(button("加入流程 ↓", self.add_to_pipeline))
         bar.addStretch()
-        bar.addWidget(button("■ 停止", self.runner.stop))
+        bar.addWidget(button("■ 停止", self.stop_run))
         lay.addLayout(bar)
         return w
 
@@ -714,10 +719,11 @@ class CalcPanel(QWidget):
         self.refresh_list()
         return split
 
-    def shutdown(self):
-        """关闭主窗口前：结束运行中的程序，保存本目录的记录。"""
-        if self.busy:
-            self.runner.kill()
+    def shutdown(self, stop=False):
+        """关闭主窗口前：保存本目录的记录；运行中的计算在后台继续，stop 为真时停止它。"""
+        if self.busy and stop:
+            self.stop_run()
+        self.detach()
         self.save_session()
 
     # ---- 态组 ----
@@ -792,6 +798,9 @@ class CalcPanel(QWidget):
         if d == self.cur_workdir:
             return
         self.save_session()
+        if self.busy:
+            self.write("\n" + T("[原目录 {d} 的计算在后台继续；再次打开该目录即可接上]", d=self.cur_workdir) + "\n", "info")
+        self.detach()
         self.cur_workdir = d
         self.open_workdir(d)
 
@@ -804,6 +813,7 @@ class CalcPanel(QWidget):
             self.status(T("已载入此目录上次的记录") + f"  ({os.path.join(d, core.SESSION_FILE)})")
         else:
             self.status(T("此目录还没有记录，沿用当前参数"))
+        self.show_background(d)
 
     def save_session(self):
         data = self.collect()
@@ -818,14 +828,23 @@ class CalcPanel(QWidget):
         try:
             while True:
                 s, tag = self.q.get_nowait()
-                if tag == "done":
-                    self.finished(s)
+                if tag in ("done", "step"):
+                    if segs:                       # 先显示此前的输出
+                        self.q_segments(segs)
+                        segs = []
+                    if tag == "done":
+                        self.finished(s)
+                    else:
+                        self.show_step(s)
                 elif segs and segs[-1][1] == tag:
                     segs[-1][0].append(s)
                 else:
                     segs.append(([s], tag))
         except queue.Empty:
             pass
+        self.q_segments(segs)
+
+    def q_segments(self, segs):
         for parts, tag in segs:
             text = "".join(parts)
             if text.count("\n") > core.MAX_OUT_LINES:
@@ -867,23 +886,149 @@ class CalcPanel(QWidget):
         return True
 
     def start(self, jobs):
-        if self.busy:
+        if self.busy and not self.remote:
             QMessageBox.information(self, T("运行中"), T("已有任务在运行，请等待或先停止。"))
             return
         if not jobs or not self.check_dirs():
             return
+        st = grasp_bg.status(self.cur_workdir)
+        if st and st["status"] == "running" and st["remote"] and QMessageBox.question(
+                self, T("运行中"), T("此目录的计算正在 {h} 上运行 (开始于 {t})。仍要在本机开始新的计算吗？",
+                                    h=st.get("host", "?"), t=st.get("start", "?"))) != QMessageBox.Yes:
+            return
         cfg = dict(self.run.values(), cwd=self.cur_workdir)
         self.run.save()
         self.save_session()
-        self.busy = True
-        self.status(T("运行中：{n} 个步骤 …", n=len(jobs)))
-        threading.Thread(target=self.runner.run_all, daemon=True,
-                         args=(jobs, cfg, lambda ok: self.q.put((ok, "done")))).start()
+        self.detach()                      # 不再读取另一台机器上的计算的输出
+        try:
+            proc = grasp_bg.launch(self.cur_workdir, jobs, cfg)
+        except (OSError, RuntimeError) as e:
+            QMessageBox.warning(self, T("运行"), str(e))
+            return
+        threading.Thread(target=proc.wait, daemon=True).start()    # 运行进程结束后回收
+        sock = grasp_bg.connect(self.cur_workdir, timeout=10)
+        if sock is None:
+            QMessageBox.warning(self, T("运行"), T("无法启动后台运行进程"))
+            return
+        self.attach(sock, [j["title"] for j in jobs])
 
-    def finished(self, ok):
+    # ---- 后台运行 (grasp_bg)：计算由独立的运行进程执行，本页只是查看者 ----
+    def attach(self, sock, titles):
+        """连上运行进程：读取它发来的输出 (先补发此前的输出，然后是实时输出)。"""
+        self.client, self.titles, self.busy = sock, titles, True
+        self.status(T("运行中：{n} 个步骤 …", n=len(titles)))
+        threading.Thread(target=self.read_client, args=(sock,), daemon=True).start()
+
+    def read_client(self, sock):
+        done = None
+        try:
+            for line in sock.makefile("rb"):
+                m = json.loads(line)
+                if "s" in m:
+                    self.q.put((m["s"], m.get("tag", "") if m.get("tag", "") in TAG_COLORS else ""))
+                elif "step" in m:
+                    self.q.put((m["step"], "step"))
+                elif "done" in m:
+                    done = m["done"]
+        except (OSError, ValueError):
+            pass
+        if sock is self.client:            # 不是本页主动断开 (detach)
+            self.q.put((done or "lost", "done"))
+
+    def detach(self):
+        """断开与运行进程的连接；计算在后台继续。"""
+        sock, self.client = self.client, None
+        self.remote = None
         self.busy = False
+        if sock:
+            try:
+                sock.close()
+            except OSError:
+                pass
+
+    def stop_run(self):
+        if self.client:
+            try:
+                self.client.sendall(b"stop\n")
+            except OSError:
+                pass
+        elif self.remote:
+            st = grasp_bg.status(self.cur_workdir) or {}
+            QMessageBox.information(self, T("停止"), T("计算在 {h} 上运行 (进程 {p})，只能在那台机器上停止。",
+                                                      h=st.get("host", "?"), p=st.get("pid", "?")))
+
+    def show_step(self, i):
+        if self.busy and 0 <= i < len(self.titles):
+            self.status(T("运行中：第 {i}/{n} 步 {t}", i=i + 1, n=len(self.titles), t=self.titles[i]))
+
+    def finished(self, result):
+        if not self.busy:
+            return
+        self.detach()
+        ok = result == "ok"
+        if result == "lost":
+            self.write("\n" + T("*** 后台运行进程意外结束") + "\n", "err")
         self.status(T("完成") if ok else T("失败 / 已停止 — 详见输出"))
+        grasp_bg.mark_seen(self.cur_workdir)
         self.runFinished.emit(ok)
+
+    def show_background(self, d):
+        """打开目录时：有计算在运行就接上；上次在后台结束的计算 (尚未看过结果) 显示其输出的末尾和结果。"""
+        st = grasp_bg.status(d)
+        if not st:
+            return
+        when = T("开始于 {t}", t=st.get("start", "?"))
+        if st["status"] == "running" and not st["remote"]:
+            sock = grasp_bg.connect(d, timeout=2)
+            if sock:
+                self.out.clear()
+                self.write(T("[接上后台运行的计算，{w}]", w=when) + "\n", "info")
+                self.attach(sock, st.get("titles", []))
+                return
+            st["status"] = "lost"
+        if st["status"] == "running":
+            self.write("\n" + T("[此目录的计算正在 {h} 上运行，{w}；以下输出读自 {f}]", h=st.get("host", "?"), w=when,
+                                 f=grasp_bg.RUN_LOG) + "\n", "info")
+            self.remote = token = object()
+            self.busy = True
+            self.titles = st.get("titles", [])
+            threading.Thread(target=self.tail_remote, args=(d, token), daemon=True).start()
+            return
+        if st.get("seen"):
+            return
+        self.out.clear()
+        self.write(T("[上次在后台运行的计算，{w}，结束于 {e}]", w=when, e=st.get("end", "?")) + "\n", "info")
+        self.write(grasp_bg.log_tail(d))
+        i, titles = st.get("step", 0), st.get("titles", [])
+        title = titles[i] if 0 <= i < len(titles) else "?"
+        self.write("\n" + {"ok": T("*** 后台运行完成"),
+                           "stopped": T("*** 后台运行已停止 (第 {i} 步 {t})", i=i + 1, t=title),
+                           "failed": T("*** 后台运行在第 {i} 步 {t} 出错", i=i + 1, t=title)}.get(
+            st["status"], T("*** 后台运行进程意外结束 (第 {i} 步 {t})", i=i + 1, t=title)) + "\n",
+                   "info" if st["status"] == "ok" else "err")
+        grasp_bg.mark_seen(d)
+        self.runFinished.emit(st["status"] == "ok")
+
+    def tail_remote(self, d, token):
+        """计算在另一台机器上运行 (连不上运行进程)：每 0.2 秒读取 RUN_LOG 新增的部分，直到状态不再是 running。"""
+        path, pos = os.path.join(d, grasp_bg.RUN_LOG), 0
+        dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        while self.remote is token:
+            try:
+                with open(path, "rb") as f:
+                    f.seek(pos)
+                    data = f.read()
+                pos += len(data)
+                if data:
+                    self.q.put((dec.decode(data), ""))
+            except OSError:
+                pass
+            st = grasp_bg.status(d) or {}
+            if st.get("status") != "running":
+                if self.remote is token:
+                    self.q.put((st.get("status", "lost"), "done"))
+                return
+            time.sleep(0.2)
 
     def run_current(self):
         job = self.current_job()
