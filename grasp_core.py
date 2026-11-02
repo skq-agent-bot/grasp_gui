@@ -776,6 +776,16 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。": "The zero-order CSF list {z} and {f} have different symmetry blocks ({a} / {b}): their J and parity blocks must match one to one.",
     "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
     "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
+    "零阶 CSFG 列表必须在每个对称块中至少包含一个 CSFG。": "The zero-order CSFG list must contain at least one CSFG in each symmetry block.",
+    "把零阶空间的 CSFG 排在各块最前面，输出 rcsfg.out 和 icut。两个 .g 文件旁必须有内容相同的同名 .l 文件。": "Move zero-order CSFGs to the beginning of each block, writing rcsfg.out and icut. Both .g files need matching .l files with identical contents.",
+    "零阶空间的 CSFG 列表": "CSFG list of the zero-order space",
+    "完整文件名，包含 .g": "Full file name, including .g",
+    "要划分的 CSFG 列表": "CSFG list to partition",
+    "结果 rcsfg.out 保存为": "Save the result rcsfg.out as",
+    "同时复制标记文件为同名 .l，icut 为同名 .icut；留空则不复制": "Also copy the labelling file to the matching .l and icut to .icut; leave blank to skip copying",
+    "零阶 / 一阶划分：零阶空间以外的 CSFG 按一阶微扰处理": "Zero/first-order partition: CSFGs outside the zero-order space treated as first-order perturbations",
+    "先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面": "First use rcsfgzerofirst_csfg to move the zero-order space to the beginning of each block",
+    "各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个": "ICCUT counts CSFGs in each block of this .g list, not expanded CSFs; at least one per block",
 }
 
 
@@ -1103,6 +1113,31 @@ class RcsfSplit(Step):
 ICCUT = "@ICCUT"
 ICCUT_AWK = "f&&/^ *[*]/{print int(n/3);n=0;next} f&&NF{n++} /^CSF[(]s[)]:/{f=1} END{print int(n/3)}"
 
+# 与 read_csfs 一样按三行记录计数，保留块的 J/宇称，避免把空的耦合行漏掉。
+CSFG_ICCUT_AWK = r"""
+function block() {
+    if (row || n < 1) bad=1
+    count[file,++blk]=n; symmetry[file,blk]=sym; n=0; row=0; sym=""
+}
+FNR==1 {
+    if (file) {block(); blocks[file]=blk; if (!header) bad=1}
+    file++; blk=0; n=0; row=0; active=0; header=0
+}
+/^CSF[(]s[)]:/ {active=1; header=1; next}
+!active {next}
+row==0 && /^ *[*] *$/ {block(); next}
+row==0 && !NF {next}
+{row++; if (row==3) {n++; if (n==1) sym=$NF; row=0}}
+END {
+    block(); blocks[file]=blk
+    if (!header || file!=2 || blocks[1]!=blocks[2]) bad=1
+    for (i=1;i<=blocks[1];i++)
+        if (symmetry[1,i]!=symmetry[2,i] || count[1,i]>count[2,i]) bad=1
+    if (bad) {print "Invalid CSFG ICCUT: check block symmetries and 1 <= zero count <= full count" > "/dev/stderr"; exit 1}
+    for (i=1;i<=blocks[1];i++) print count[1,i]
+}
+"""
+
 
 def zero_first_fields(default_zero):
     # added="2.2.0"：该版本新增的字段，旧版本导出的配置中没有时直接用默认值 (不提示)
@@ -1126,7 +1161,9 @@ def expand_iccut(stdin, cwd, strict=False):
         if not line.startswith(ICCUT + " "):
             out.append(line)
             continue
-        zero, full = line.split()[1:3]
+        parts = shlex.split(line)
+        zero, full = parts[1:3]
+        csfg = len(parts) > 3 and parts[3] == "csfg"
         try:
             zb, fb = csf_blocks(os.path.join(cwd, zero)), csf_blocks(os.path.join(cwd, full))
         except (OSError, StopIteration, IndexError) as e:
@@ -1134,6 +1171,8 @@ def expand_iccut(stdin, cwd, strict=False):
         if [s for _, s in zb] != [s for _, s in fb]:
             raise RuntimeError(T("零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。",
                                  z=zero, f=full, a=" ".join(s for _, s in zb), b=" ".join(s for _, s in fb)))
+        if csfg and (not zb or any(n < 1 for n, _ in zb)):
+            raise RuntimeError(T("零阶 CSFG 列表必须在每个对称块中至少包含一个 CSFG。"))
         for (n, sym), (ncf, _) in zip(zb, fb):
             if n > ncf or (strict and not 1 < n < ncf):
                 raise RuntimeError(T("块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。"
@@ -1587,6 +1626,42 @@ class RcsfgSplit(RcsfSplit):
         return f"{self.prog} {v['state']}"
 
 
+class RcsfgZeroFirst(RcsfZeroFirst):
+    key = name = prog = "rcsfgzerofirst_csfg"
+    fields = [
+        Note("把零阶空间的 CSFG 排在各块最前面，输出 rcsfg.out 和 icut。两个 .g 文件旁必须有内容相同的同名 .l 文件。"),
+        Entry("zero", "零阶空间的 CSFG 列表", "odd2.g", "完整文件名，包含 .g"),
+        Entry("full", "要划分的 CSFG 列表", "odd3.g", "完整文件名，包含 .g"),
+        Entry("saveas", "结果 rcsfg.out 保存为", "odd3.g", "同时复制标记文件为同名 .l，icut 为同名 .icut；留空则不复制"),
+    ]
+
+    def post(self, v):
+        s = v["saveas"].strip()
+        if not s:
+            return []
+        src = os.path.splitext(v["full"].strip())[0] + ".l"
+        base = os.path.splitext(s)[0]
+        acts = [("cp", "rcsfg.out", s), ("cp", "icut", base + ".icut")]
+        if src != base + ".l":
+            acts.append(("cp", src, base + ".l"))
+        return acts
+
+    def title(self, v):
+        s = v["saveas"].strip()
+        return f"{self.prog} -> {s}" if s else self.prog
+
+
+def csfg_zero_first_fields():
+    return [Check("zf", "零阶 / 一阶划分：零阶空间以外的 CSFG 按一阶微扰处理", False,
+                  "先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面", added=True),
+            Entry("zero", "零阶空间的 CSFG 列表", "odd2.g",
+                  "各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个", added=True)]
+
+
+def csfg_iccut(zero, full):
+    return f"{ICCUT} {shlex.quote(zero.strip())} {shlex.quote(full)} csfg"
+
+
 class RAngularCsfg(RAngular):
     key = name = "rangular_csfg"
     prog = "rangular_csfg_mpi"
@@ -1595,10 +1670,12 @@ class RAngularCsfg(RAngular):
         Note("计算角系数 (写在 MPI 临时目录中，rmcdhf_csfg 必须使用相同的 MPI 进程数)。读取 rcsfg.inp、rlabel.inp，"
              "并写出展开的 CSF 列表 rcsf.out。"),
         Entry("csf", "CSFG 列表 (不含扩展名)", "odd2", "复制 name.g / name.l 为 rcsfg.inp / rlabel.inp；留空则用现有文件"),
-    ]
+    ] + csfg_zero_first_fields()
 
     def stdin(self, v):
-        return "y\n"                   # 默认设置 (零阶 / 一阶划分的 CSFG 版本尚未支持)
+        if v.get("zf"):
+            return answers(["n", "n", csfg_iccut(v["zero"], "rcsfg.inp")])
+        return "y\n"
 
     def pre(self, v):
         return csfg_inputs(v["csf"].strip())
@@ -1669,10 +1746,13 @@ class RCiCsfg(RCi):
         Entry("mem", "每个进程的内存上限 (GB，整数)", "8"),
         Text("levels", "各块计算的能级", "1\n1", "每块一行", lines=3),
         Entry("log", "输出日志文件", "outodd_rci"),
-    ]
+    ] + csfg_zero_first_fields()
 
     def stdin(self, v):
-        lines = ["y", v["state"].strip(), yn(v["trans"]), yn(v["modfreq"])]
+        state = v["state"].strip()
+        lines = (["n", state, "n", "n", "y", "n", csfg_iccut(v["zero"], state + ".g")]
+                 if v.get("zf") else ["y", state])
+        lines += [yn(v["trans"]), yn(v["modfreq"])]
         if v["modfreq"]:
             lines.append(v["factor"])
         lines += [yn(v["limn"]), v["maxn"], yn(v["liml"]), v["maxl"]]
@@ -1848,7 +1928,7 @@ class RMixAccumulateCsfg(Step):
 STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RcsfZeroFirst(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
          RCi(), Jj2lsj(), RHfs(), RIs4(), RLevels(), RTableLevels(), RTabTrans1(), RTabTrans2(),
          RBioTransform(), RTransition(), Custom(),
-         RcsfgGenerate(), RcsfgInteract(), RcsfgSplit(), RAngularCsfg(), RWfnEstimateCsfg(), RMcdhfCsfg(), RSaveCsfg(),
+         RcsfgGenerate(), RcsfgInteract(), RcsfgSplit(), RcsfgZeroFirst(), RAngularCsfg(), RWfnEstimateCsfg(), RMcdhfCsfg(), RSaveCsfg(),
          RCiCsfg(), Jj2lsjCsfg(), RLevelsCsfg(), RcsfgExpand(), RcsfgExtend(), RcsfgBlockSplit(),
          RMixAccumulateCsfg(), RCiBlockCsfg(), RDistHMatrixCsfg()]
 
@@ -1865,7 +1945,7 @@ STEP_GROUPS = {
         ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
     ],
     "GRASPG": [
-        ("核与组态", ["rnucleus", "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg"]),
+        ("核与组态", ["rnucleus", "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg", "rcsfgzerofirst_csfg"]),
         ("自洽场与 CI", ["rangular_csfg", "rwfnestimate_csfg", "rmcdhf_csfg", "rsave_csfg", "rci_csfg", "rci_block_csfg"]),
         ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
         ("结果与工具", ["jj2lsj_csfg", "rlevels_csfg", "rtablevels", "rtabtrans1", "rtabtrans2", "custom"]),
@@ -1907,7 +1987,7 @@ def package_of(step_keys):
 GROUPS = ("odd", "even")
 GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci",
                "jj2lsj", "rhfs", "ris4",
-               "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg", "rangular_csfg", "rwfnestimate_csfg",
+               "rcsfggenerate_csfg", "rcsfginteract_csfg", "rcsfgsplit_csfg", "rcsfgzerofirst_csfg", "rangular_csfg", "rwfnestimate_csfg",
                "rmcdhf_csfg", "rsave_csfg", "rci_csfg", "jj2lsj_csfg", "rcsfgexpand_csfg", "rcsfgextend_csfg",
                "rcsfgblocksplit_csfg", "rmixaccumulate_csfg", "rci_block_csfg")
 
@@ -2005,7 +2085,16 @@ def describe(job, mpi_prefix=""):
         cmd = f"{shlex.quote(job['prog'])} {args}".rstrip()
     if job["log"]:
         cmd += f" > {shlex.quote(job['log'])}"
-    if any(ln.startswith(ICCUT + " ") for ln in job["stdin"].split("\n")):
+    csfg_lines = [ln for ln in job["stdin"].split("\n")
+                  if ln.startswith(ICCUT + " ") and shlex.split(ln)[-1] == "csfg"]
+    if csfg_lines:
+        zero, full = shlex.split(csfg_lines[0])[1:3]
+        out.append(f"grasp_iccut=$(awk {shlex.quote(CSFG_ICCUT_AWK)} {shlex.quote(zero)} "
+                   f"{shlex.quote(full)}) || exit 1")
+        lines = ["$grasp_iccut" if ln in csfg_lines else re.sub(r"([\\$`])", r"\\\1", ln)
+                 for ln in job["stdin"].split("\n")]
+        out.append(f"{cmd} <<EOF\n" + "\n".join(lines) + "EOF")
+    elif any(ln.startswith(ICCUT + " ") for ln in job["stdin"].split("\n")):
         # 各块的 ICCUT 在运行时由零阶列表算出：不加引号的 here-document，其余各行转义
         lines = [f"$(awk '{ICCUT_AWK}' {shlex.quote(ln.split()[1])})" if ln.startswith(ICCUT + " ")
                  else re.sub(r"([\\$`])", r"\\\1", ln) for ln in job["stdin"].split("\n")]
