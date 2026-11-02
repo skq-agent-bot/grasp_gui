@@ -376,7 +376,7 @@ def steps_markdown():
             if f.hint:
                 meaning += f" — {both(f.hint)}"
             if getattr(f, "added", False):
-                meaning += " *(2.2.0)*"
+                meaning += f" *({f.added})*"
             default = json.dumps(f.default, ensure_ascii=False)
             out.append(f"| `{f.key}` | {field_type(f)} | `{md_cell(default)}` | {md_cell(meaning)} |")
         out.append("")
