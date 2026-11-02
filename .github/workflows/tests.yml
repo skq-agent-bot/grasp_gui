@@ -1,0 +1,66 @@
+# 每个 PR 和推送到 main 时运行测试 (见 AGENTS.md 第 6 节)。
+#   tests: 不需要 GRASP 的测试，Python 3.10 (旧系统版) 和 3.12，Qt 与打包相同 (6.8 LTS)，界面 offscreen
+#   grasp: 编译 GRASP2018 (缓存)，用它重算几秒钟的手册算例并与参考能量比较
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRASP_REF: 9006157730a82ac839f2b4ff4e938bcba63a539e     # compas/grasp master, 2025-09-21
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Qt runtime libraries
+        run: sudo apt-get update -q && sudo apt-get install -y -q libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 fonts-noto-cjk
+      - run: pip install "pyside6-essentials>=6.8.3,<6.9" pytest
+      - run: python -m pytest tests -ra
+
+  grasp:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: GRASP build cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: grasp-bin
+          key: grasp-${{ env.GRASP_REF }}-ubuntu-24.04
+      - name: GRASP build tools and libraries
+        run: sudo apt-get update -q && sudo apt-get install -y -q gfortran cmake libblas-dev liblapack-dev libopenmpi-dev
+      - name: Build GRASP2018
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone -q https://github.com/compas/grasp.git grasp-src
+          git -C grasp-src checkout -q "$GRASP_REF"
+          cmake -S grasp-src -B grasp-src/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_FLAGS=-fallow-argument-mismatch
+          cmake --build grasp-src/build -j "$(nproc)"
+          cmake --install grasp-src/build
+          mkdir grasp-bin
+          cp "$(dirname "$(find grasp-src -name rmcdhf -type f -perm -u+x | head -1)")"/* grasp-bin/
+      - run: pip install pytest
+      - run: GRASP_REQUIRED=1 GRASP_BINDIR="$PWD/grasp-bin" python -m pytest tests/test_grasp.py -ra

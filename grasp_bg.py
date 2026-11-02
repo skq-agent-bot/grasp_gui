@@ -31,6 +31,7 @@ RUN_REQUEST = ".grasp_gui_run_request.json"
 RUN_STATE = ".grasp_gui_run.json"
 RUN_LOG = ".grasp_gui_run.log"
 HISTORY = 1 << 20              # 界面连上时补发的最近输出 (字节)
+ATTACH_WAIT = 10               # 运行进程开始计算前等待启动它的界面连上的秒数 (与界面的 connect 超时相同)
 RESULTS = ("ok", "failed", "stopped")
 
 
@@ -164,6 +165,7 @@ class Server:
     def __init__(self, workdir, listener, jobs, cfg):
         self.workdir, self.listener, self.jobs, self.cfg = workdir, listener, jobs, cfg
         self.lock = threading.Lock()
+        self.attached = threading.Event()
         self.clients = []
         self.history = []          # [(文本, 标记)]，总长度不超过 HISTORY
         self.size = 0
@@ -224,6 +226,7 @@ class Server:
                     c.close()
                     continue
                 self.clients.append(c)
+            self.attached.set()
             threading.Thread(target=self.read_loop, args=(c,), daemon=True).start()
 
     def read_loop(self, c):
@@ -244,10 +247,18 @@ class Server:
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
                 if line.strip() == b"stop":
-                    self.runner.stop()
+                    self.stop()
+
+    def stop(self):
+        """停止：结束正在运行的程序，不再开始后面的步骤；还在等界面连上时不再等待。"""
+        self.runner.stop()
+        self.attached.set()
 
     def run(self):
         threading.Thread(target=self.accept_loop, daemon=True).start()
+        # 等启动它的界面连上再开始：几毫秒就结束的计算 (如单独运行 rnucleus) 否则在界面连上之前已经退出，
+        # 界面会报告无法启动并且看不到输出。界面没有连上 (如刚启动就被关闭) 时等待后照常计算。
+        self.attached.wait(ATTACH_WAIT)
         result = []
         self.runner.run_all(self.jobs, self.cfg, result.append, started=self.started)
         ok = result[0] if result else False
@@ -281,7 +292,7 @@ def serve(workdir):
     core.set_lang(req.get("lang", "zh"))
     server = Server(workdir, listener, req["jobs"], req["cfg"])
     # SIGTERM / SIGHUP (例如用户用 kill 结束运行进程)：按“停止”处理，结束正在运行的程序
-    signal.signal(signal.SIGTERM, lambda *_: server.runner.stop())
+    signal.signal(signal.SIGTERM, lambda *_: server.stop())
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     server.run()
     return 0
