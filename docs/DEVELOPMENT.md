@@ -251,8 +251,16 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
   KillUserProcesses 为真 (busctl 读取实际生效的值)、用户不在 KillExcludeUsers 中)，都满足时退出对话框提示；解决办法
   (管理员关闭、lingering + `systemd-run --user --scope`、Slurm) 写在 INTERFACE.md。界面不自动用 systemd-run 启动运行进程：
   需要 lingering 才有效，而且多数系统不需要。
+- v2.3.0 之后的修正 (自动测试发现)：几毫秒就结束的计算 (如单独运行 rnucleus) 在界面连上之前运行进程已经退出，界面报告
+  “无法启动后台运行进程”，看不到输出。现在运行进程先等启动它的界面连上 (最多 10 秒) 再开始；停止 / SIGTERM 时不再等待，
+  一步也不执行 (`Runner.run_all` 不再在开始时清除停止标记，能级图页再次计算前自己清除)。
 
 ## 测试方法
+
+自动测试在 `tests/` 中 (`python3 -m pytest tests`，GitHub Actions 对每个 PR 运行)：算例的配置检查和生成脚本的标准结果
+(`tests/golden/`)、导出 / 导入往返、翻译完整、只用标准库的模块不导入 Qt、Python 3.10 语法、后台运行进程、offscreen 界面冒烟测试；
+有 GRASP 时 (`GRASP_BINDIR`) 用 GRASP 重算算例并与参考能量比较。参与开发的规则见根目录的 `AGENTS.md`。
+下表是此前的人工 / 一次性测试：
 
 | 测试 | 内容 |
 |---|---|

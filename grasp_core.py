@@ -1754,10 +1754,10 @@ class Runner:
                 raise RuntimeError(T("{p} 退出码 {rc}", p=a[1][0], rc=rc))
 
     def run_all(self, jobs, cfg, done, started=None):
-        """依次执行 jobs，结束后调用 done(ok)；started(i, job)：开始第 i 步 (从 0 起) 时调用。"""
+        """依次执行 jobs，结束后调用 done(ok)；started(i, job)：开始第 i 步 (从 0 起) 时调用。
+        开始前已调用 stop() 时一步也不执行；再次使用同一个 Runner 时由调用者先把 stopped 设回 False。"""
         # 绝对路径：MPI_TMP 由工作目录拼出，程序又在工作目录中启动，相对路径会被解析两次
         cfg = dict(cfg, cwd=os.path.abspath(cfg["cwd"]))
-        self.stopped = False
         ok = True
         try:
             for i, job in enumerate(jobs):
