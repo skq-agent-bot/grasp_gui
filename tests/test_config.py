@@ -3,6 +3,7 @@
 import glob
 import json
 import os
+import re
 
 import pytest
 
@@ -61,9 +62,13 @@ def test_version_1_is_upgraded():
 
 
 def test_missing_new_fields_take_defaults_silently():
-    """新版本增加的字段 (added=True) 缺少时不产生警告：旧配置照样导入。"""
+    """新版本增加的字段 (added="版本号") 缺少时不产生警告：旧配置照样导入。"""
     added = [(s.key, f.key) for s in core.STEPS for f in s.fields if getattr(f, "added", False)]
-    assert added, "no fields marked added=True"
+    assert added, "no fields marked added"
+    for s in core.STEPS:
+        for f in s.fields:
+            if getattr(f, "added", False):
+                assert re.fullmatch(r"\d+\.\d+\.\d+", str(f.added)), f"{s.key}.{f.key}: added must be a version string"
     for step, key in added:
         vals = config.STEPS[step].defaults()
         vals.pop(key)

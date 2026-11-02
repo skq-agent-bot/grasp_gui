@@ -1105,11 +1105,11 @@ ICCUT_AWK = "f&&/^ *[*]/{print int(n/3);n=0;next} f&&NF{n++} /^CSF[(]s[)]:/{f=1}
 
 
 def zero_first_fields(default_zero):
-    # added=True：2.2.0 新增的字段，旧版本导出的配置中没有时直接用默认值 (不提示)
+    # added="2.2.0"：该版本新增的字段，旧版本导出的配置中没有时直接用默认值 (不提示)
     return [Check("zf", "零阶 / 一阶划分：零阶空间以外的 CSF 按一阶微扰处理", False,
-                  "先用 rcsfzerofirst 把零阶空间的 CSF 排在各块最前面", added=True),
+                  "先用 rcsfzerofirst 把零阶空间的 CSF 排在各块最前面", added="2.2.0"),
             Entry("zero", "  零阶空间的 CSF 列表", default_zero, "各块的 ICCUT 取此列表各块的 CSF 数 (运行时读取)",
-                  added=True)]
+                  added="2.2.0")]
 
 
 def csf_blocks(path):
