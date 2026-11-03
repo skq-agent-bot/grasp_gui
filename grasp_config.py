@@ -20,7 +20,6 @@ GRASP2018 手册算例 (demos/*.json) 也采用这个格式。只用标准库，
 import json
 import os
 import re
-import shutil
 import sys
 
 import grasp_core as core
@@ -201,7 +200,7 @@ def programs(cfg):
 
 def missing_programs(cfg, bindir):
     """配置用到、但在 bin 目录和 PATH 中都找不到的程序。"""
-    return [p for p in programs(cfg) if not os.path.isfile(os.path.join(bindir, p)) and not shutil.which(p)]
+    return [p for p in programs(cfg) if not core.program_path(bindir, p)]
 
 
 def custom_commands(cfg):
@@ -376,7 +375,7 @@ def steps_markdown():
             if f.hint:
                 meaning += f" — {both(f.hint)}"
             if getattr(f, "added", False):
-                meaning += " *(2.2.0)*"
+                meaning += f" *({f.added})*"
             default = json.dumps(f.default, ensure_ascii=False)
             out.append(f"| `{f.key}` | {field_type(f)} | `{md_cell(default)}` | {md_cell(meaning)} |")
         out.append("")

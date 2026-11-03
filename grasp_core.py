@@ -23,6 +23,22 @@ VERSION = "2.3.1"         # 发布时改为发布的版本号 (写入导出的�
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".config", "grasp_gui.json")
 
+# 同一份 GRASP 源码由不同构建方式安装出的名称；不包含输入不同的旧版程序。
+PROGRAM_ALIASES = {"jj2lsj": ["jj2lsj_2025"]}
+
+
+def program_path(bindir, prog):
+    """优先查找原名，再尝试同源程序的替代名；与导出脚本的 PATH 优先级一致。"""
+    for name in [prog] + PROGRAM_ALIASES.get(prog, []):
+        p = os.path.join(bindir, name)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+        p = shutil.which(name)
+        if p:
+            return p
+    return None
+
+
 # 输出窗口只保留最后这么多行（完整输出可写入日志文件），避免大量输出拖慢界面
 MAX_OUT_LINES = 5000
 
@@ -1026,11 +1042,11 @@ ICCUT_AWK = "f&&/^ *[*]/{print int(n/3);n=0;next} f&&NF{n++} /^CSF[(]s[)]:/{f=1}
 
 
 def zero_first_fields(default_zero):
-    # added=True：2.2.0 新增的字段，旧版本导出的配置中没有时直接用默认值 (不提示)
+    # added="2.2.0"：该版本新增的字段，旧版本导出的配置中没有时直接用默认值 (不提示)
     return [Check("zf", "零阶 / 一阶划分：零阶空间以外的 CSF 按一阶微扰处理", False,
-                  "先用 rcsfzerofirst 把零阶空间的 CSF 排在各块最前面", added=True),
+                  "先用 rcsfzerofirst 把零阶空间的 CSF 排在各块最前面", added="2.2.0"),
             Entry("zero", "  零阶空间的 CSF 列表", default_zero, "各块的 ICCUT 取此列表各块的 CSF 数 (运行时读取)",
-                  added=True)]
+                  added="2.2.0")]
 
 
 def csf_blocks(path):
@@ -1524,12 +1540,20 @@ def action_sh(a):
     return cmd
 
 
-def describe(job, mpi_prefix=""):
+def program_fallbacks(pipeline):
+    """只为流程实际调用的程序生成 POSIX shell 替代函数。"""
+    used = {p for job in pipeline for p in [job["prog"]] +
+            [a[1][0] for a in job["pre"] + job["post"] if a[0] == "run"]}
+    return [f'command -v {p} >/dev/null 2>&1 || {p}() {{ {aliases[0]} "$@"; }}'
+            for p, aliases in PROGRAM_ALIASES.items() if p in used]
+
+
+def describe(job, mpi_prefix="", fallback=True):
     """任务的 shell 等价写法，用于预览和导出脚本。
 
     mpi_prefix 非空 (如 "mpirun -np 4") 时，有并行版本的程序写成 "<mpi_prefix> <prog>_mpi"。
     """
-    out = [action_sh(a) for a in job["pre"]]
+    out = (program_fallbacks([job]) if fallback else []) + [action_sh(a) for a in job["pre"]]
     args = " ".join(shlex.quote(x) for x in job["args"])
     if mpi_prefix and job.get("mpi"):
         cmd = f"{mpi_prefix} {job['prog']}_mpi {args}".rstrip()
@@ -1552,14 +1576,14 @@ def describe(job, mpi_prefix=""):
 
 def shell_script(pipeline, bindir, workdir, mpi_prefix="", mpitmp="tmp_mpi"):
     body = ["#!/bin/sh", "set -x", "",
-            f"export PATH={shlex.quote(bindir)}:$PATH",
+            f"export PATH={shlex.quote(bindir)}:$PATH", *program_fallbacks(pipeline),
             f"cd {shlex.quote(workdir)}", ""]
     if mpi_prefix:
         body += [f"export MPI_TMP=\"$PWD\"/{shlex.quote(mpitmp or 'tmp_mpi')}", 'mkdir -p "$MPI_TMP"',
                  "# hwloc's GL plugin makes mpirun hang under WSLg",
                  'export HWLOC_COMPONENTS="${HWLOC_COMPONENTS:--gl}"', ""]
     for i, job in enumerate(pipeline, 1):
-        body += [f"# {i}. {job['title']}", describe(job, mpi_prefix), ""]
+        body += [f"# {i}. {job['title']}", describe(job, mpi_prefix, fallback=False), ""]
     return "\n".join(body)
 
 
@@ -1583,7 +1607,7 @@ def slurm_script(pipeline, s):
               "# to one directory on the server and submit it there with: sbatch <this script>",
               "", "set -e", ""]
     lines += nonblank_lines(s["modules"])
-    lines += [f"export PATH={s['bindir']}:$PATH",
+    lines += [f"export PATH={s['bindir']}:$PATH", *program_fallbacks(pipeline),
               'cd "$SLURM_SUBMIT_DIR"',
               f"export MPI_TMP={s['mpitmp'] or '$SLURM_SUBMIT_DIR/tmp_mpi'}",
               'mkdir -p "$MPI_TMP"',
@@ -1591,7 +1615,7 @@ def slurm_script(pipeline, s):
               'echo "Job $SLURM_JOB_ID on $SLURM_JOB_NODELIST, $SLURM_NTASKS tasks, started $(date)"',
               "set -x", ""]
     for i, job in enumerate(pipeline, 1):
-        lines += [f"# {i}. {job['title']}", describe(job, s["mpirun"]), ""]
+        lines += [f"# {i}. {job['title']}", describe(job, s["mpirun"], fallback=False), ""]
     lines += ["set +x", 'echo "Finished $(date)"', ""]
     return "\n".join(lines)
 
@@ -1666,10 +1690,7 @@ class Runner:
         self.stopped = False
 
     def resolve(self, bindir, prog):
-        p = os.path.join(bindir, prog)
-        if os.path.isfile(p) and os.access(p, os.X_OK):
-            return p
-        p = shutil.which(prog)
+        p = program_path(bindir, prog)
         if not p:
             raise FileNotFoundError(T("找不到程序 {p} (bin 目录: {d})", p=prog, d=bindir))
         return p
@@ -1693,6 +1714,8 @@ class Runner:
         self.proc = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
                                      start_new_session=True)
+        if self.stopped:                # stop() 在程序启动的同时到达 (当时 self.proc 还是 None)
+            self._signal(self.proc, signal.SIGTERM)
         threading.Thread(target=self._feed, args=(self.proc, stdin.encode()), daemon=True).start()
         # 按块读取（而不是逐行），大量输出时显著减少界面刷新次数；
         # 也能显示不以换行结尾的提示

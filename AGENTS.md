@@ -43,6 +43,7 @@ GRASP2018 不随本项目提供。有 GRASP 时用环境变量 `GRASP_BINDIR=/pa
 ## 4. 代码规范
 
 - **跟随周围代码的写法**：命名、注释密度、函数长度与所在文件一致。优先修改已有的函数和结构，不另起一套。
+  测试也一样：字符串用双引号，按 PEP 8 加空格 (`a = b`、`f(x, y)`)，每行一条语句。
 - 注释和文档字符串用**中文**，简洁，说明“为什么”而不是复述代码。提交说明用英文 (见第 8 节)。
 - **界面文字**一律写中文并经过 `T("…")`，同时在 `grasp_core.EN` 中加英文翻译；占位符用 `T("共 {n} 个", n=n)`，不要把
   f-string 传给 `T()`。程序页的字段名、说明、选项同样要有翻译 (有测试检查)。
@@ -55,7 +56,8 @@ GRASP2018 不随本项目提供。有 GRASP 时用环境变量 `GRASP_BINDIR=/pa
 - **旧系统版**：`legacy` 分支用 PySide2 5.15 和一个替身包运行同一份代码。只用 Qt 5.15 和 Qt 6 都有的 API；用到新的
   Qt 类或写法时在 PR 中列出，由负责人补到 legacy 的替身包中。不要修改 `legacy` 分支。
 - **Qt 版本**：打包用 Qt 6.8 LTS (≥ 6.8.3)；不要依赖 6.9 以后才有的功能。
-- **共享配置**：已发布的配置文件必须照样能导入。给程序页加字段时设 `added=True` (缺少时用默认值，不报警告)；
+- **共享配置**：已发布的配置文件必须照样能导入。给程序页加字段时设 `added="<首次包含它的版本>"`
+  (如 `added="3.0.0"`；缺少时用默认值，不报警告，`docs/STEPS.md` 中标注该版本)；
   改变格式要提高 `grasp_config.VERSION` 并在 `upgrade()` 中转换旧版本，并且先在 issue 中讨论。
 - **工作目录中的文件** (`.grasp_gui.json`、`.grasp_gui_run*`) 的格式同样要向前兼容。
 
@@ -85,8 +87,11 @@ GRASP_SLOW=1 GRASP_BINDIR=… python3 -m pytest tests      # 全部算例 (约�
 
 ## 8. Git 与 PR
 
-- 从最新的 `main` 建分支：`agent/<issue 编号>-<简短名称>`。一个 issue 一个分支一个 PR，改动尽量小 (几百行以内)。
-- 开 PR 前 `git fetch && git rebase origin/main`，确保测试通过。PR 按模板填写 (`.github/pull_request_template.md`)。
+- 基础分支是 issue 中指定的分支，没有指定时为 `main` (例如 V3 的任务基于 `v3`)。从它的最新提交建分支：
+  `agent/<issue 编号>-<简短名称>`。一个 issue 一个分支一个 PR，改动尽量小 (几百行以内)。
+- 开 PR 前 `git fetch && git rebase origin/<基础分支>`，确保测试通过。PR 的目标分支选基础分支，按模板填写
+  (`.github/pull_request_template.md`)。分支可以推到仓库本身或自己的 fork；**推送后必须开 PR**，只推送分支不算完成，
+  开 PR 失败时在 issue 中说明。
 - 提交说明用英文：第一行概括改动 (不超过约 70 字符)，空一行，用短横线列出要点。不要提交生成的文件、日志、GRASP 的计算输出、
   `build/`、`dist/`。
 - 不要：推送到 `main`、`legacy`、`v1`、`v3` 等保护分支，强制推送他人的分支，创建标签或 Release，修改 `grasp_core.VERSION`
