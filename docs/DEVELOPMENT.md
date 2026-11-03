@@ -256,6 +256,9 @@ GRASP2018 的图形界面：填写参数后自动生成各程序的交互输入�
   “无法启动后台运行进程”，看不到输出。现在运行进程先等启动它的界面连上 (最多 10 秒) 再开始；停止 / SIGTERM 时不再等待，
   一步也不执行 (`Runner.run_all` 不再在开始时清除停止标记，能级图页再次计算前自己清除)。
 
+GRASP2018 的同一份 jj2lsj 源码由 CMake 安装为 `jj2lsj`，Makefile 安装为 `jj2lsj_2025`：运行和程序缺失检查优先用原名，找不到时用后者。
+导出的 shell / Slurm 脚本在运行时选择名称；不替代输入不同的 `jj2lsj_2024` 或 GRASPG 的 `jj2lsj_csfg`。
+
 ## 测试方法
 
 自动测试在 `tests/` 中 (`python3 -m pytest tests`，GitHub Actions 对每个 PR 运行)：算例的配置检查和生成脚本的标准结果

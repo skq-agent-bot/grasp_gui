@@ -2,6 +2,7 @@
 set -x
 
 export PATH=/opt/grasp/bin:$PATH
+command -v jj2lsj >/dev/null 2>&1 || jj2lsj() { jj2lsj_2025 "$@"; }
 cd .
 
 export MPI_TMP="$PWD"/tmp_mpi
