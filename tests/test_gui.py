@@ -98,3 +98,23 @@ def test_close_while_running_asks(qapp, tmp_path, no_dialogs):
     w.calc.stop_run()
     spin(qapp, lambda: not w.calc.busy)
     assert bg.status(str(tmp_path / "wd"))["status"] == "stopped"
+
+
+@pytest.mark.parametrize("lang", ["zh", "en"])
+def test_csfg_partition_forms(qapp, tmp_path, no_dialogs, lang):
+    """新程序页可在两个态组中编辑，新增选项不影响逐块 CI。"""
+    core.set_lang(lang)
+    w = window(tmp_path)
+    w.calc.set_package("GRASPG")
+    for group in core.GROUPS:
+        w.calc.switch_group(group)
+        for key in ("rcsfgzerofirst_csfg", "rangular_csfg", "rci_csfg"):
+            form = w.calc.nav.by_key[key]
+            w.calc.nav.setCurrentWidget(form)
+            assert form.values()["zero"] == group + "2.g"
+            if "zf" in form.put:
+                form.put["zf"](True)
+                assert "@ICCUT" in form.step.stdin(form.values())
+    assert "zf" not in w.calc.nav.by_key["rci_block_csfg"].put
+    assert w.close()
+    assert no_dialogs == []

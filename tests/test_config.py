@@ -72,7 +72,8 @@ def test_missing_new_fields_take_defaults_silently():
     for step, key in added:
         vals = config.STEPS[step].defaults()
         vals.pop(key)
-        doc = dict(format=config.FORMAT, version=2, jobs=[dict(step=step, group="odd", vals=vals)])
+        doc = dict(format=config.FORMAT, version=2, package=core.package_of([step]),
+                   jobs=[dict(step=step, group="odd", vals=vals)])
         assert config.check(doc)[1] == []
 
 

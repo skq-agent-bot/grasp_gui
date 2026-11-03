@@ -96,7 +96,7 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
 * **Package (程序包)** combo box at the top right: *GRASP2018* (default) or *GRASPG* (V3). It selects which program
   tabs are shown and is saved per working directory; importing a GRASPG configuration switches to it. With GRASPG
   the tabs are:
-  * *Nucleus & CSFs*: `rnucleus`, `rcsfggenerate_csfg`, `rcsfginteract_csfg`, `rcsfgsplit_csfg`
+  * *Nucleus & CSFs*: `rnucleus`, `rcsfggenerate_csfg`, `rcsfginteract_csfg`, `rcsfgsplit_csfg`, `rcsfgzerofirst_csfg`
   * *SCF & CI*: `rangular_csfg`, `rwfnestimate_csfg`, `rmcdhf_csfg`, `rsave_csfg`, `rci_csfg`, `rci_block_csfg`
     (block-by-block CI of one block file such as `oddCI6_odd1`: *Mode* one step / only build and save the H matrix /
     restart from the saved H matrix; *First copy this wave function file to name.w*; the `rci_csfg` options;
@@ -124,7 +124,16 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   on errors; the GUI recognises their error messages (`Stop Error`, `Error!`, `… is not found`, `not exists`,
   `Problems with opening`, `STOP …error…`) and stops the pipeline.
   Choosing GRASPG when the bin directory has no `rcsfggenerate_csfg` shows a warning in the status bar.
-  `rcsfgzerofirst_csfg` can be run from *Custom*.
+  `rcsfgzerofirst_csfg` takes the full `.g` names of the zero-order list and the list to partition; both need
+  same-named `.l` files with identical contents. *Save the result rcsfg.out as (结果 rcsfg.out 保存为)* takes
+  a `.g` file name and also saves the matching `.l` and `.icut`; using the same name as the list to partition
+  overwrites that list (blank leaves the outputs as `rcsfg.out` and `icut`). It supports odd/even.
+  Then enable *Zero/first-order partition (零阶 / 一阶划分)* in `rangular_csfg` / `rci_csfg` and supply the same zero-order `.g`.
+  ICCUT counts CSFG records in that list at run time, not expanded CSFs. Each block must contain at least one
+  zero-order CSFG; block symmetries must match, and counts cannot exceed the full list. The GUI and exported
+  shell scripts check this before starting the angular/CI program. Both diagonal-block questions are answered
+  `n`, as in the author's `script3_ZF`. The option defaults to off; `rci_block_csfg` has no partition option.
+
 * **Forms**: one per program, generated from the field definitions in `grasp_core.py` (description line, fields
   with hints at the right). Inputs follow each program's default-settings question order; they reproduce the inputs
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use
