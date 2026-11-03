@@ -782,10 +782,11 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "完整文件名，包含 .g": "Full file name, including .g",
     "要划分的 CSFG 列表": "CSFG list to partition",
     "结果 rcsfg.out 保存为": "Save the result rcsfg.out as",
-    "同时复制标记文件为同名 .l，icut 为同名 .icut；留空则不复制": "Also copy the labelling file to the matching .l and icut to .icut; leave blank to skip copying",
+    "与要划分的列表同名时覆盖原列表；同时复制同名 .l 和 .icut；留空则不复制": "Overwrites the list to partition if the names match; also copies the matching .l and .icut; leave blank to skip copying",
     "零阶 / 一阶划分：零阶空间以外的 CSFG 按一阶微扰处理": "Zero/first-order partition: CSFGs outside the zero-order space treated as first-order perturbations",
     "先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面": "First use rcsfgzerofirst_csfg to move the zero-order space to the beginning of each block",
     "各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个": "ICCUT counts CSFGs in each block of this .g list, not expanded CSFs; at least one per block",
+    "块 {s}：零阶空间有 {n} 个 CSFG，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFGs, more than the {ncf} of {f}.",
 }
 
 
@@ -1174,6 +1175,9 @@ def expand_iccut(stdin, cwd, strict=False):
         if csfg and (not zb or any(n < 1 for n, _ in zb)):
             raise RuntimeError(T("零阶 CSFG 列表必须在每个对称块中至少包含一个 CSFG。"))
         for (n, sym), (ncf, _) in zip(zb, fb):
+            if csfg and n > ncf:
+                raise RuntimeError(T("块 {s}：零阶空间有 {n} 个 CSFG，比 {f} 的 {ncf} 个还多。",
+                                     s=sym, n=n, f=full, ncf=ncf))
             if n > ncf or (strict and not 1 < n < ncf):
                 raise RuntimeError(T("块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。"
                                      if strict else "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。",
@@ -1632,7 +1636,7 @@ class RcsfgZeroFirst(RcsfZeroFirst):
         Note("把零阶空间的 CSFG 排在各块最前面，输出 rcsfg.out 和 icut。两个 .g 文件旁必须有内容相同的同名 .l 文件。"),
         Entry("zero", "零阶空间的 CSFG 列表", "odd2.g", "完整文件名，包含 .g"),
         Entry("full", "要划分的 CSFG 列表", "odd3.g", "完整文件名，包含 .g"),
-        Entry("saveas", "结果 rcsfg.out 保存为", "odd3.g", "同时复制标记文件为同名 .l，icut 为同名 .icut；留空则不复制"),
+        Entry("saveas", "结果 rcsfg.out 保存为", "odd3.g", "与要划分的列表同名时覆盖原列表；同时复制同名 .l 和 .icut；留空则不复制"),
     ]
 
     def post(self, v):
@@ -1653,9 +1657,9 @@ class RcsfgZeroFirst(RcsfZeroFirst):
 
 def csfg_zero_first_fields():
     return [Check("zf", "零阶 / 一阶划分：零阶空间以外的 CSFG 按一阶微扰处理", False,
-                  "先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面", added=True),
+                  "先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面", added="3.0.0"),
             Entry("zero", "零阶空间的 CSFG 列表", "odd2.g",
-                  "各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个", added=True)]
+                  "各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个", added="3.0.0")]
 
 
 def csfg_iccut(zero, full):

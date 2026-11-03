@@ -81,3 +81,19 @@ def test_missing_list_stops_export(tmp_path):
         core.expand_iccut(job['stdin'], str(tmp_path))
     result = subprocess.run(['sh', '-c', core.describe(job)], cwd=tmp_path, capture_output=True)
     assert result.returncode != 0 and not (tmp_path / 'started').exists()
+
+
+@pytest.mark.parametrize('lang', ['zh', 'en'])
+@pytest.mark.parametrize('csfg', [False, True])
+def test_excess_zero_count_names_the_correct_records(tmp_path, lang, csfg):
+    """CSFG 的报错明确写 CSFG，原有 CSF 提示保持不变。"""
+    core.set_lang(lang)
+    write_list(tmp_path / 'zero.g', [(2, '0+')])
+    write_list(tmp_path / 'full.g', [(1, '0+')])
+    marker = core.csfg_iccut('zero.g', 'full.g') if csfg else '@ICCUT zero.g full.g'
+    with pytest.raises(RuntimeError) as error:
+        core.expand_iccut(marker, str(tmp_path))
+    unit = 'CSFG' if csfg else 'CSF'
+    expected = (f'块 0+：零阶空间有 2 个 {unit}，比 full.g 的 1 个还多。' if lang == 'zh' else
+                f'Block 0+: the zero-order space has 2 {unit}s, more than the 1 of full.g.')
+    assert str(error.value) == expected

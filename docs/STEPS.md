@@ -331,7 +331,7 @@ program `rcsfgzerofirst_csfg`; `group`: "odd" / "even"
 |---|---|---|---|
 | `zero` | string | `"odd2.g"` | 零阶空间的 CSFG 列表 / CSFG list of the zero-order space — 完整文件名，包含 .g / Full file name, including .g |
 | `full` | string | `"odd3.g"` | 要划分的 CSFG 列表 / CSFG list to partition — 完整文件名，包含 .g / Full file name, including .g |
-| `saveas` | string | `"odd3.g"` | 结果 rcsfg.out 保存为 / Save the result rcsfg.out as — 同时复制标记文件为同名 .l，icut 为同名 .icut；留空则不复制 / Also copy the labelling file to the matching .l and icut to .icut; leave blank to skip copying |
+| `saveas` | string | `"odd3.g"` | 结果 rcsfg.out 保存为 / Save the result rcsfg.out as — 与要划分的列表同名时覆盖原列表；同时复制同名 .l 和 .icut；留空则不复制 / Overwrites the list to partition if the names match; also copies the matching .l and .icut; leave blank to skip copying |
 
 ## `rangular_csfg`
 
@@ -342,8 +342,8 @@ program `rangular_csfg_mpi`; MPI `rangular_csfg_mpi_mpi`; `group`: "odd" / "even
 | key | type | default | meaning / 含义 |
 |---|---|---|---|
 | `csf` | string | `"odd2"` | CSFG 列表 (不含扩展名) / CSFG list (without extension) — 复制 name.g / name.l 为 rcsfg.inp / rlabel.inp；留空则用现有文件 / copies name.g / name.l to rcsfg.inp / rlabel.inp; empty = use the existing files |
-| `zf` | bool | `false` | 零阶 / 一阶划分：零阶空间以外的 CSFG 按一阶微扰处理 / Zero/first-order partition: CSFGs outside the zero-order space treated as first-order perturbations — 先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面 / First use rcsfgzerofirst_csfg to move the zero-order space to the beginning of each block *(2.2.0)* |
-| `zero` | string | `"odd2.g"` | 零阶空间的 CSFG 列表 / CSFG list of the zero-order space — 各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个 / ICCUT counts CSFGs in each block of this .g list, not expanded CSFs; at least one per block *(2.2.0)* |
+| `zf` | bool | `false` | 零阶 / 一阶划分：零阶空间以外的 CSFG 按一阶微扰处理 / Zero/first-order partition: CSFGs outside the zero-order space treated as first-order perturbations — 先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面 / First use rcsfgzerofirst_csfg to move the zero-order space to the beginning of each block *(3.0.0)* |
+| `zero` | string | `"odd2.g"` | 零阶空间的 CSFG 列表 / CSFG list of the zero-order space — 各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个 / ICCUT counts CSFGs in each block of this .g list, not expanded CSFs; at least one per block *(3.0.0)* |
 
 ## `rwfnestimate_csfg`
 
@@ -412,8 +412,8 @@ program `rci_csfg_mpi`; MPI `rci_csfg_mpi_mpi`; `group`: "odd" / "even"
 | `mem` | string | `"8"` | 每个进程的内存上限 (GB，整数) / Memory limit per process (GB, integer) |
 | `levels` | text | `"1\n1"` | 各块计算的能级 / Levels per block — 每块一行 / one line per block |
 | `log` | string | `"outodd_rci"` | 输出日志文件 / Output log file |
-| `zf` | bool | `false` | 零阶 / 一阶划分：零阶空间以外的 CSFG 按一阶微扰处理 / Zero/first-order partition: CSFGs outside the zero-order space treated as first-order perturbations — 先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面 / First use rcsfgzerofirst_csfg to move the zero-order space to the beginning of each block *(2.2.0)* |
-| `zero` | string | `"odd2.g"` | 零阶空间的 CSFG 列表 / CSFG list of the zero-order space — 各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个 / ICCUT counts CSFGs in each block of this .g list, not expanded CSFs; at least one per block *(2.2.0)* |
+| `zf` | bool | `false` | 零阶 / 一阶划分：零阶空间以外的 CSFG 按一阶微扰处理 / Zero/first-order partition: CSFGs outside the zero-order space treated as first-order perturbations — 先用 rcsfgzerofirst_csfg 把零阶空间排在各块最前面 / First use rcsfgzerofirst_csfg to move the zero-order space to the beginning of each block *(3.0.0)* |
+| `zero` | string | `"odd2.g"` | 零阶空间的 CSFG 列表 / CSFG list of the zero-order space — 各块 ICCUT 从此 .g 列表统计 CSFG 数，不是展开后的 CSF 数；每块至少一个 / ICCUT counts CSFGs in each block of this .g list, not expanded CSFs; at least one per block *(3.0.0)* |
 
 ## `jj2lsj_csfg`
 

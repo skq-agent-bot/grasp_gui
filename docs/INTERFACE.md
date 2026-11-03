@@ -125,20 +125,15 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   `Problems with opening`, `STOP …error…`) and stops the pipeline.
   Choosing GRASPG when the bin directory has no `rcsfggenerate_csfg` shows a warning in the status bar.
   `rcsfgzerofirst_csfg` takes the full `.g` names of the zero-order list and the list to partition; both need
-  same-named `.l` files with identical contents. *Save the result rcsfg.out as* takes a `.g` file name and also
-  saves the matching `.l` and `.icut` (blank leaves the outputs as `rcsfg.out` and `icut`). It supports odd/even.
-  Then enable *Zero/first-order partition* in `rangular_csfg` / `rci_csfg` and supply the same zero-order `.g`.
+  same-named `.l` files with identical contents. *Save the result rcsfg.out as (结果 rcsfg.out 保存为)* takes
+  a `.g` file name and also saves the matching `.l` and `.icut`; using the same name as the list to partition
+  overwrites that list (blank leaves the outputs as `rcsfg.out` and `icut`). It supports odd/even.
+  Then enable *Zero/first-order partition (零阶 / 一阶划分)* in `rangular_csfg` / `rci_csfg` and supply the same zero-order `.g`.
   ICCUT counts CSFG records in that list at run time, not expanded CSFs. Each block must contain at least one
   zero-order CSFG; block symmetries must match, and counts cannot exceed the full list. The GUI and exported
   shell scripts check this before starting the angular/CI program. Both diagonal-block questions are answered
   `n`, as in the author's `script3_ZF`. The option defaults to off; `rci_block_csfg` has no partition option.
 
-  **GRASPG 零阶 / 一阶划分**：`rcsfgzerofirst_csfg` 输入零阶列表和要划分的列表的完整 `.g` 文件名，旁边必须有内容相同的
-  同名 `.l` 文件。“结果 rcsfg.out 保存为”填写 `.g` 文件名，同时保存同名 `.l` 和 `.icut`；留空则保留 `rcsfg.out` 和 `icut`。
-  支持 odd/even 两组。随后在 `rangular_csfg` / `rci_csfg` 勾选“零阶 / 一阶划分”，填写同一个零阶 `.g` 列表。
-  ICCUT 在运行时统计该列表每块的 CSFG 数（不是展开后的 CSF 数）；每块至少一个，对称块须一一对应，且不能超过完整列表的个数。
-  界面和导出的 shell 脚本均在启动角系数 / CI 程序前检查。两个对角块选项均回答 `n`，与作者的 `script3_ZF` 一致。
-  新选项默认关闭；`rci_block_csfg` 不增加划分选项。
 * **Forms**: one per program, generated from the field definitions in `grasp_core.py` (description line, fields
   with hints at the right). Inputs follow each program's default-settings question order; they reproduce the inputs
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use
