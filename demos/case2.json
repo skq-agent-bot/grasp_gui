@@ -9,12 +9,12 @@
   "en": "Case 2: C IV (Z = 6), one Li-like ion"
  },
  "summary": {
-  "zh": "原脚本对 Z = 6–12 循环；这里只算 Z = 6，采用 z < 7 的首元素分支，现场计算角向数据，不依赖前一个元素。1s²2s 和 1s²2p 的 Dirac-Fock 后，逐层加入到 n = 5 的单、双、三重激发，再做含 Breit 和 QED 的 CI 与 E1 跃迁。规模保持原脚本不变，单进程约 10 分钟。首层直接读 DF.w，等价于原脚本复制到 even2.w / odd2.w。",
-  "en": "The original loops over Z = 6–12; this example runs only Z = 6, taking the z < 7 branch to compute angular data without files from a preceding ion. Dirac-Fock for 1s²2s and 1s²2p, layer-by-layer single, double and triple excitations through n = 5, then CI with Breit and QED and E1 transitions. The original model is retained (about 10 minutes serial). The first layer reads DF.w directly instead of copying it to even2.w / odd2.w."
+  "zh": "原脚本对 Z = 6–12 循环；这里只算 Z = 6，采用 z < 7 的首元素分支，现场计算角向数据，不依赖前一个元素。1s²2s 和 1s²2p 的 Dirac-Fock 后，逐层加入到 n = 5 的单、双、三重激发，再做含 Breit 和 QED 的 CI 与 E1 跃迁。规模保持原脚本不变，单进程约 3–4 分钟。首层直接读 DF.w，等价于原脚本复制到 even2.w / odd2.w。",
+  "en": "The original loops over Z = 6–12; this example runs only Z = 6, taking the z < 7 branch to compute angular data without files from a preceding ion. Dirac-Fock for 1s²2s and 1s²2p, layer-by-layer single, double and triple excitations through n = 5, then CI with Breit and QED and E1 transitions. The original model is retained (about 3–4 minutes serial). The first layer reads DF.w directly instead of copying it to even2.w / odd2.w."
  },
  "runtime": {
-  "zh": "单进程约 10 分钟",
-  "en": "about 10 minutes serial"
+  "zh": "单进程约 3–4 分钟",
+  "en": "about 3–4 minutes serial"
  },
  "jobs": [
   {

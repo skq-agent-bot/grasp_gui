@@ -33,6 +33,7 @@ class Demo:
         self.jobs = []
         self.checks = []            # (job index, manual input file or None)
         self.group = None
+        self.equivalent = None     # 示例声明等价输入规则；返回原因，空字符串表示不等价
 
     def add(self, step, src=None, **vals):
         fields = {f.key for f in STEPS[step].fields if isinstance(f, core.Field)}
@@ -402,11 +403,11 @@ def case2():
              dict(zh="算例 2：C IV (Z = 6)，Li 样序列的单个元素", en="Case 2: C IV (Z = 6), one Li-like ion"),
              dict(zh="原脚本对 Z = 6–12 循环；这里只算 Z = 6，采用 z < 7 的首元素分支，现场计算角向数据，不依赖前一个元素。"
                      "1s²2s 和 1s²2p 的 Dirac-Fock 后，逐层加入到 n = 5 的单、双、三重激发，再做含 Breit 和 QED 的 CI 与 E1 跃迁。"
-                     "规模保持原脚本不变，单进程约 10 分钟。首层直接读 DF.w，等价于原脚本复制到 even2.w / odd2.w。",
+                     "规模保持原脚本不变，单进程约 3–4 分钟。首层直接读 DF.w，等价于原脚本复制到 even2.w / odd2.w。",
                   en="The original loops over Z = 6–12; this example runs only Z = 6, taking the z < 7 branch to compute angular data without files from a preceding ion. "
                      "Dirac-Fock for 1s²2s and 1s²2p, layer-by-layer single, double and triple excitations through n = 5, then CI with Breit and QED and E1 transitions. "
-                     "The original model is retained (about 10 minutes serial). The first layer reads DF.w directly instead of copying it to even2.w / odd2.w."),
-             dict(zh="单进程约 10 分钟", en="about 10 minutes serial"),
+                     "The original model is retained (about 3–4 minutes serial). The first layer reads DF.w directly instead of copying it to even2.w / odd2.w."),
+             dict(zh="单进程约 3–4 分钟", en="about 3–4 minutes serial"),
              "case2/script", ["Z6/even5.cm", "Z6/odd5.cm"])
     d.nucleus("6", "12", "12.0107", src=("sh_nuc_seq", "EOF", 0, dict(z="6", m="12", MM="12.0107")))
     d.csfs([(["1s(2,i)2s(1,i)"], "2s,2p", ("1", "1"), "0"),
@@ -434,6 +435,16 @@ def case2():
     d.group = None
     d.add("rbiotransform", ("sh_even_odd", "S4", 0, {}), ci=True, init="even5", final="odd5")
     d.add("rtransition", ("sh_even_odd", "S4", 1, {}), ci=True, init="even5", final="odd5", kind="E1")
+
+    def equivalent(job, actual, expected):
+        if job["step"] == "rnucleus" and expected == actual + ["n"]:
+            return "rnucleus does not read the final extra n"
+        copies = {"even2.w": "DF.w", "odd2.w": "DF.w"}
+        if job["step"] == "rwfnestimate" and [copies.get(line, line) for line in expected] == actual:
+            return "read the original DF wavefunction instead of its identical copy"
+        return ""
+
+    d.equivalent = equivalent
     return d
 
 
@@ -485,6 +496,14 @@ def case3():
         d.lsj(f"{g}5", src=("sh_rlevels", f"S{i+1}", 0, {}))
     d.group = None
     d.add("rlevels", files="even5.cm odd5.cm", log="energy26")
+
+    def equivalent(job, actual, expected):
+        copies = {"even3.w": "DFeven.w", "odd3.w": "DFodd.w"}
+        if job["step"] == "rwfnestimate" and [copies.get(line, line) for line in expected] == actual:
+            return "read the original DF wavefunction instead of its identical copy"
+        return ""
+
+    d.equivalent = equivalent
     return d
 
 
@@ -554,6 +573,20 @@ def manual_zf():
           nqed="3", levels="\n".join(lv))
     d.checks = [(i, os.path.join(os.path.dirname(os.path.abspath(__file__)), "manual_inputs",
                                f"section141_{i:02}.in")) for i in range(len(d.jobs))]
+
+    def equivalent(job, actual, expected):
+        # 旧手册指定常数；现有表单从同一个 MR 列表读取这些块大小。
+        expanded = [value for line in actual for value in
+                    (["9", "15", "20"] if line.startswith("@ICCUT ") else [line])]
+        if job["step"] in ("rangular", "rci") and actual != expanded and expanded == expected:
+            return "ICCUT read from mr.c: 9, 15, 20 (verified by the real calculation)"
+        if job["step"] == "rcsfzerofirst" and not expected and actual == ["mr.c", "full.c"]:
+            return "current program takes the MR/full lists explicitly; old manual uses mr.exc"
+        if job["step"] == "rwfnestimate" and expected == ["y", "1", "", "*", "2", "*"] and actual == ["y", "1", "mr.w", "*", "2", "*"]:
+            return "read saved mr.w explicitly instead of default rwfn.out"
+        return ""
+
+    d.equivalent = equivalent
     return d
 
 
@@ -636,23 +669,7 @@ def check(d, roots):
                           lambda m: variables[m[1] or m[2]], want)
         got = stdin_of(d.jobs[i])
         actual, expected = norm(got), norm(want)
-        reason = ""
-        if d.id == "manual_zf":
-            # 旧手册指定常数；现有表单从同一个 MR 列表读取这些块大小。
-            expanded = re.sub(r"@ICCUT [^\n]+", "9\n15\n20", got)
-            if got != expanded and norm(expanded) == expected:
-                reason = "ICCUT read from mr.c: 9, 15, 20 (verified by the real calculation)"
-            elif d.jobs[i]["step"] == "rcsfzerofirst" and not expected and actual == ["mr.c", "full.c"]:
-                reason = "current program takes the MR/full lists explicitly; old manual uses mr.exc"
-            elif d.jobs[i]["step"] == "rwfnestimate" and expected == ["y", "1", "", "*", "2", "*"] and actual == ["y", "1", "mr.w", "*", "2", "*"]:
-                reason = "read saved mr.w explicitly instead of default rwfn.out"
-        if d.id in ("case2", "case3") and d.jobs[i]["step"] == "rnucleus" and expected == actual + ["n"]:
-            reason = "rnucleus does not read the final extra n"
-        if d.id in ("case2", "case3") and d.jobs[i]["step"] == "rwfnestimate":
-            copies = {"even2.w": "DF.w", "odd2.w": "DF.w"} if d.id == "case2" else {
-                "even3.w": "DFeven.w", "odd3.w": "DFodd.w"}
-            if expected != actual and [copies.get(line, line) for line in expected] == actual:
-                reason = "read the original DF wavefunction instead of its identical copy"
+        reason = d.equivalent(d.jobs[i], actual, expected) if d.equivalent else ""
         if actual == expected:
             same += 1
         elif reason:
