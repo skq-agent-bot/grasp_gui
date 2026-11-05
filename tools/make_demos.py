@@ -662,10 +662,10 @@ def manual_asfsplit():
     d = example3()
     d.id, d.order = "manual_asfsplit", 17
     d.title = dict(zh="手册 §7.11：Si VIII 按对称块拆分 ASF", en="Manual §7.11: split Si VIII ASFs by symmetry")
-    d.summary = dict(zh="先重算 example3 的 Si VIII，再按手册拆分 2s22p3_2p5_3 的 .c/.m/.cm/.w；各块确认使用同一轨道集。",
-                     en="Recalculate Si VIII from example3, then split 2s22p3_2p5_3 .c/.m/.cm/.w as in §7.11, confirming the common orbital set.")
+    d.summary = dict(zh="先重算 example3 的 Si VIII，再按手册拆分 2s22p3_2p5_3 的 .c/.m/.cm/.w；前提是各块使用同一轨道集。",
+                     en="Recalculate Si VIII from example3, then split 2s22p3_2p5_3 .c/.m/.cm/.w as in §7.11, requiring a common orbital set.")
     src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "manual_inputs", "section711.in")
-    d.add("rasfsplit", src, state="2s22p3_2p5_3", same_orbitals=True)
+    d.add("rasfsplit", src, state="2s22p3_2p5_3")
     return d
 
 

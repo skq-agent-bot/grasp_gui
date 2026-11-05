@@ -30,11 +30,10 @@ def test_tabhfs(files, expected):
     assert step.stdin(dict(step.defaults(), files=files)) == expected
 
 
-@pytest.mark.parametrize("confirm", [False, True])
-def test_asfsplit(confirm):
+def test_asfsplit():
     step = core.RAsfSplit()
-    assert step.stdin(dict(step.defaults(), state="state", same_orbitals=confirm)) == (
-        "state\n" + ("y\n" if confirm else "n\n"))
+    assert step.stdin(dict(step.defaults(), state="state")) == "state\ny\n"
+    assert "same_orbitals" not in step.defaults()
 
 
 @pytest.mark.parametrize("step, vals", [

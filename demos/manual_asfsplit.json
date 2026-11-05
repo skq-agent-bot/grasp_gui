@@ -9,8 +9,8 @@
   "en": "Manual §7.11: split Si VIII ASFs by symmetry"
  },
  "summary": {
-  "zh": "先重算 example3 的 Si VIII，再按手册拆分 2s22p3_2p5_3 的 .c/.m/.cm/.w；各块确认使用同一轨道集。",
-  "en": "Recalculate Si VIII from example3, then split 2s22p3_2p5_3 .c/.m/.cm/.w as in §7.11, confirming the common orbital set."
+  "zh": "先重算 example3 的 Si VIII，再按手册拆分 2s22p3_2p5_3 的 .c/.m/.cm/.w；前提是各块使用同一轨道集。",
+  "en": "Recalculate Si VIII from example3, then split 2s22p3_2p5_3 .c/.m/.cm/.w as in §7.11, requiring a common orbital set."
  },
  "runtime": {
   "zh": "约半分钟",
@@ -212,8 +212,7 @@
   {
    "step": "rasfsplit",
    "vals": {
-    "state": "2s22p3_2p5_3",
-    "same_orbitals": true
+    "state": "2s22p3_2p5_3"
    }
   }
  ],

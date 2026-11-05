@@ -236,12 +236,11 @@ program `rtabhfs`
 
 program `rasfsplit`; `group`: "odd" / "even"
 
-> 按 J 和宇称拆分 name.c、可用的 name.m / name.cm，并复制 name.w，输出 name_even1.* / name_odd1.* 等。各块必须使用同一轨道集；未确认时程序只回答 n 并停止。 / Split name.c and available name.m / name.cm by J and parity, and copy name.w to name_even1.* / name_odd1.* etc. Blocks must share an orbital set; without confirmation the program answers n and stops.
+> 按 J 和宇称拆分 name.c、可用的 name.m / name.cm，并复制 name.w，输出 name_even1.* / name_odd1.* 等。前提：各块必须使用同一轨道集，否则拆出的 .w 没有意义。 / Split name.c and available name.m / name.cm by J and parity, and copy name.w to name_even1.* / name_odd1.* etc. Prerequisite: all blocks must share an orbital set; otherwise the split .w files are meaningless.
 
 | key | type | default | meaning / 含义 |
 |---|---|---|---|
 | `state` | string | `"oddCI6"` | 态名称 / State name *(2.5.0)* |
-| `same_orbitals` | bool | `false` | 确认各块使用同一轨道集 / Confirm all blocks use the same orbital set *(2.5.0)* |
 
 ## `rlevels`
 

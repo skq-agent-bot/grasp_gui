@@ -54,24 +54,6 @@ SLURM_DEFAULTS = dict(job="grasp", partition="", nodes="1", ntasks="32", time="2
 LANG = "zh"
 
 EN = {
-    "按混合系数绝对值提取 CSF。读取 name.c、name.(c)m；输出 rcsf.out 和 name.rmx。": "Extract CSFs by absolute mixing coefficient. Reads name.c and name.(c)m; writes rcsf.out and name.rmx.",
-    "按混合系数平方的累积权重压缩 CSF。读取 name.c、name.(c)m；输出 rcsf.out。": "Condense CSFs by accumulated squared mixing coefficients. Reads name.c and name.(c)m; writes rcsf.out.",
-    "提取方式": "Extraction scope",
-    "各能级分别提取": "Each state separately",
-    "所有能级联合提取": "Across all states",
-    "混合系数绝对值下限": "Minimum absolute mixing coefficient",
-    "按混合系数排序 CSF": "Sort CSFs by mixing coefficient",
-    "保留的累积权重 (0–1)": "Retained accumulated weight (0–1)",
-    "读取 rhfs_lsj 生成的 name.(c)hlsj，输出超精细常数表 hfs.tex。此版本只支持 HFS 数据。": "Reads name.(c)hlsj from rhfs_lsj and writes hfs.tex. This version supports HFS data only.",
-    "超精细常数文件": "Hyperfine constant files",
-    "每行一个，最多 20 个": "One per line, at most 20",
-    "按 J 和宇称拆分 name.c、可用的 name.m / name.cm，并复制 name.w，输出 name_even1.* / name_odd1.* 等。各块必须使用同一轨道集；未确认时程序只回答 n 并停止。": "Split name.c and available name.m / name.cm by J and parity, and copy name.w to name_even1.* / name_odd1.* etc. Blocks must share an orbital set; without confirmation the program answers n and stops.",
-    "确认各块使用同一轨道集": "Confirm all blocks use the same orbital set",
-    "态名称须为 1–80 个英文字母、数字、下划线、点或短横线，且不能以点或短横线开头": "State name must have 1–80 ASCII letters, digits, underscores, dots or hyphens, and start with a letter, digit or underscore",
-    "截断值必须是 0 到 1 之间的数": "Cutoff must be a number between 0 and 1",
-    "提取方式必须为 0 或 1": "Extraction scope must be 0 or 1",
-    "请给出 1–20 个文件名，每个不超过 80 个字符": "Provide 1–20 filenames, each at most 80 characters",
-    "跳过字符数必须是 0–63 的整数": "Characters to skip must be an integer from 0 to 63",
     "修改 NSIC": "Modify NSIC",
     "  NSIC": "  NSIC",
     "非负整数；仅勾选修改 NSIC 时使用": "Non-negative integer; used only when Modify NSIC is checked",
@@ -551,6 +533,35 @@ EN = {
     "能级文件": "Energy files",
     "每行一个，按活跃集从小到大；在 rlevels 页用“输出日志文件”生成":
         "one per line, smallest active set first; write them with the output log file of the rlevels tab",
+    # rmixextract / rmixaccumulate / rtabhfs / rasfsplit
+    "按混合系数绝对值提取 CSF。读取 name.c、name.(c)m；输出 rcsf.out 和 name.rmx。":
+        "Extract CSFs by absolute mixing coefficient. Reads name.c and name.(c)m; writes rcsf.out and "
+        "name.rmx.",
+    "按混合系数平方的累积权重压缩 CSF。读取 name.c、name.(c)m；输出 rcsf.out。":
+        "Condense CSFs by accumulated squared mixing coefficients. Reads name.c and name.(c)m; writes "
+        "rcsf.out.",
+    "提取方式": "Extraction scope",
+    "各能级分别提取": "Each state separately",
+    "所有能级联合提取": "Across all states",
+    "混合系数绝对值下限": "Minimum absolute mixing coefficient",
+    "按混合系数排序 CSF": "Sort CSFs by mixing coefficient",
+    "保留的累积权重 (0–1)": "Retained accumulated weight (0–1)",
+    "读取 rhfs_lsj 生成的 name.(c)hlsj，输出超精细常数表 hfs.tex。此版本只支持 HFS 数据。":
+        "Reads name.(c)hlsj from rhfs_lsj and writes hfs.tex. This version supports HFS data only.",
+    "超精细常数文件": "Hyperfine constant files",
+    "每行一个，最多 20 个": "One per line, at most 20",
+    "态名称须为 1–80 个英文字母、数字、下划线、点或短横线，且不能以点或短横线开头":
+        "State name must have 1–80 ASCII letters, digits, underscores, dots or hyphens, and start with a "
+        "letter, digit or underscore",
+    "截断值必须是 0 到 1 之间的数": "Cutoff must be a number between 0 and 1",
+    "提取方式必须为 0 或 1": "Extraction scope must be 0 or 1",
+    "请给出 1–20 个文件名，每个不超过 80 个字符": "Provide 1–20 filenames, each at most 80 characters",
+    "跳过字符数必须是 0–63 的整数": "Characters to skip must be an integer from 0 to 63",
+    "按 J 和宇称拆分 name.c、可用的 name.m / name.cm，并复制 name.w，输出 name_even1.* / name_odd1.* "
+    "等。前提：各块必须使用同一轨道集，否则拆出的 .w 没有意义。":
+        "Split name.c and available name.m / name.cm by J and parity, and copy name.w to name_even1.* / "
+        "name_odd1.* etc. Prerequisite: all blocks must share an orbital set; otherwise the split .w files "
+        "are meaningless.",
     # rtabtrans1 / rtabtrans2
     "为 rtabtrans2 生成能级标记文件 energylabel.latex / energylabel.ascii。读取各混合系数文件及其 jj2lsj 标记 "
     "(name.lsj.lbl)。":
@@ -1464,9 +1475,8 @@ class RAsfSplit(Step):
     key = name = prog = "rasfsplit"
     fields = [
         Note("按 J 和宇称拆分 name.c、可用的 name.m / name.cm，并复制 name.w，输出 name_even1.* / name_odd1.* 等。"
-             "各块必须使用同一轨道集；未确认时程序只回答 n 并停止。"),
+             "前提：各块必须使用同一轨道集，否则拆出的 .w 没有意义。"),
         Entry("state", "态名称", "oddCI6", added="2.5.0"),
-        Check("same_orbitals", "确认各块使用同一轨道集", False, added="2.5.0"),
     ]
 
     def validate(self, v):
@@ -1474,7 +1484,7 @@ class RAsfSplit(Step):
 
     def stdin(self, v):
         self.validate(v)
-        return answers([v["state"].strip(), yn(v["same_orbitals"])])
+        return answers([v["state"].strip(), "y"])
 
 
 class RLevels(Step):
@@ -1610,7 +1620,8 @@ class Custom(Step):
 
 
 STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RcsfZeroFirst(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
-         RCi(), Jj2lsj(), RHfs(), RIs4(), RMixExtract(), RMixAccumulate(), RTabHfs(), RAsfSplit(), RLevels(), RTableLevels(), RTabTrans1(), RTabTrans2(),
+         RCi(), Jj2lsj(), RHfs(), RIs4(), RMixExtract(), RMixAccumulate(), RTabHfs(), RAsfSplit(), RLevels(),
+         RTableLevels(), RTabTrans1(), RTabTrans2(),
          RBioTransform(), RTransition(), Custom()]
 
 # 界面左侧程序列表的功能分组 (每个程序恰好出现一次)
@@ -1618,7 +1629,8 @@ STEP_GROUPS = [
     ("准备", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst"]),
     ("自洽场与 CI", ["rangular", "rwfnestimate", "rmcdhf", "rsave", "rci"]),
     ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
-    ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "rmixextract", "rmixaccumulate", "rtabhfs", "rasfsplit", "custom"]),
+    ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "rmixextract",
+                  "rmixaccumulate", "rtabhfs", "rasfsplit", "custom"]),
 ]
 assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s in STEPS)
 
@@ -1632,7 +1644,8 @@ assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s 
 # ---------------------------------------------------------------------------
 
 GROUPS = ("odd", "even")
-GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst", "rangular", "rwfnestimate", "rmcdhf", "rsave", "rci", "rmixextract", "rmixaccumulate", "rasfsplit",
+GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst", "rangular", "rwfnestimate", "rmcdhf",
+               "rsave", "rci", "rmixextract", "rmixaccumulate", "rasfsplit",
                "jj2lsj", "rhfs", "ris4")
 
 # even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))

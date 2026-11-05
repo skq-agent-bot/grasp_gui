@@ -116,7 +116,8 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   and can copy it to *Save rcsf.out as (结果 rcsf.out 保存为)*; extraction also writes `name.rmx`.
   *rtabhfs* reads 1–20 `name.(c)hlsj` files (one per line) from rhfs_lsj and writes `hfs.tex`; this source version supports HFS only.
   *rasfsplit* splits `.c` and available `.m`/`.cm` files into `name_evenN.*`/`name_oddN.*` and copies `.w`.
-  *Confirm all blocks use the same orbital set (确认各块使用同一轨道集)* must be checked to run the split; otherwise the program stops.
+  Prerequisite: all blocks must share the same orbital set, otherwise the split `.w` files are meaningless.
+  The form always answers `y` to the common-orbital question; there is no confirmation checkbox.
   The three single-state tools keep separate odd/even parameters; the multi-file HFS table is shared.
 * **Built-in file steps**: save `rcsf.out` as `name.c`, copy a `.c` file to `rcsf.inp` before `rangular`, run
   `rsave` after `rmcdhf` (*rsave afterwards as*), copy `.c/.w` before `rci`.
