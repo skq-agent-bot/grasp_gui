@@ -91,7 +91,7 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   * *SCF & CI (自洽场与 CI)*: `rangular`, `rwfnestimate`, `rmcdhf`, `rsave`, `rci`
   * *Properties & transitions (性质与跃迁)*: `rhfs` (optionally followed by `rhfs_lsj`), `ris4`, `rbiotransform`,
     `rtransition`
-  * *Results & tools (结果与工具)*: `jj2lsj`, `rlevels`, `rtablevels`, `rtabtrans1`, `rtabtrans2`, `rmixextract`, `rmixaccumulate`, `rtabhfs`, `rasfsplit`, *Custom (自定义)*
+  * *Results & tools (结果与工具)*: `jj2lsj`, `Coupling`, `rlevels`, `rtablevels`, `rtabtrans1`, `rtabtrans2`, `rmixextract`, `rmixaccumulate`, `rtabhfs`, `rasfsplit`, *Custom (自定义)*
     (any program with hand-written input)
 * **Forms**: one per program, generated from the field definitions in `grasp_core.py` (description line, fields
   with hints at the right). Inputs follow each program's default-settings question order; they reproduce the inputs
@@ -119,6 +119,14 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   Prerequisite: all blocks must share the same orbital set, otherwise the split `.w` files are meaningless.
   The form always answers `y` to the common-orbital question; there is no confirmation checkbox.
   The three single-state tools keep separate odd/even parameters; the multi-file HFS table is shared.
+* **Other coupling schemes**: `jj2lsj` has *Write files for Coupling (写出 Coupling 需要的文件)*, with an optional
+  `block: levels` selection (empty = all), composition print cutoff and backup of the original LSJ labels.
+  The external *Coupling* program ([compas/coupling](https://github.com/compas/coupling), separately installed) reads
+  `name.lsj.c`/`name.lsj.j` and writes `name.coupN.*.lbl`/`.sum`. Select 1, 2 or 3 coupled shells and the shells to recouple;
+  available label schemes depend on that count. *Use the selected scheme labels afterwards (结束后采用指定方案的标记)*
+  optionally backs up `name.lsj.lbl` and copies the chosen result there, ready for `rlevels`. Parameters are per odd/even group.
+  New examples `example2_coupling` and `example3_coupling` preserve the original examples; the Si VIII example generates
+  partial labels only, without the manual's hand-edited repairs or a full recoupled energy table.
 * **Built-in file steps**: save `rcsf.out` as `name.c`, copy a `.c` file to `rcsf.inp` before `rangular`, run
   `rsave` after `rmcdhf` (*rsave afterwards as*), copy `.c/.w` before `rci`.
 * **State groups odd / even (态组)**: `rcsfgenerate`, `rcsfinteract`, `rcsfsplit`, `rcsfzerofirst`, `rangular`, `rwfnestimate`,

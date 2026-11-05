@@ -54,6 +54,30 @@ SLURM_DEFAULTS = dict(job="grasp", partition="", nodes="1", ntasks="32", time="2
 LANG = "zh"
 
 EN = {
+    "外部程序 https://github.com/compas/coupling。先在 jj2lsj 勾选写出 Coupling 文件；读取 name.lsj.c、name.lsj.j，输出 name.coupN.*.lbl 和 name.coupN.sum。": "External program https://github.com/compas/coupling. First enable Coupling output in jj2lsj. Reads name.lsj.c/name.lsj.j; writes name.coupN.*.lbl and name.coupN.sum.",
+    "写出 Coupling 需要的文件": "Write files for Coupling",
+    "生成 Coupling 文件前备份 LSJ 标记": "Back up LSJ labels before writing Coupling files",
+    "Coupling 输出的成分打印下限": "Composition print cutoff for Coupling output",
+    "Coupling 能级选择": "Coupling level selection",
+    "空 = 全部；否则每行：块号: 能级号，如 2: 1-3": "Empty = all; otherwise block: levels per line, e.g. 2: 1-3",
+    "Coupling 态名称须为不含空格的 ASCII 基名，最多 23 个字符": "Coupling state name must be an ASCII basename without spaces, at most 23 characters",
+    "Coupling 能级选择须为每行块号: 能级号": "Coupling levels must be block: levels per line",
+    "详细输出": "Detailed output",
+    "耦合壳层数": "Number of coupled shells",
+    "三壳层": "Three shells",
+    "两壳层": "Two shells",
+    "单壳层": "One shell",
+    "成分打印下限": "Composition print cutoff",
+    "重耦合轨道": "Shells for recoupling",
+    "逗号分隔，最多 12 个": "Comma-separated, at most 12",
+    "结束后采用指定方案的标记": "Use the selected scheme labels afterwards",
+    "标记方案": "Label scheme",
+    "先备份 name.lsj.lbl 为 name.lsj.lbl_SAVE": "First back up name.lsj.lbl as name.lsj.lbl_SAVE",
+    "耦合壳层数必须为 1、2 或 3": "Number of coupled shells must be 1, 2 or 3",
+    "成分打印下限必须是 0–1 的数": "Composition print cutoff must be a number from 0 to 1",
+    "请给出最多 12 个重耦合轨道，总长不超过 56 个字符": "Provide at most 12 shells for recoupling, at most 56 characters in total",
+    "所选标记方案不适用于该耦合壳层数": "The selected label scheme is not available for this shell count",
+    "外部程序 {p}：请从 {url} 安装": "External program {p}: install from {url}",
     "修改 NSIC": "Modify NSIC",
     "  NSIC": "  NSIC",
     "非负整数；仅勾选修改 NSIC 时使用": "Non-negative integer; used only when Modify NSIC is checked",
@@ -1326,14 +1350,99 @@ class Jj2lsj(Step):
         Entry("state", "态名称", "odd2"),
         Check("ci", "混合系数来自 CI 计算 (.cm)", False, "否则读 .m"),
         Check("unique", "需要唯一标记 (unique labeling)", True),
+        Check("coupling_files", "写出 Coupling 需要的文件", False, added="2.5.0"),
+        Check("coupling_backup", "生成 Coupling 文件前备份 LSJ 标记", False, added="2.5.0", enabled_by="coupling_files"),
+        Entry("coupling_threshold", "Coupling 输出的成分打印下限", "0.001", added="2.5.0", enabled_by="coupling_files"),
+        Text("coupling_levels", "Coupling 能级选择", "", "空 = 全部；否则每行：块号: 能级号，如 2: 1-3", lines=3,
+             added="2.5.0", enabled_by="coupling_files"),
         Entry("log", "输出日志文件", ""),
     ]
 
+    def validate(self, v):
+        if not v.get("coupling_files"):
+            return
+        if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,22}", v["state"].strip()):
+            raise ValueError(T("Coupling 态名称须为不含空格的 ASCII 基名，最多 23 个字符"))
+        value = v.get("coupling_threshold", "0.001").strip()
+        if not re.fullmatch(r"[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eEdD][+-]?[0-9]+)?", value) or not 0 <= float(value.lower().replace("d", "e")) <= 1:
+            raise ValueError(T("成分打印下限必须是 0–1 的数"))
+        for row in nonblank_lines(v.get("coupling_levels", "")):
+            block, sep, levels = row.partition(":")
+            if not sep or not re.fullmatch(r"[1-9][0-9]?", block.strip()) or not re.fullmatch(
+                    r"[1-9][0-9]*(?: *- *[1-9][0-9]*)?(?:[ ,]+[1-9][0-9]*(?: *- *[1-9][0-9]*)?)*", levels.strip()):
+                raise ValueError(T("Coupling 能级选择须为每行块号: 能级号"))
+            if any(int(a) > int(b) for a, b in re.findall(r"([0-9]+) *- *([0-9]+)", levels)):
+                raise ValueError(T("Coupling 能级选择须为每行块号: 能级号"))
+
     def stdin(self, v):
-        return answers([v["state"].strip(), yn(v["ci"]), yn(v["unique"]), "y"])
+        self.validate(v)
+        lines = [v["state"].strip(), yn(v["ci"]), yn(v["unique"])]
+        if not v.get("coupling_files"):
+            return answers(lines + ["y"])
+        rows = nonblank_lines(v.get("coupling_levels", ""))
+        lines += ["n", yn(not rows)]
+        for i, row in enumerate(rows):
+            block, _, levels = row.partition(":")
+            lines += [block.strip(), levels.strip(), yn(i + 1 < len(rows))]
+        # MINCOMP=0 自动写 .lsj.c/.lsj.j；不写、不复用 .lsj.T；Nielson-Koster 标记与默认一致。
+        return answers(lines + ["0", v.get("coupling_threshold", "0.001"), "n", "n", "1"])
 
     def title(self, v):
         return f"jj2lsj {v['state']}"
+
+    def pre(self, v):
+        if v.get("coupling_files") and v.get("coupling_backup"):
+            state = v["state"].strip()
+            return [("cp", state + ".lsj.lbl", state + ".lsj.lbl_SAVE")]
+        return []
+
+
+class Coupling(Step):
+    key = name = prog = "Coupling"
+    source_url = "https://github.com/compas/coupling"
+    SCHEMES = {"1": ("LS", "jj"), "2": ("LS", "JJ", "LK", "JK", "LScjj", "jj"),
+               "3": ("LS", "LS3", "LSJ3", "LK3", "JK3", "cLSJ3", "jj")}
+    fields = [
+        Note("外部程序 https://github.com/compas/coupling。先在 jj2lsj 勾选写出 Coupling 文件；"
+             "读取 name.lsj.c、name.lsj.j，输出 name.coupN.*.lbl 和 name.coupN.sum。"),
+        Entry("state", "态名称", "2s2p_DF", added="2.5.0"),
+        Check("verbose", "详细输出", False, added="2.5.0"),
+        Choice("shells", "耦合壳层数", [("3", "三壳层"), ("2", "两壳层"), ("1", "单壳层")], added="2.5.0"),
+        Entry("threshold", "成分打印下限", "0", added="2.5.0"),
+        Entry("orbitals", "重耦合轨道", "1s,2s,2p", "逗号分隔，最多 12 个", added="2.5.0"),
+        Check("use_label", "结束后采用指定方案的标记", False, added="2.5.0"),
+        Choice("scheme", "标记方案", [(s, s) for s in ("LK3", "JK3", "LS3", "LSJ3", "cLSJ3", "LS", "JJ", "LK", "JK", "LScjj", "jj")],
+               added="2.5.0", enabled_by="use_label"),
+        Check("backup", "先备份 name.lsj.lbl 为 name.lsj.lbl_SAVE", True, added="2.5.0", enabled_by="use_label"),
+    ]
+
+    def validate(self, v):
+        if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,22}", v["state"].strip()):
+            raise ValueError(T("Coupling 态名称须为不含空格的 ASCII 基名，最多 23 个字符"))
+        if v["shells"] not in self.SCHEMES:
+            raise ValueError(T("耦合壳层数必须为 1、2 或 3"))
+        if not re.fullmatch(r"[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eEdD][+-]?[0-9]+)?", v["threshold"].strip()):
+            raise ValueError(T("成分打印下限必须是 0–1 的数"))
+        if not 0 <= float(v["threshold"].lower().replace("d", "e")) <= 1:
+            raise ValueError(T("成分打印下限必须是 0–1 的数"))
+        orbitals = v["orbitals"].strip().split(",")
+        if not 1 <= len(orbitals) <= 12 or len(v["orbitals"].strip()) > 56 or any(
+                not re.fullmatch(r"[1-9][0-9]*[spdfghiklmno]", o.strip()) for o in orbitals):
+            raise ValueError(T("请给出最多 12 个重耦合轨道，总长不超过 56 个字符"))
+        if v["use_label"] and v["scheme"] not in self.SCHEMES[v["shells"]]:
+            raise ValueError(T("所选标记方案不适用于该耦合壳层数"))
+
+    def stdin(self, v):
+        self.validate(v)
+        # 轨道列表只在首次读到非空 CSF 时读入；若没有 CSF，末尾多给的一行不再被读取。
+        return answers([v["state"].strip(), yn(not v["verbose"]), v["shells"], v["threshold"], v["orbitals"].strip()])
+
+    def post(self, v):
+        if not v["use_label"]:
+            return []
+        state = v["state"].strip()
+        out = [("cp", state + ".lsj.lbl", state + ".lsj.lbl_SAVE")] if v["backup"] else []
+        return out + [("cp", f"{state}.coup{v['shells']}.{v['scheme']}.lbl", state + ".lsj.lbl")]
 
 
 class RHfs(Step):
@@ -1620,7 +1729,7 @@ class Custom(Step):
 
 
 STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RcsfZeroFirst(), RAngular(), RWfnEstimate(), RMcdhf(), RSave(),
-         RCi(), Jj2lsj(), RHfs(), RIs4(), RMixExtract(), RMixAccumulate(), RTabHfs(), RAsfSplit(), RLevels(),
+         RCi(), Jj2lsj(), Coupling(), RHfs(), RIs4(), RMixExtract(), RMixAccumulate(), RTabHfs(), RAsfSplit(), RLevels(),
          RTableLevels(), RTabTrans1(), RTabTrans2(),
          RBioTransform(), RTransition(), Custom()]
 
@@ -1629,7 +1738,7 @@ STEP_GROUPS = [
     ("准备", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst"]),
     ("自洽场与 CI", ["rangular", "rwfnestimate", "rmcdhf", "rsave", "rci"]),
     ("性质与跃迁", ["rhfs", "ris4", "rbiotransform", "rtransition"]),
-    ("结果与工具", ["jj2lsj", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "rmixextract",
+    ("结果与工具", ["jj2lsj", "Coupling", "rlevels", "rtablevels", "rtabtrans1", "rtabtrans2", "rmixextract",
                   "rmixaccumulate", "rtabhfs", "rasfsplit", "custom"]),
 ]
 assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s in STEPS)
@@ -1646,7 +1755,7 @@ assert sorted(k for _, keys in STEP_GROUPS for k in keys) == sorted(s.key for s 
 GROUPS = ("odd", "even")
 GROUP_STEPS = ("rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst", "rangular", "rwfnestimate", "rmcdhf",
                "rsave", "rci", "rmixextract", "rmixaccumulate", "rasfsplit",
-               "jj2lsj", "rhfs", "ris4")
+               "jj2lsj", "Coupling", "rhfs", "ris4")
 
 # even 组与 odd 组默认值中物理内容不同的部分 (grasptest/case1 的 2s2p(2))
 EVEN_DEFAULTS = {
