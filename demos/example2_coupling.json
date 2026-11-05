@@ -150,7 +150,7 @@
    "group": "odd"
   },
   {
-   "step": "Coupling",
+   "step": "coupling",
    "vals": {
     "state": "2s2p_DF",
     "verbose": false,

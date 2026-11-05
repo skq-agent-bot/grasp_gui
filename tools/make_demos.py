@@ -707,7 +707,7 @@ def example2_coupling():
     d.group = "odd"
     d.add("jj2lsj", "jj2lsj_input_couplings", state="2s2p_DF", ci=False, unique=False, coupling_files=True,
           coupling_threshold="0.01")
-    d.add("Coupling", "coupling_input", state="2s2p_DF", shells="3", threshold="0", orbitals="1s,2s,2p",
+    d.add("coupling", "coupling_input", state="2s2p_DF", shells="3", threshold="0", orbitals="1s,2s,2p",
           use_label=True, scheme="LK3", backup=True)
     d.group = None
     d.add("rlevels", files="2s2p_DF.m", log="energy_LK3")
@@ -732,7 +732,7 @@ def example3_coupling():
     d.group = "odd"
     d.add("jj2lsj", "jj2lsj_input_coupling", state="2s22p3_2p5_3", ci=True, unique=False, coupling_files=True,
           coupling_levels="1: 1\n2: 1-3\n3: 1", coupling_threshold="0.01", coupling_backup=True)
-    d.add("Coupling", "coupling_input", state="2s22p3_2p5_3", shells="3", threshold="0",
+    d.add("coupling", "coupling_input", state="2s22p3_2p5_3", shells="3", threshold="0",
           orbitals="1s,2s,2p,3s,3p,3d")
 
     def equivalent(job, actual, expected):

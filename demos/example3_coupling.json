@@ -228,7 +228,7 @@
    "group": "odd"
   },
   {
-   "step": "Coupling",
+   "step": "coupling",
    "vals": {
     "state": "2s22p3_2p5_3",
     "verbose": false,

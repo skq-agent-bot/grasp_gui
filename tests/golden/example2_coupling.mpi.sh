@@ -114,7 +114,7 @@ y
 0
 1s,2s,2p
 EOF
-cp 2s2p_DF.lsj.lbl 2s2p_DF.lsj.lbl_SAVE
+cp 2s2p_DF.lsj.lbl 2s2p_DF.lsj.lbl_LSJ
 cp 2s2p_DF.coup3.LK3.lbl 2s2p_DF.lsj.lbl
 
 # 14. rlevels

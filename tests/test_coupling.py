@@ -26,7 +26,7 @@ def test_coupling_input(shells, verbose):
     assert step.post(v) == []
     for scheme in step.SCHEMES[shells]:
         v.update(use_label=True, scheme=scheme, backup=True)
-        assert step.post(v) == [("cp", "state.lsj.lbl", "state.lsj.lbl_SAVE"),
+        assert step.post(v) == [("cp", "state.lsj.lbl", "state.lsj.lbl_LSJ"),
                                 ("cp", f"state.coup{shells}.{scheme}.lbl", "state.lsj.lbl")]
         v["backup"] = False
         assert len(step.post(v)) == 1
@@ -44,3 +44,37 @@ def test_coupling_input(shells, verbose):
 def test_invalid_coupling(step, changes):
     with pytest.raises(ValueError):
         step.stdin(dict(step.defaults(), **changes))
+
+
+def test_coupling_configuration_key():
+    step = core.Coupling()
+    job = step.job(step.defaults())
+    assert job["step"] == "coupling"
+    assert job["prog"] == "Coupling"
+    assert "coupling" in core.GROUP_STEPS
+
+
+def test_both_backups_preserve_complete_and_partial_labels(tmp_path):
+    """模拟部分转换再采用 LK3，验证导出脚本不会覆盖最初的完整标记。"""
+    import subprocess
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    for name, text in [
+        ("jj2lsj", "cat >/dev/null\nprintf 'partial LSJ\\n' > state.lsj.lbl\n"),
+        ("Coupling", "cat >/dev/null\nprintf 'LK3 labels\\n' > state.coup3.LK3.lbl\n"),
+    ]:
+        program = bindir / name
+        program.write_text("#!/bin/sh\n" + text)
+        program.chmod(0o755)
+    (tmp_path / "state.lsj.lbl").write_text("complete LSJ\n")
+    jj = core.Jj2lsj()
+    coupling = core.Coupling()
+    jobs = [jj.job(dict(jj.defaults(), state="state", coupling_files=True, coupling_backup=True)),
+            coupling.job(dict(coupling.defaults(), state="state", use_label=True, backup=True))]
+    script = core.shell_script(jobs, str(bindir), ".")
+    result = subprocess.run(["sh", "-c", script], cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "state.lsj.lbl_SAVE").read_text() == "complete LSJ\n"
+    assert (tmp_path / "state.lsj.lbl_LSJ").read_text() == "partial LSJ\n"
+    assert (tmp_path / "state.lsj.lbl").read_text() == "LK3 labels\n"
