@@ -45,3 +45,21 @@ def test_old_config_and_zero_nsic():
     assert core.RMcdhf().stdin(imported) == core.RMcdhf().stdin(vals)
     imported.update(modify_nsic=True, nsic=" 0 ")
     assert "\ny\n0\nn\nn\n1\n" in core.RMcdhf().stdin(imported)
+
+
+def test_config_calls_validation_hook(monkeypatch):
+    class CheckedStep(core.Step):
+        key = "validation_test"
+        fields = [core.Entry("value", "value", "0")]
+
+        def validate(self, v):
+            if v["value"] != "0":
+                raise ValueError("invalid value")
+
+    monkeypatch.setitem(config.STEPS, CheckedStep.key, CheckedStep())
+    job = dict(step=CheckedStep.key, vals=dict(value=0))
+    doc = dict(format=config.FORMAT, version=config.VERSION, jobs=[job])
+    assert config.check(doc)[1] == []
+    job["vals"]["value"] = 1
+    with pytest.raises(config.ConfigError, match="invalid value"):
+        config.check(doc)

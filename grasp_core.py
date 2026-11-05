@@ -59,7 +59,7 @@ EN = {
     "非负整数；仅勾选修改 NSIC 时使用": "Non-negative integer; used only when Modify NSIC is checked",
     "NSIC 必须是非负整数": "NSIC must be a non-negative integer",
     "第 {i} 步 ({step})：{e}": "Step {i} ({step}): {e}",
-    "首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。": "Extra improvements of the least self-consistent orbitals in the first SCF cycle. Default EOL: (NW-NFIX)/4 serial, 4+(NW-NFIX)/4 MPI, or 0 if any varied orbital is a correlation orbital; AL: 2+(NW-NFIX)/4 (integer division).",
+    "勾选后修改 NSIC；不勾选时用程序的默认值": "Override NSIC when checked; otherwise use the program default",
     # 主窗口
     "GRASP 图形界面": "GRASP GUI",
     "文件": "File",
@@ -357,9 +357,14 @@ EN = {
     "  轨道": "  Orbitals",
     # rmcdhf
     "自洽场计算 (读取 rcsf.inp, rwfn.inp, mcp.*；输出 rwfn.out, rmix.out)。"
-    "每个 J 对称块一行能级号，例如 1,2,3 或 1-3。":
+    "每个 J 对称块一行能级号，例如 1,2,3 或 1-3。"
+    "NSIC 是首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，"
+    "含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。":
         "Self-consistent field calculation (reads rcsf.inp, rwfn.inp, mcp.*; writes rwfn.out, rmix.out). "
-        "One line of level numbers per J block, e.g. 1,2,3 or 1-3.",
+        "One line of level numbers per J block, e.g. 1,2,3 or 1-3. "
+        "NSIC is the number of extra improvements of the least self-consistent orbitals in the first SCF cycle. "
+        "Default EOL: (NW-NFIX)/4 serial, 4+(NW-NFIX)/4 MPI, or 0 if any varied orbital is a correlation orbital; "
+        "AL: 2+(NW-NFIX)/4 (integer division).",
     "各块要优化的能级": "Levels to optimise\nper block",
     "使用内存版本 rmcdhf_mem": "Use the in-memory version rmcdhf_mem",
     "角系数一次读入内存：更快，但更占内存": "angular coefficients kept in memory: faster, but uses more memory",
@@ -895,6 +900,10 @@ class Step:
     def defaults(cls):
         return {f.key: f.default for f in cls.fields if isinstance(f, Field)}
 
+    def validate(self, v):
+        """检查表单参数；不合法时由程序页抛出 ValueError。"""
+        pass
+
     def stdin(self, v):
         return ""
 
@@ -1159,7 +1168,9 @@ class RMcdhf(Step):
     mpi = True
     fields = [
         Note("自洽场计算 (读取 rcsf.inp, rwfn.inp, mcp.*；输出 rwfn.out, rmix.out)。"
-             "每个 J 对称块一行能级号，例如 1,2,3 或 1-3。"),
+             "每个 J 对称块一行能级号，例如 1,2,3 或 1-3。"
+             "NSIC 是首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，"
+             "含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。"),
         Check("mem", "使用内存版本 rmcdhf_mem", False, "角系数一次读入内存：更快，但更占内存"),
         Text("levels", "各块要优化的能级", "1\n1", "每块一行", lines=3),
         Choice("weights", "能级权重", [("5", "标准 (EOL)"), ("1", "等权重"), ("9", "用户指定")]),
@@ -1168,14 +1179,15 @@ class RMcdhf(Step):
         Entry("spec", "谱学轨道 (非关联轨道)", "*", "空 = 无"),
         Entry("nscf", "最大 SCF 迭代次数", "100"),
         Check("modify_nsic", "修改 NSIC", False,
-              "首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。",
+              "勾选后修改 NSIC；不勾选时用程序的默认值",
               added="2.4.0"),
-        Entry("nsic", "  NSIC", "0", "非负整数；仅勾选修改 NSIC 时使用", added="2.4.0"),
+        Entry("nsic", "  NSIC", "0", "非负整数；仅勾选修改 NSIC 时使用", added="2.4.0", enabled_by="modify_nsic"),
         Entry("log", "输出日志文件", "outodd_rmcdhf_initial", "空 = 只显示在窗口"),
         Entry("save", "结束后 rsave 保存为", "odd2", "空 = 不保存"),
     ]
 
     def stdin(self, v):
+        self.validate(v)
         levels = nonblank_lines(v["levels"])
         # 非默认模式先关闭调试输出，并保留光速 / 网格、ACCY 的默认值。
         lines = (["n", "n", "n", "n"] if v.get("modify_nsic") else ["y"]) + levels
@@ -1185,13 +1197,15 @@ class RMcdhf(Step):
                 lines.append(v["uweights"])
         return answers(lines + [v["vary"], v["spec"], v["nscf"]] + self.other_defaults(v))
 
+    def validate(self, v):
+        if v.get("modify_nsic") and not re.fullmatch(r"[0-9]+", str(v.get("nsic", "0")).strip()):
+            raise ValueError(T("NSIC 必须是非负整数"))
+
     def other_defaults(self, v):
         """只修改 NSIC；最后的 1 保留 SCF 的默认正交化顺序。"""
         if not v.get("modify_nsic"):
             return []
         nsic = str(v.get("nsic", "0")).strip()
-        if not re.fullmatch(r"[0-9]+", nsic):
-            raise ValueError(T("NSIC 必须是非负整数"))
         # Modify other defaults；节点阈值、积分、首振荡符号、ODAMP、CDAMP；NSIC；NSOLV、正交化。
         return ["y", "n", "n", "n", "n", "n", "y", nsic, "n", "n", "1"]
 

@@ -123,3 +123,23 @@ def test_nsic_form(qapp, tmp_path, no_dialogs, lang):
     assert no_dialogs[-1][0] == "critical"
     assert "NSIC" in no_dialogs[-1][1][1]
     w.close()
+
+
+@pytest.mark.parametrize("checked", [False, True])
+def test_field_enabled_by(qapp, checked):
+    from calc_panel import StepForm
+
+    class DependentStep(core.Step):
+        key = "dependency_test"
+        # 被控制字段可以放在复选框之前；默认状态和恢复后的状态都要生效。
+        fields = [core.Entry("value", "value", "0", enabled_by="enabled"),
+                  core.Check("enabled", "enabled", checked)]
+
+    form = StepForm(DependentStep(), "")
+    value = form.get["value"].__self__
+    assert value.isEnabled() == checked
+    form.set_values(dict(enabled=not checked))
+    assert value.isEnabled() != checked
+    form.put["enabled"](checked)
+    assert value.isEnabled() == checked
+    form.close()

@@ -106,10 +106,7 @@ class StepForm(QScrollArea):
             elif isinstance(f, core.Check):
                 w = QCheckBox(T(f.label))
                 g.addWidget(w, r, 0, 1, 2)
-                hint = hint_label(f.hint)
-                if step.key == "rmcdhf" and f.key == "modify_nsic":
-                    hint.setWordWrap(True)
-                g.addWidget(hint, r, 2)
+                g.addWidget(hint_label(f.hint), r, 2)
                 self.get[f.key], self.put[f.key] = w.isChecked, w.setChecked
             elif isinstance(f, core.CsfLists):
                 w = CsfListsWidget()
@@ -143,11 +140,13 @@ class StepForm(QScrollArea):
             r += 1
         g.setRowStretch(r, 1)
         self.setWidget(inner)
-        if step.key == "rmcdhf":
-            controls["modify_nsic"].toggled.connect(controls["nsic"].setEnabled)
+        self.enabled_controls = []
+        for f in step.fields:
+            if getattr(f, "enabled_by", None):
+                source, target = controls[f.enabled_by], controls[f.key]
+                source.toggled.connect(target.setEnabled)
+                self.enabled_controls.append((source, target))
         self.set_values(step.defaults())
-        if step.key == "rmcdhf":
-            controls["nsic"].setEnabled(self.get["modify_nsic"]())
 
     def values(self):
         return {k: get() for k, get in self.get.items()}
@@ -157,6 +156,8 @@ class StepForm(QScrollArea):
         for k, val in d.items():
             if k in self.put:
                 self.put[k](core.normalize(fields[k], val))
+        for source, target in self.enabled_controls:
+            target.setEnabled(source.isChecked())
 
     def job(self):
         return self.step.job(self.values())

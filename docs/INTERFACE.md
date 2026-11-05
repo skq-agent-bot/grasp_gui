@@ -98,16 +98,9 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use
   *Custom*). `rcsfgenerate` has several CSF lists (*+ Add list*, *− Delete current list*, *Reference configurations
   (one per line)*). `rmcdhf` can use the in-memory version `rmcdhf_mem` / `rmcdhf_mem_mpi`.
-* **rmcdhf NSIC**: next to *Maximum SCF iterations (最大 SCF 迭代次数)*, *Modify NSIC (修改 NSIC)*
-  enables *NSIC*, the non-negative number of extra improvements of the least self-consistent orbitals in the first
-  SCF cycle. Default EOL: `(NW-NFIX)/4` serial, `4+(NW-NFIX)/4` MPI; either becomes 0 if any varied orbital is a
-  correlation orbital. Default AL: `2+(NW-NFIX)/4` (integer division; NW = number of orbitals, NFIX = fixed orbitals).
-  Checking it uses non-default input while retaining all other settings. Unchecked, the original input is unchanged;
-  older configurations use the unchecked default without warnings.
-  **中文**：勾选“修改 NSIC”后才能编辑数值，表示首轮 SCF 额外改进自洽性最差的轨道数，必须为非负整数。
-  EOL 默认值：串行 `(NW-NFIX)/4`，MPI `4+(NW-NFIX)/4`；含变分关联轨道时均为 0。
-  AL 默认 `2+(NW-NFIX)/4`，使用整数除法；NW 为轨道数，NFIX 为固定轨道数。不勾选时输入保持原样，旧配置默认不勾选。
-  [中文截图](images/zh_rmcdhf_nsic.png) · [English screenshot](images/en_rmcdhf_nsic.png)
+* **rmcdhf NSIC**: *Modify NSIC (修改 NSIC)* enables a non-negative count of extra first-cycle orbital improvements; unchecked uses the program default.
+  EOL defaults: `(NW-NFIX)/4` serial, `4+(NW-NFIX)/4` MPI, or 0 with varied correlation orbitals; AL: `2+(NW-NFIX)/4` (integer division).
+  The page description explains the defaults; older configurations import with this option unchecked and no warning.
 * **Zero/first-order partition (零阶 / 一阶划分)**: `rcsfzerofirst` (*CSF list of the zero-order space*, *CSF list to
   partition*, *Save the result rcsf.out as*) puts the zero-order CSFs at the top of each block. `rangular` and `rci`
   have the check box *Zero/first-order partition: CSFs outside the zero-order space treated as first-order
