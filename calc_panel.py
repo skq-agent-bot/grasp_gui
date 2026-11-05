@@ -95,6 +95,7 @@ class StepForm(QScrollArea):
         g = QGridLayout(inner)
         g.setColumnStretch(1, 1)
         self.get, self.put = {}, {}
+        controls = {}
         r = 0
         for f in step.fields:
             if isinstance(f, core.Note):
@@ -105,7 +106,10 @@ class StepForm(QScrollArea):
             elif isinstance(f, core.Check):
                 w = QCheckBox(T(f.label))
                 g.addWidget(w, r, 0, 1, 2)
-                g.addWidget(hint_label(f.hint), r, 2)
+                hint = hint_label(f.hint)
+                if step.key == "rmcdhf" and f.key == "modify_nsic":
+                    hint.setWordWrap(True)
+                g.addWidget(hint, r, 2)
                 self.get[f.key], self.put[f.key] = w.isChecked, w.setChecked
             elif isinstance(f, core.CsfLists):
                 w = CsfListsWidget()
@@ -134,10 +138,16 @@ class StepForm(QScrollArea):
                 g.addWidget(label, r, 0, Qt.AlignTop if isinstance(f, core.Text) else Qt.AlignVCenter)
                 g.addWidget(w, r, 1)
                 g.addWidget(hint_label(f.hint), r, 2)
+            if isinstance(f, core.Field):
+                controls[f.key] = w
             r += 1
         g.setRowStretch(r, 1)
         self.setWidget(inner)
+        if step.key == "rmcdhf":
+            controls["modify_nsic"].toggled.connect(controls["nsic"].setEnabled)
         self.set_values(step.defaults())
+        if step.key == "rmcdhf":
+            controls["nsic"].setEnabled(self.get["modify_nsic"]())
 
     def values(self):
         return {k: get() for k, get in self.get.items()}

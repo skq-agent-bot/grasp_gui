@@ -54,6 +54,12 @@ SLURM_DEFAULTS = dict(job="grasp", partition="", nodes="1", ntasks="32", time="2
 LANG = "zh"
 
 EN = {
+    "修改 NSIC": "Modify NSIC",
+    "  NSIC": "  NSIC",
+    "非负整数；仅勾选修改 NSIC 时使用": "Non-negative integer; used only when Modify NSIC is checked",
+    "NSIC 必须是非负整数": "NSIC must be a non-negative integer",
+    "第 {i} 步 ({step})：{e}": "Step {i} ({step}): {e}",
+    "首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。": "Extra improvements of the least self-consistent orbitals in the first SCF cycle. Default EOL: (NW-NFIX)/4 serial, 4+(NW-NFIX)/4 MPI, or 0 if any varied orbital is a correlation orbital; AL: 2+(NW-NFIX)/4 (integer division).",
     # 主窗口
     "GRASP 图形界面": "GRASP GUI",
     "文件": "File",
@@ -1161,18 +1167,33 @@ class RMcdhf(Step):
         Entry("vary", "变分轨道", "*", "如 *  或 3*  或 2s,2p*"),
         Entry("spec", "谱学轨道 (非关联轨道)", "*", "空 = 无"),
         Entry("nscf", "最大 SCF 迭代次数", "100"),
+        Check("modify_nsic", "修改 NSIC", False,
+              "首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。",
+              added="2.4.0"),
+        Entry("nsic", "  NSIC", "0", "非负整数；仅勾选修改 NSIC 时使用", added="2.4.0"),
         Entry("log", "输出日志文件", "outodd_rmcdhf_initial", "空 = 只显示在窗口"),
         Entry("save", "结束后 rsave 保存为", "odd2", "空 = 不保存"),
     ]
 
     def stdin(self, v):
         levels = nonblank_lines(v["levels"])
-        lines = ["y"] + levels
+        # 非默认模式先关闭调试输出，并保留光速 / 网格、ACCY 的默认值。
+        lines = (["n", "n", "n", "n"] if v.get("modify_nsic") else ["y"]) + levels
         if count_levels(levels) > 1:        # 只优化一个能级时 rmcdhf 不询问权重
             lines.append(v["weights"])
             if v["weights"] == "9":
                 lines.append(v["uweights"])
-        return answers(lines + [v["vary"], v["spec"], v["nscf"]])
+        return answers(lines + [v["vary"], v["spec"], v["nscf"]] + self.other_defaults(v))
+
+    def other_defaults(self, v):
+        """只修改 NSIC；最后的 1 保留 SCF 的默认正交化顺序。"""
+        if not v.get("modify_nsic"):
+            return []
+        nsic = str(v.get("nsic", "0")).strip()
+        if not re.fullmatch(r"[0-9]+", nsic):
+            raise ValueError(T("NSIC 必须是非负整数"))
+        # Modify other defaults；节点阈值、积分、首振荡符号、ODAMP、CDAMP；NSIC；NSOLV、正交化。
+        return ["y", "n", "n", "n", "n", "n", "y", nsic, "n", "n", "1"]
 
     def program(self, v):
         # MPI 时在此基础上加 _mpi：rmcdhf_mpi / rmcdhf_mem_mpi

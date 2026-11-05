@@ -113,6 +113,8 @@ program `rmcdhf`; MPI `rmcdhf_mpi`; `group`: "odd" / "even"
 | `vary` | string | `"*"` | 变分轨道 / Orbitals to vary — 如 *  或 3*  或 2s,2p* / e.g. *  or 3*  or 2s,2p* |
 | `spec` | string | `"*"` | 谱学轨道 (非关联轨道) / Spectroscopic orbitals — 空 = 无 / empty = none |
 | `nscf` | string | `"100"` | 最大 SCF 迭代次数 / Max SCF cycles |
+| `modify_nsic` | bool | `false` | 修改 NSIC / Modify NSIC — 首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。 / Extra improvements of the least self-consistent orbitals in the first SCF cycle. Default EOL: (NW-NFIX)/4 serial, 4+(NW-NFIX)/4 MPI, or 0 if any varied orbital is a correlation orbital; AL: 2+(NW-NFIX)/4 (integer division). *(2.4.0)* |
+| `nsic` | string | `"0"` | NSIC — 非负整数；仅勾选修改 NSIC 时使用 / Non-negative integer; used only when Modify NSIC is checked *(2.4.0)* |
 | `log` | string | `"outodd_rmcdhf_initial"` | 输出日志文件 / Output log file — 空 = 只显示在窗口 / empty = show in window only |
 | `save` | string | `"odd2"` | 结束后 rsave 保存为 / rsave afterwards as — 空 = 不保存 / empty = do not save |
 
