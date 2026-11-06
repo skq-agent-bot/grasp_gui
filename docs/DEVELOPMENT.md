@@ -282,6 +282,9 @@ v2.3.2 起，GRASP2018 的同一份 jj2lsj 源码由 CMake 安装为 `jj2lsj`，
 自动测试在 `tests/` 中 (`python3 -m pytest tests`，GitHub Actions 对每个 PR 运行)：算例的配置检查和生成脚本的标准结果
 (`tests/golden/`)、导出 / 导入往返、翻译完整、只用标准库的模块不导入 Qt、Python 3.10 语法、后台运行进程、offscreen 界面冒烟测试；
 有 GRASP 时 (`GRASP_BINDIR`) 用 GRASP 重算算例并与参考能量比较。参与开发的规则见根目录的 `AGENTS.md`。
+Coupling 是独立外部程序：`COUPLING_BINDIR=/path/to/coupling/bin GRASP_BINDIR=/path/to/grasp/bin python3 -m pytest tests/test_grasp.py -k coupling`。
+也可通过 PATH 找到 Coupling；缺少时跳过，不受 GRASP_REQUIRED 影响。
+
 下表是此前的人工 / 一次性测试：
 
 | 测试 | 内容 |
