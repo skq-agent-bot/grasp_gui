@@ -44,16 +44,13 @@ def test_hfszeeman_registration_and_fields():
     assert config.session(cfg)["pipeline"][0]["stdin"] == step.stdin(step.defaults())
 
 
-def test_example9_hfszeeman_inputs_unchanged():
+def test_example9_uses_hfszeeman_form():
+    """example9 原来的两个自定义步骤已换成程序页，stdin 与原来的手册输入逐字相同。"""
     cfg, _ = config.load(str(Path(__file__).resolve().parents[1] / "demos/example9.json"))
-    states = []
     step = core.RHfsZeeman95()
-    for job in cfg["jobs"]:
-        v = job["vals"]
-        if job["step"] == "custom" and v["prog"] == "rhfszeeman95":
-            default, state, ci, offdiag = v["stdin"].splitlines()
-            assert default == "y"
-            actual = step.stdin(dict(step.defaults(), state=state, ci=ci == "y", offdiag=offdiag == "y"))
-            assert actual == v["stdin"]
-            states.append(state)
-    assert states == ["even_n3", "odd_n3"]
+    jobs = [job for job in cfg["jobs"] if job["step"] == "rhfszeeman95"]
+    assert [(job["group"], job["vals"]["state"]) for job in jobs] == [("even", "even_n3"), ("odd", "odd_n3")]
+    for job in jobs:
+        state = job["vals"]["state"]
+        assert step.stdin(config.job_values(job)) == f"y\n{state}\ny\ny\n"
+    assert not any(job["step"] == "custom" and job["vals"]["prog"] == "rhfszeeman95" for job in cfg["jobs"])
