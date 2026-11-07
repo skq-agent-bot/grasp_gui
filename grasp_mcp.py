@@ -112,7 +112,7 @@ class Server:
 
     def call(self, name, params):
         if not core.load_config().get("mcp_enabled", False):
-            raise ValueError(T("MCP 已关闭；请由用户运行 grasp_gui mcp --enable 打开"))
+            raise ValueError(T("MCP 已关闭。只能由用户本人打开（GUI 的“设置”菜单，或用户自己在终端运行命令）；请告知用户，不要代为执行。"))
         values = arguments(name, params)
         if "config" in values:
             values["configuration"] = values.pop("config")

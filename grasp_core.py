@@ -810,6 +810,9 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "MCP can read results, create and update plans, and start or stop calculations in the allowed "
         "directory. Clients connect through standard input/output; no port is opened."),
     "MCP 已关闭": "MCP disabled",
+    "MCP 已关闭。只能由用户本人打开（GUI 的“设置”菜单，或用户自己在终端运行命令）；请告知用户，不要代为执行。": (
+        "MCP is disabled. Only the user may enable it (in the GUI Settings menu or in their own terminal). "
+        "Inform the user; do not run commands on their behalf."),
     "MCP 已关闭；请由用户运行 grasp_gui mcp --enable 打开": (
         "MCP is disabled; the user must run grasp_gui mcp --enable to enable it"),
     "MCP 已打开": "MCP enabled",

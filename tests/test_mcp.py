@@ -143,6 +143,23 @@ def test_stdio_protocol_config_and_live_disable(tmp_path, settings):
         client.close()
 
 
+@pytest.mark.parametrize("language,notice", [("zh", "不要代为执行"), ("en", "do not run commands on their behalf")])
+def test_disabled_tool_informs_user_without_enable_command(tmp_path, settings, language, notice):
+    core.save_config(lang=language)
+    client = Client(tmp_path / "allowed", settings, no_qt=True)
+    try:
+        client.initialize()
+        core.save_config(mcp_enabled=False)
+        result = client.call("list_steps")
+        assert result["isError"]
+        text = "\n".join(item["text"] for item in result["content"] if item["type"] == "text")
+        assert "--enable" not in text
+        assert notice in text
+        assert not core.load_config()["mcp_enabled"]
+    finally:
+        client.close()
+
+
 def test_paths_custom_and_revision_conflicts(tmp_path, settings):
     root = tmp_path / "allowed"
     root.mkdir()

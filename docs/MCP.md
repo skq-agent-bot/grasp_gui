@@ -25,6 +25,27 @@ python3 grasp_gui.py mcp --enable
 python3 grasp_gui.py mcp --disable
 ```
 
+## Agent 须知 / Instructions for agents
+
+是否打开 MCP、是否允许自定义命令，均由用户本人决定。Agent 不得：
+
+- 执行 `mcp --enable`，包括通过自己的 shell 工具代为执行；
+- 修改用户设置中的 `mcp_enabled`；
+- 自行给服务或客户端配置添加 `--allow-custom`。
+
+服务关闭或拒绝自定义命令时，应告知用户，由用户自己决定并操作。用户若选择允许自定义命令，
+应自行在客户端的服务启动参数中添加 `--allow-custom`。
+
+Enabling MCP and allowing custom commands are decisions for the user alone. Agents must not:
+
+- Execute `mcp --enable`, including through their own shell tools.
+- Change `mcp_enabled` in the user's settings.
+- Add `--allow-custom` to the service invocation or client configuration themselves.
+
+When the service is disabled or custom commands are refused, inform the user and leave the decision and
+action to them. A user who chooses to allow custom commands adds `--allow-custom` to the server arguments
+in their client configuration themselves.
+
 ## 本机客户端 / Local clients
 
 先打开开关，再用 `--print-config` 生成适合当前安装位置的配置。输出带当前可执行文件的绝对路径
