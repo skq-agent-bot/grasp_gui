@@ -96,10 +96,17 @@ class Coefficients:
             return struct.unpack("<d", b"".join(index.chunks(f, self.rec, self.offset + i * 8, 8)))[0]
 
 
+class Blocks(list):
+    """open_mix / read_mix 的结果：[Block]；partial 为真时文件尚未写完 (只含完整的块)。"""
+    partial = False
+
+
 def open_mix(path, summary=False, workers=None, cancel=None, progress=None, k=index.TOP_K):
-    """只读元数据，系数按需访问；summary 额外准备并缓存前 k 项。"""
+    """只读元数据，系数按需访问；summary 额外准备并缓存前 k 项。
+    尚未写完的文件只取完整的块，并把结果的 partial 设为真；文件头不完整时抛出 ValueError。"""
     data = (index.prepare_mix(path, k, workers, cancel, progress) if summary else index.mix_index(path, cancel))
-    blocks = []
+    blocks = Blocks()
+    blocks.partial = bool(data.get("partial"))
     for meta in data["blocks"]:
         b = Block(meta["nb"], meta["ncf"], meta["twoj1"], meta["parity"])
         for i in range(meta["nev"]):

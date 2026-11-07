@@ -292,3 +292,22 @@ def test_parallel_threshold_boundary(tmp_path, monkeypatch, ncf, expected_pools)
     assert len(started) == expected_pools
     assert result[0].levels[0].top_components(500) == old.read_mix(path)[0].levels[0].components()[:500]
     assert not multiprocessing.active_children()
+
+
+def test_partially_written_mixing_file(tmp_path):
+    """程序正在逐块写出的文件：只取完整的块并标记 partial；文件头不完整时报错。"""
+    ncf, nev = 5, 2
+    block = [record(struct.pack("<5i", 1, ncf, nev, 2, -1)), record(struct.pack(f"<{nev}i", 1, 2)),
+             record(struct.pack(f"<{nev + 1}d", -7.4, 0.0, 0.001)), record(struct.pack(f"<{ncf * nev}d", *[0.5] * 10))]
+    head = [record(b"G92MIX"), record(struct.pack("<6i", 3, 2 * ncf, 2, 2 * nev, ncf * nev, 2))]
+    second = b"".join(block)
+    path = tmp_path / "state.cm"
+    path.write_bytes(b"".join(head + block) + second[:len(second) - 20])
+    for blocks in (mix.open_mix(path), mix.open_mix(path, summary=True, workers=1), mix.read_mix(path)):
+        assert blocks.partial and len(blocks) == 1 and len(blocks[0].levels) == nev
+    path.write_bytes(b"".join(head + block) + second)
+    blocks = mix.open_mix(path)
+    assert not blocks.partial and len(blocks) == 2
+    path.write_bytes(head[0] + head[1][:10])
+    with pytest.raises(ValueError):
+        mix.open_mix(path)

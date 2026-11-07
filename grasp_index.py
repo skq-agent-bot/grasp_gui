@@ -256,9 +256,12 @@ def mix_index(path, cancel=None):
             counts = struct.unpack("<6i", body(f, header, 24))
             if min(counts) < 0:
                 raise ValueError("invalid mixing file header")
-            blocks = []
-            for _ in range(counts[5]):
-                checkpoint(cancel)
+        except StopIteration:
+            raise ValueError("truncated mixing coefficient file") from None
+        blocks, partial = [], False
+        for _ in range(counts[5]):
+            checkpoint(cancel)
+            try:
                 r = next(recs)
                 nb, ncf, nev, twoj1, parity = struct.unpack("<5i", body(f, r, 20))
                 if ncf < 0 or nev < 0 or twoj1 < 1 or parity not in (-1, 1):
@@ -272,12 +275,14 @@ def mix_index(path, cancel=None):
                     e = struct.unpack(f"<{nev + 1}d", body(f, energies, 8 * (nev + 1)))
                     block["energies"] = [e[0] + x for x in e[1:]]
                     block["records"] += [ids, energies, coeffs]
-                blocks.append(block)
-                # 读记录正文会移动文件位置；恢复到当前块的结尾再跳下一块。
-                f.seek(block["records"][-1]["end"])
-        except StopIteration:
-            raise ValueError("truncated mixing coefficient file") from None
-    data = dict(header=counts, records=[tag, header], blocks=blocks, stamp=saved, top_k=0)
+            except (StopIteration, ValueError, struct.error):
+                # 文件尚未写完 (程序正在逐块写出)：只取完整的块。缓存按大小和修改时间核对，文件写完后会重建。
+                partial = True
+                break
+            blocks.append(block)
+            # 读记录正文会移动文件位置；恢复到当前块的结尾再跳下一块。
+            f.seek(block["records"][-1]["end"])
+    data = dict(header=counts, records=[tag, header], blocks=blocks, stamp=saved, top_k=0, partial=partial)
     save_cache(saved, "mix", data)
     return data
 
