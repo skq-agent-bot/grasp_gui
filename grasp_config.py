@@ -30,6 +30,8 @@ VERSION = 2                    # 1：GUI 1.3 / 2.0 的示例格式 (demo_format 
 PACKAGES = ("GRASP2018",)
 MAX_FILE = 1 << 20             # 附带文件：每个最多 1 MB，合计最多 MAX_FILES_TOTAL
 MAX_FILES_TOTAL = 4 << 20
+MAX_CONFIG = MAX_FILES_TOTAL * 8    # 给附带文本的 JSON 转义和流程参数留出空间
+MAX_CLIPBOARD = MAX_FILES_TOTAL     # 大文本可改存文件，避免阻塞桌面剪贴板
 DEMO_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "demos")
 
 STEPS = {s.key: s for s in core.STEPS}
@@ -126,14 +128,33 @@ def valid_file_name(name):
             and "\\" not in name and "\0" not in name)
 
 
-def load(path):
-    """读取并检查配置文件：返回 (配置, 警告列表)；出错时抛出 ConfigError。"""
+def loads(content):
+    """读取配置文本；文件与剪贴板共用检查，接受单个 Markdown 代码块。"""
+    if not isinstance(content, str):
+        raise ConfigError(T("不是 GRASP GUI 的配置文件"))
+    if len(content.encode("utf-8")) > MAX_CONFIG:
+        raise ConfigError(T("配置文本太大 (最多 {n} MB)", n=MAX_CONFIG >> 20))
+    content = content.strip()
+    match = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```", content, re.S | re.I)
+    if match:
+        content = match.group(1).strip()
     try:
-        with open(path, encoding="utf-8") as f:
-            doc = json.load(f)
-    except (OSError, UnicodeDecodeError, ValueError) as e:
-        raise ConfigError(T("无法读取 {p}：{e}", p=os.path.basename(path), e=e))
+        doc = json.loads(content)
+    except (ValueError, RecursionError) as e:
+        raise ConfigError(T("配置文本不是有效的 JSON：{e}", e=e)) from e
     return check(doc)
+
+
+def load(path):
+    """读取并检查配置文件；与文本导入共用大小限制和格式检查。"""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(MAX_CONFIG + 1)
+        if len(raw) > MAX_CONFIG:
+            raise ConfigError(T("配置文本太大 (最多 {n} MB)", n=MAX_CONFIG >> 20))
+        return loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as e:
+        raise ConfigError(T("无法读取 {p}：{e}", p=os.path.basename(path), e=e)) from e
 
 
 def list_demos(path=DEMO_DIR):
@@ -302,10 +323,18 @@ def portability(cfg):
     return notes
 
 
+def dumps(cfg):
+    """文件与剪贴板采用完全相同的 JSON 排版和末尾换行。"""
+    content = json.dumps(cfg, ensure_ascii=False, indent=1) + "\n"
+    if len(content.encode("utf-8")) > MAX_CONFIG:
+        raise ConfigError(T("配置文本太大 (最多 {n} MB)", n=MAX_CONFIG >> 20))
+    return content
+
+
 def save(cfg, path):
+    content = dumps(cfg)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=1)
-        f.write("\n")
+        f.write(content)
 
 
 # ---------------------------------------------------------------------------
