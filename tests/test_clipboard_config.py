@@ -54,3 +54,25 @@ def test_rejected_save_keeps_existing_file(tmp_path, monkeypatch):
     with pytest.raises(config.ConfigError):
         config.save(document(), path)
     assert path.read_text() == "keep this file"
+
+
+
+@pytest.mark.parametrize("content", ["{}", "[]", "not JSON", json.dumps({"format": "other"})])
+def test_file_and_clipboard_report_same_format_error(tmp_path, content):
+    path = tmp_path / "invalid.json"
+    path.write_text(content)
+    with pytest.raises(config.ConfigError) as clipboard:
+        config.loads(content)
+    with pytest.raises(config.ConfigError) as file:
+        config.load(path)
+    assert str(file.value) == str(clipboard.value)
+
+
+def test_file_read_errors_keep_filename(tmp_path):
+    missing = tmp_path / "missing.json"
+    with pytest.raises(config.ConfigError, match="无法读取 missing.json"):
+        config.load(missing)
+    invalid = tmp_path / "invalid-utf8.json"
+    invalid.write_bytes(b"\xff")
+    with pytest.raises(config.ConfigError, match="无法读取 invalid-utf8.json"):
+        config.load(invalid)

@@ -445,7 +445,9 @@ class ConfigDialog(QDialog):
         self.info.setHtml("".join(html))
         if not self.dir_edited and not self.update.isChecked():
             if e.get("clipboard"):
-                self.dir.setText(free_dir(os.path.join(CALC_ROOT, "clipboard")))
+                name = str(d.get("id") or grasp_config.text(d, "title") or "clipboard")
+                stem = re.sub(r"[^\w.-]+", "_", name).strip("._") or "clipboard"
+                self.dir.setText(free_dir(os.path.join(CALC_ROOT, stem)))
             elif e["path"] is None:
                 self.dir.setText(free_dir(os.path.join(DEMO_ROOT, d.get("id") or "demo")))
             else:
@@ -552,13 +554,19 @@ class UpdateDialog(QDialog):
         self.accept()
 
 
+def file_size(size):
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.1f} {unit}"
+        size /= 1024
+
+
 class ClearDialog(QDialog):
     """永久删除前列出候选和保留项；全部删除需要再次输入目录名。"""
 
-    def __init__(self, parent, workdir, inputs, allow_untracked=False, protected_inputs=()):
+    def __init__(self, parent, workdir, allow_untracked=False):
         super().__init__(parent)
-        self.workdir, self.inputs, self.allow_untracked = workdir, inputs, allow_untracked
-        self.protected_inputs = protected_inputs
+        self.workdir, self.allow_untracked = workdir, allow_untracked
         self.setWindowTitle(T("清空工作目录"))
         self.resize(850, 680)
         lay = QVBoxLayout(self)
@@ -577,6 +585,13 @@ class ClearDialog(QDialog):
         split.addWidget(self.files)
         split.addWidget(self.kept)
         lay.addWidget(QLabel(T("左侧：可删除项目（可取消勾选）；右侧：保留项目")))
+        selection = QHBoxLayout()
+        self.select_all = button("全选", lambda: self.select_files(True))
+        self.select_none = button("全不选", lambda: self.select_files(False))
+        selection.addWidget(self.select_all)
+        selection.addWidget(self.select_none)
+        selection.addStretch()
+        lay.addLayout(selection)
         lay.addWidget(split, 1)
         self.total = QLabel()
         lay.addWidget(self.total)
@@ -596,8 +611,7 @@ class ClearDialog(QDialog):
 
     def refresh(self):
         try:
-            self.plan = workdir_ops.prepare_clear(self.workdir, self.all_files.isChecked(), self.inputs,
-                                                 self.allow_untracked, self.protected_inputs)
+            self.plan = workdir_ops.prepare_clear(self.workdir, self.all_files.isChecked(), self.allow_untracked)
         except (OSError, ValueError) as e:
             self.plan = None
             QMessageBox.warning(self, T("清空工作目录"), str(e))
@@ -608,7 +622,7 @@ class ClearDialog(QDialog):
         self.files.blockSignals(True)
         self.files.clear()
         for item in self.plan["entries"]:
-            row = QListWidgetItem(f"{item['name']} — {item['count']} / {item['size']} B")
+            row = QListWidgetItem(f"{item['name']} — {item['count']} / {file_size(item['size'])}")
             row.setData(Qt.UserRole, item)
             row.setFlags(row.flags() | Qt.ItemIsUserCheckable)
             row.setCheckState(Qt.Checked if item["checked"] else Qt.Unchecked)
@@ -617,6 +631,13 @@ class ClearDialog(QDialog):
         self.kept.clear()
         self.kept.addItems([item["name"] for item in self.plan["kept"]])
         self.confirmation.setEnabled(self.all_files.isChecked())
+        self.count_changed()
+
+    def select_files(self, selected):
+        self.files.blockSignals(True)
+        for i in range(self.files.count()):
+            self.files.item(i).setCheckState(Qt.Checked if selected else Qt.Unchecked)
+        self.files.blockSignals(False)
         self.count_changed()
 
     def selected_names(self):
@@ -630,7 +651,7 @@ class ClearDialog(QDialog):
         selected = self.selected_names()
         count = sum(item["count"] for item in self.plan["entries"] if item["name"] in selected)
         size = sum(item["size"] for item in self.plan["entries"] if item["name"] in selected)
-        self.total.setText(T("将删除 {n} 项，共 {size} 字节", n=count, size=size))
+        self.total.setText(T("将删除 {n} 项，共 {size}", n=count, size=file_size(size)))
         confirmed = self.confirmation.text() == os.path.basename(self.plan["root"])
         self.ok.setEnabled(bool(selected) and (not self.all_files.isChecked() or confirmed))
 
@@ -822,8 +843,6 @@ class CalcPanel(QWidget):
         self.titles = []               # 正在运行的各步标题
         self.remote = None             # 本目录的计算在另一台机器上运行时：读取其 RUN_LOG 的线程的标记
         self.pipeline = []
-        self.known_inputs = {}
-        self.updated_inputs = {}
         self.session_cleared = False
         self.busy = False
         self.group = core.GROUPS[0]
@@ -1546,7 +1565,6 @@ class CalcPanel(QWidget):
         except OSError as e:
             QMessageBox.warning(self, T("导入配置"), str(e))
             return
-        self.known_inputs[os.path.realpath(path)] = {item["name"] for item in cfg.get("files", [])}
         self.session_cleared = False
         if path == self.cur_workdir:
             self.open_workdir(path)
@@ -1566,8 +1584,6 @@ class CalcPanel(QWidget):
             return
         self.session_cleared = False
         self.apply(data)
-        root = os.path.realpath(self.cur_workdir)
-        self.updated_inputs.setdefault(root, set()).update(item["name"] for item in cfg.get("files", []))
         first = 0 if dlg.overwrite() else plan["first"]
         if first is not None:
             self.plist.setCurrentRow(first)
@@ -1584,7 +1600,7 @@ class CalcPanel(QWidget):
 
     def restore_workdir(self):
         if QMessageBox.question(self, T("恢复上一次的工作目录记录"),
-                               T("只恢复流程和参数，计算结果与附带文件不变。确定恢复吗？")) != QMessageBox.Yes:
+                               T("只恢复流程和参数，计算结果与附带文件不变。当前记录也会备份；连续恢复两次会回到恢复前的状态。确定恢复吗？")) != QMessageBox.Yes:
             return
         try:
             data = workdir_ops.restore(self.cur_workdir)
@@ -1604,8 +1620,7 @@ class CalcPanel(QWidget):
             if not tracked and QMessageBox.question(self, T("清空工作目录"),
                     T("此目录没有工作目录记录。仍要查看并选择待删除内容吗？")) != QMessageBox.Yes:
                 return
-            dlg = ClearDialog(self, root, self.known_inputs.get(root), not tracked,
-                              self.updated_inputs.get(root, set()))
+            dlg = ClearDialog(self, root, not tracked)
             if dlg.plan is None:
                 return
             if dlg.exec() != QDialog.Accepted:
@@ -1622,8 +1637,6 @@ class CalcPanel(QWidget):
         if not os.path.exists(os.path.join(root, core.SESSION_FILE)):
             self.apply(dict(pipeline=[], steps={s.key: s.defaults() for s in core.STEPS}, groups={}))
             self.session_cleared = True
-            self.known_inputs.pop(root, None)
-            self.updated_inputs.pop(root, None)
         self.filesChanged.emit()
 
     def export_config(self, clipboard=False):

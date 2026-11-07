@@ -42,7 +42,7 @@ def _record(workdir):
 
 
 def _read_plain(path):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as f:
         if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
             raise ValueError(T("工作目录记录的格式有误"))
@@ -213,6 +213,12 @@ def prepare_update(workdir, cfg, current=None):
     # 补齐未在新流程中出现的表单，避免界面保留上个方案的隐含参数。
     new["steps"] = {s.key: dict(s.defaults(), **new["steps"].get(s.key, {})) for s in core.STEPS
                     if s.key not in core.GROUP_STEPS}
+    manifest = Path(workdir) / config.INPUTS_FILE
+    try:
+        inputs_raw = _read_plain(manifest)
+    except FileNotFoundError:
+        inputs_raw = None
+    inputs = config.parse_inputs(inputs_raw) if inputs_raw is not None else set()
     files, names = [], set()
     for item in cfg.get("files", []):
         if item["name"] in names:
@@ -233,7 +239,9 @@ def prepare_update(workdir, cfg, current=None):
         previous = existing.decode("utf-8", "replace") if existing is not None else T("现有项目不是小型普通文本文件")
         files.append(dict(name=item["name"], kind=kind, text=item["text"], previous=previous, signature=signature,
                           mode=stat.S_IMODE(st.st_mode) if stat.S_ISREG(st.st_mode) else None))
-    return dict(root=os.path.realpath(workdir), expected=raw, session=new, files=files, **compare(old, new))
+    inputs.update(names)
+    return dict(root=os.path.realpath(workdir), expected=raw, session=new, files=files,
+                inputs=inputs, inputs_expected=inputs_raw, **compare(old, new))
 
 
 def apply_update(plan, overwrite=()):
@@ -258,6 +266,15 @@ def apply_update(plan, overwrite=()):
             raise ValueError(T("附带文件已改变，请重新预览：{name}", name=item["name"]))
         if item in writes and path.is_dir() and not path.is_symlink():
             raise ValueError(T("不能用附带文件覆盖目录：{name}", name=item["name"]))
+    manifest = Path(root) / config.INPUTS_FILE
+    try:
+        inputs_raw = _read_plain(manifest)
+    except FileNotFoundError:
+        inputs_raw = None
+    if inputs_raw != plan["inputs_expected"]:
+        raise ValueError(T("附带输入清单已改变，请重新预览"))
+    writes.append(dict(name=config.INPUTS_FILE,
+                       text=json.dumps(sorted(plan["inputs"]), ensure_ascii=False, indent=1) + "\n"))
     if raw is not None:
         _backup(root, raw)
     originals = []
@@ -357,9 +374,16 @@ def _measure(fd, name):
     return size, count, signature
 
 
-def prepare_clear(workdir, all_files=False, inputs=None, allow_untracked=False, protected_inputs=()):
+def prepare_clear(workdir, all_files=False, allow_untracked=False):
     root = safe_root(workdir, allow_untracked)
-    protected = set(inputs or ()) | set(protected_inputs) | {core.SESSION_FILE}
+    inputs_raw = None
+    if not all_files:
+        try:
+            inputs_raw = _read_plain(Path(root) / config.INPUTS_FILE)
+        except FileNotFoundError:
+            pass
+    inputs = config.parse_inputs(inputs_raw) if inputs_raw is not None else None
+    protected = set(inputs or ()) | {core.SESSION_FILE, config.INPUTS_FILE}
     protected.update(p.name for p in backups(root))
     entries, kept = [], []
     fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -377,7 +401,8 @@ def prepare_clear(workdir, all_files=False, inputs=None, allow_untracked=False, 
                 path.name == ".grasp_gui")
             entries.append(item)
     return dict(root=root, signature=_signature(root), entries=entries, kept=kept, all_files=all_files,
-                allow_untracked=allow_untracked, unknown_inputs=inputs is None and not all_files)
+                allow_untracked=allow_untracked, unknown_inputs=inputs is None and not all_files,
+                inputs_expected=inputs_raw)
 
 
 def _remove(fd, name):
@@ -402,6 +427,13 @@ def clear(plan, selected, confirmation=None):
     root = safe_root(plan["root"], plan["allow_untracked"])
     if plan["all_files"] and confirmation != os.path.basename(root):
         raise ValueError(T("请输入目录名确认：{name}", name=os.path.basename(root)))
+    if not plan["all_files"]:
+        try:
+            inputs_raw = _read_plain(Path(root) / config.INPUTS_FILE)
+        except FileNotFoundError:
+            inputs_raw = None
+        if inputs_raw != plan["inputs_expected"]:
+            raise ValueError(T("附带输入清单已改变，请重新预览"))
     expected = {item["name"]: item for item in plan["entries"]}
     selected = set(selected)
     if not selected <= expected.keys():

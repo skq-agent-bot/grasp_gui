@@ -49,8 +49,10 @@ def test_import_mode_defaults_to_new_directory(qapp, tmp_path):
     assert d.dir.text() == new_target and not d.dir.isReadOnly() and d.browse.isEnabled()
 
 
-def test_import_update_runs_only_appended_steps(qapp, tmp_path, no_dialogs, monkeypatch):
+@pytest.mark.parametrize("source", ["file", "clipboard"])
+def test_import_update_runs_only_appended_steps(qapp, tmp_path, no_dialogs, monkeypatch, source):
     original, _ = config.load(os.path.join(DEMOS, "example1.json"))
+    original.setdefault("files", []).append(dict(name="extra.in", text="preserve input"))
     root = tmp_path / "calc"
     config.install(original, str(root))
     old_record = (root / core.SESSION_FILE).read_bytes()
@@ -64,6 +66,9 @@ def test_import_update_runs_only_appended_steps(qapp, tmp_path, no_dialogs, monk
 
     def choose_update(d):
         assert d.update.isChecked() and d.target() == str(root)
+        if source == "clipboard":
+            qapp.clipboard().setText("```json\n" + config.dumps(revised) + "```")
+            assert d.open_clipboard() and d.target() == str(root)
         d.accept()
         return d.result()
 
@@ -76,10 +81,12 @@ def test_import_update_runs_only_appended_steps(qapp, tmp_path, no_dialogs, monk
 
     monkeypatch.setattr(panel.ConfigDialog, "exec", choose_update)
     monkeypatch.setattr(panel.UpdateDialog, "exec", append_only)
-    monkeypatch.setattr(QtWidgets.QMessageBox, "question", lambda *a, **k: QtWidgets.QMessageBox.Yes)
+    confirmations = []
+    monkeypatch.setattr(QtWidgets.QMessageBox, "question",
+                        lambda *a, **k: confirmations.append(a[2]) or QtWidgets.QMessageBox.Yes)
     w = window(root)
-    w.calc.import_config(False, str(path), update=True)
-    assert len(seen) == 1 and w.calc.busy
+    w.calc.import_config(False, str(path) if source == "file" else None, update=True)
+    assert len(seen) == 1 and len(confirmations) == 1 and w.calc.busy
     spin(qapp, lambda: not w.calc.busy)
     assert (root / "appended.txt").read_text().splitlines() == ["1", "2"]
     assert result.read_bytes() == b"original result\x00do not touch"
@@ -87,6 +94,22 @@ def test_import_update_runs_only_appended_steps(qapp, tmp_path, no_dialogs, monk
     assert len(w.calc.pipeline) == len(revised["jobs"])
     assert not no_dialogs
     assert w.close()
+    restarted = window(root)
+
+    def clear_results(d):
+        assert not d.plan["unknown_inputs"]
+        assert d.selected_names() >= {"original.cm", "appended.txt"}
+        assert {x["name"] for x in d.plan["kept"]} >= {"extra.in", config.INPUTS_FILE, core.SESSION_FILE}
+        d.accept()
+        return d.result()
+
+    monkeypatch.setattr(panel.ClearDialog, "exec", clear_results)
+    restarted.calc.clear_workdir()
+    assert not result.exists() and not (root / "appended.txt").exists()
+    assert (root / "extra.in").read_text() == "preserve input"
+    assert config.load_inputs(root) == {"extra.in"}
+    assert (root / core.SESSION_FILE).is_file()
+    assert restarted.close() and not no_dialogs
 
 
 def test_update_cancel_restore_and_running_guard(qapp, tmp_path, no_dialogs, monkeypatch):
@@ -117,11 +140,10 @@ def test_clear_selection_and_all_delete_survives_close(qapp, tmp_path, no_dialog
     (tmp_path / ".grasp_gui").mkdir()
     (tmp_path / ".grasp_gui" / "cache").write_text("cache")
     w = window(tmp_path)
-    w.calc.known_inputs[str(tmp_path)] = {"input"}
 
     def delete_results(d):
         assert not d.all_files.isChecked()
-        assert {d.kept.item(i).text() for i in range(d.kept.count())} == {"input", core.SESSION_FILE}
+        assert {d.kept.item(i).text() for i in range(d.kept.count())} == {"input", core.SESSION_FILE, config.INPUTS_FILE}
         for i in range(d.files.count()):
             if d.files.item(i).data(Qt.UserRole)["name"] == "other.cm":
                 d.files.item(i).setCheckState(Qt.Unchecked)
@@ -148,18 +170,17 @@ def test_clear_selection_and_all_delete_survives_close(qapp, tmp_path, no_dialog
     assert not no_dialogs
 
 
-def test_unknown_input_protection_survives_update(qapp, tmp_path, no_dialogs, monkeypatch):
+def test_persistent_inputs_survive_update_and_restart(qapp, tmp_path, no_dialogs, monkeypatch):
     config.install(cfg([job()], [dict(name="old.in", text="must retain")]), str(tmp_path))
     w = window(tmp_path)
     monkeypatch.setattr(panel.UpdateDialog, "exec", lambda d: QtWidgets.QDialog.Accepted)
     w.calc.update_workdir(cfg([job(z="4")], [dict(name="new.in", text="new")]))
-    d = panel.ClearDialog(w.calc, str(tmp_path), w.calc.known_inputs.get(str(tmp_path)),
-                          protected_inputs=w.calc.updated_inputs[str(tmp_path)])
-    assert d.plan["unknown_inputs"]
-    assert "new.in" in {x["name"] for x in d.plan["kept"]}
-    assert not next(x for x in d.plan["entries"] if x["name"] == "old.in")["checked"]
-    assert w.close() and not no_dialogs
-
+    assert w.close()
+    restarted = window(tmp_path)
+    d = panel.ClearDialog(restarted.calc, str(tmp_path))
+    assert not d.plan["unknown_inputs"]
+    assert {x["name"] for x in d.plan["kept"]} >= {"old.in", "new.in", config.INPUTS_FILE}
+    assert restarted.close() and not no_dialogs
 
 
 def test_untracked_clear_needs_separate_confirmation(qapp, tmp_path, no_dialogs, monkeypatch):
@@ -199,3 +220,30 @@ def test_partial_clear_does_not_recreate_removed_record(qapp, tmp_path, no_dialo
     assert w.calc.pipeline == []
     assert w.close() and not (tmp_path / core.SESSION_FILE).exists()
     assert (tmp_path / "result").read_text() == "result"
+
+
+
+def test_legacy_directory_all_and_none(qapp, tmp_path):
+    config.install(cfg([job()]), str(tmp_path))
+    (tmp_path / config.INPUTS_FILE).unlink()
+    for i in range(40):
+        (tmp_path / f"result-{i}.cm").write_bytes(b"result")
+    d = panel.ClearDialog(None, str(tmp_path))
+    assert d.plan["unknown_inputs"] and not d.selected_names() and not d.ok.isEnabled()
+    d.select_all.click()
+    assert len(d.selected_names()) == 40 and d.ok.isEnabled()
+    assert core.SESSION_FILE not in d.selected_names()
+    d.select_none.click()
+    assert not d.selected_names() and not d.ok.isEnabled()
+
+
+@pytest.mark.parametrize("size,text", [(0, "0.0 B"), (512, "512.0 B"), (1024, "1.0 KB"),
+                                      (int(2.5 * 1024 ** 2), "2.5 MB"), (int(6.2 * 1024 ** 3), "6.2 GB")])
+def test_clear_readable_size(qapp, tmp_path, size, text):
+    config.install(cfg([job()]), str(tmp_path))
+    # 稀疏文件只用于核对显示，不写入或读取数 GB 的内容。
+    with (tmp_path / "result.cm").open("wb") as f:
+        f.truncate(size)
+    d = panel.ClearDialog(None, str(tmp_path))
+    assert text in d.files.item(0).text()
+    assert text in d.total.text()

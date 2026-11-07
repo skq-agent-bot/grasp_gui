@@ -120,8 +120,8 @@ def test_clear_modes_inputs_and_links(tmp_path):
     (root / ".grasp_gui").mkdir()
     (root / ".grasp_gui" / "cache").write_bytes(b"cache")
     (root / ".grasp_gui_run.log").write_text("output")
-    plan = work.prepare_clear(root, inputs={"input"})
-    assert {x["name"] for x in plan["kept"]} == {"input", core.SESSION_FILE}
+    plan = work.prepare_clear(root)
+    assert {x["name"] for x in plan["kept"]} == {"input", core.SESSION_FILE, config.INPUTS_FILE}
     work.clear(plan, {x["name"] for x in plan["entries"] if x["name"] != "state.cm"})
     assert (root / "state.cm").read_bytes() == b"result"
     assert not (root / "link").exists()
@@ -146,7 +146,7 @@ def test_clear_rejects_unsafe_or_changed(tmp_path, monkeypatch):
     config.install(cfg([job()]), str(root))
     result = root / "result"
     result.write_text("result")
-    plan = work.prepare_clear(root, inputs=set())
+    plan = work.prepare_clear(root)
     result.unlink()
     result.symlink_to(tmp_path)
     with pytest.raises(ValueError, match="已改变"):
@@ -161,6 +161,7 @@ def test_clear_rejects_unsafe_or_changed(tmp_path, monkeypatch):
 def test_unknown_inputs_are_not_guessed(tmp_path):
     config.install(cfg([job()]), str(tmp_path))
     (tmp_path / "input.txt").write_text("must preserve")
+    (tmp_path / config.INPUTS_FILE).unlink()
     plan = work.prepare_clear(tmp_path)
     assert plan["unknown_inputs"]
     assert not next(x for x in plan["entries"] if x["name"] == "input.txt")["checked"]
@@ -203,8 +204,8 @@ def test_update_preserves_mode_and_unknown_old_inputs(tmp_path):
     plan = work.prepare_update(tmp_path, cfg([job(z="4")], [dict(name="input", text="new")]))
     work.apply_update(plan, {"input"})
     assert (tmp_path / "input").stat().st_mode & 0o777 == 0o640
-    clear = work.prepare_clear(tmp_path, protected_inputs={"input"})
-    assert clear["unknown_inputs"]
+    clear = work.prepare_clear(tmp_path)
+    assert not clear["unknown_inputs"]
     assert {x["name"] for x in clear["kept"]} >= {"input", core.SESSION_FILE, work.backups(tmp_path)[0].name}
 
 
@@ -216,7 +217,7 @@ def test_clear_refuses_directory_swapped_for_link(tmp_path, monkeypatch):
     config.install(cfg([job()]), str(root))
     (root / "results").mkdir()
     (root / "results" / "output").write_text("result")
-    plan = work.prepare_clear(root, inputs=set())
+    plan = work.prepare_clear(root)
     open_file = work.os.open
     swapped = False
 
@@ -233,3 +234,54 @@ def test_clear_refuses_directory_swapped_for_link(tmp_path, monkeypatch):
         work.clear(plan, {"results"})
     assert (outside / "valuable").read_text() == "keep"
     assert (root / "moved" / "output").read_text() == "result"
+
+
+
+def test_input_manifest_update_restore_and_stale_preview(tmp_path):
+    config.install(cfg([job()], [dict(name="old.in", text="keep")]), str(tmp_path))
+    assert config.load_inputs(tmp_path) == {"old.in"}
+    revised = cfg([job(z="4")], [dict(name="new.in", text="new")])
+    work.apply_update(work.prepare_update(tmp_path, revised))
+    assert config.load_inputs(tmp_path) == {"old.in", "new.in"}
+    saved_manifest = (tmp_path / config.INPUTS_FILE).read_bytes()
+    work.restore(tmp_path)
+    assert (tmp_path / config.INPUTS_FILE).read_bytes() == saved_manifest
+    assert (tmp_path / "old.in").read_text() == "keep" and (tmp_path / "new.in").read_text() == "new"
+    before_update = work.prepare_update(tmp_path, revised)
+    before_clear = work.prepare_clear(tmp_path)
+    config.save_inputs(tmp_path, {"old.in", "new.in", "other.in"})
+    with pytest.raises(ValueError, match="清单已改变"):
+        work.apply_update(before_update)
+    with pytest.raises(ValueError, match="清单已改变"):
+        work.clear(before_clear, set())
+
+
+def test_manifest_failure_rolls_back_inputs_and_record(tmp_path, monkeypatch):
+    config.install(cfg([job()], [dict(name="input", text="old")]), str(tmp_path))
+    record = (tmp_path / core.SESSION_FILE).read_bytes()
+    manifest = (tmp_path / config.INPUTS_FILE).read_bytes()
+    plan = work.prepare_update(tmp_path, cfg([job(z="4")], [dict(name="input", text="new")]))
+    atomic = work._atomic
+
+    def fail_manifest(path, raw, mode=None):
+        if Path(path).name == config.INPUTS_FILE:
+            raise OSError("simulated manifest write failure")
+        return atomic(path, raw, mode)
+
+    monkeypatch.setattr(work, "_atomic", fail_manifest)
+    with pytest.raises(OSError):
+        work.apply_update(plan, {"input"})
+    assert (tmp_path / "input").read_text() == "old"
+    assert (tmp_path / core.SESSION_FILE).read_bytes() == record
+    assert (tmp_path / config.INPUTS_FILE).read_bytes() == manifest
+
+
+def test_restore_twice_returns_to_current_record(tmp_path):
+    config.install(cfg([job()]), str(tmp_path))
+    first = (tmp_path / core.SESSION_FILE).read_bytes()
+    work.apply_update(work.prepare_update(tmp_path, cfg([job(z="4")])))
+    second = (tmp_path / core.SESSION_FILE).read_bytes()
+    work.restore(tmp_path)
+    assert (tmp_path / core.SESSION_FILE).read_bytes() == first
+    work.restore(tmp_path)
+    assert (tmp_path / core.SESSION_FILE).read_bytes() == second

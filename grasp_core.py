@@ -794,6 +794,11 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "能级图中正在进行的跃迁计算会结束。": "Transition calculations in progress in the level diagram will be stopped.",
     "计算正在运行。可以让它在后台继续，以后再打开这个工作目录即可接上并查看结果。": "A run is in progress. It can continue in the background; open this working directory again later to reattach and see the results.",
     # 工作目录的配置更新与清理
+    "附带输入清单的格式有误": "Invalid attached-input list",
+    "附带输入清单已改变，请重新预览": "Attached-input list has changed; preview again",
+    "将删除 {n} 项，共 {size}": "Delete {n} items, {size} in total",
+    "只恢复流程和参数，计算结果与附带文件不变。当前记录也会备份；连续恢复两次会回到恢复前的状态。确定恢复吗？":
+        "Restore pipeline and parameters only, retaining results and attached files. The current record is also backed up; restoring twice returns to the state before restoring. Restore?",
     "工作目录记录不能是符号链接": "The working-directory record cannot be a symbolic link",
     "工作目录记录的格式有误": "Invalid working-directory record",
     "前面 {n} 步不变，新增 {m} 步": "First {n} steps unchanged; {m} steps added",
@@ -828,7 +833,6 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "清空工作目录": "Clear working directory",
     "全部删除（默认只删除计算结果）": "Delete everything (default: results only)",
     "输入清单未知，未自动勾选普通文件；请选择要删除的计算结果。": "Input list unknown: regular files are not selected automatically. Select the results to delete.",
-    "将删除 {n} 项，共 {size} 字节": "Delete {n} items, {size} bytes in total",
     "已恢复上一次的工作目录记录": "Restored the previous working-directory record",
     "已永久删除所选项目": "Permanently deleted the selected items",
     "附带文件：冲突默认保留原文件，勾选才覆盖": "Attached files: keep conflicts by default; check to overwrite",
@@ -839,7 +843,6 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "已更新当前目录；原有结果文件保留": "Directory updated; existing result files retained",
     "更新已完成，但临时备份清理失败：{e}": "Update completed, but temporary backup cleanup failed: {e}",
     "恢复上一次的工作目录记录": "Restore previous working-directory record",
-    "只恢复流程和参数，计算结果与附带文件不变。确定恢复吗？": "Restore pipeline and parameters only, retaining results and attached files. Restore?",
     "清理未完成，部分项目可能已删除：{e}": "Cleanup incomplete; some items may already have been deleted: {e}",
     "原文件": "Existing file",
     "新配置": "New configuration",
