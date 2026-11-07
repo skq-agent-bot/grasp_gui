@@ -177,3 +177,27 @@ def test_import_menu_accepts_clipboard_without_file_picker(qapp, tmp_path, monke
     assert len(w.calc.pipeline) == len(cfg["jobs"])
     assert dialogs == []
     w.close()
+
+
+
+@pytest.mark.parametrize("identifier,title,stem", [
+    ("li-example", "Lithium calculation", "li-example"),
+    (None, "Lithium calculation", "Lithium_calculation"),
+    ("../escape", "Ignored", "escape"),
+    (None, "../", "clipboard"),
+])
+def test_clipboard_directory_uses_config_name(qapp, tmp_path, monkeypatch, identifier, title, stem):
+    import calc_panel
+    monkeypatch.setattr(calc_panel, "CALC_ROOT", str(tmp_path))
+    cfg = dict(format=config.FORMAT, version=2, title=title,
+               jobs=[dict(step="rnucleus", vals=core.RNucleus.defaults())])
+    if identifier is not None:
+        cfg["id"] = identifier
+    QGuiApplication.clipboard().setText(config.dumps(cfg))
+    d = ConfigDialog(None, [], "")
+    assert d.open_clipboard()
+    assert d.target() == str(tmp_path / stem)
+    (tmp_path / stem).mkdir()
+    (tmp_path / stem / "occupied").write_text("keep")
+    assert d.open_clipboard()
+    assert d.target() == str(tmp_path / (stem + "_2"))

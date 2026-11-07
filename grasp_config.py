@@ -20,7 +20,9 @@ GRASP2018 手册算例 (demos/*.json) 也采用这个格式。只用标准库，
 import json
 import os
 import re
+import stat
 import sys
+import tempfile
 
 import grasp_core as core
 from grasp_core import T
@@ -28,6 +30,7 @@ from grasp_core import T
 FORMAT = "grasp-gui-config"
 VERSION = 2                    # 1：GUI 1.3 / 2.0 的示例格式 (demo_format = 1)
 PACKAGES = ("GRASP2018",)
+INPUTS_FILE = ".grasp_gui_inputs.json"
 MAX_FILE = 1 << 20             # 附带文件：每个最多 1 MB，合计最多 MAX_FILES_TOTAL
 MAX_FILES_TOTAL = 4 << 20
 MAX_CONFIG = MAX_FILES_TOTAL * 8    # 给附带文本的 JSON 转义和流程参数留出空间
@@ -150,11 +153,10 @@ def load(path):
     try:
         with open(path, "rb") as f:
             raw = f.read(MAX_CONFIG + 1)
-        if len(raw) > MAX_CONFIG:
-            raise ConfigError(T("配置文本太大 (最多 {n} MB)", n=MAX_CONFIG >> 20))
-        return loads(raw.decode("utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError) as e:
+        content = raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as e:
         raise ConfigError(T("无法读取 {p}：{e}", p=os.path.basename(path), e=e)) from e
+    return loads(content)
 
 
 def list_demos(path=DEMO_DIR):
@@ -238,8 +240,49 @@ def custom_commands(cfg):
     return out
 
 
+def load_inputs(workdir):
+    """缺少输入清单的旧目录返回 None；损坏的清单要报错，不能把输入误当结果。"""
+    path = os.path.join(workdir, INPUTS_FILE)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            raise ConfigError(T("附带输入清单的格式有误"))
+        return parse_inputs(f.read())
+
+
+def parse_inputs(raw):
+    """按同一份字节解析清单，供预览后的过期检查使用。"""
+    try:
+        names = json.loads(raw)
+    except (ValueError, RecursionError) as e:
+        raise ConfigError(T("附带输入清单的格式有误")) from e
+    if not isinstance(names, list) or not all(valid_file_name(n) for n in names):
+        raise ConfigError(T("附带输入清单的格式有误"))
+    return set(names)
+
+
+def save_inputs(workdir, names):
+    """清单只记录基名，原子替换避免写到一半被当作完整清单读取。"""
+    names = list(names)
+    if not all(valid_file_name(n) for n in names):
+        raise ConfigError(T("附带输入清单的格式有误"))
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=workdir, prefix=".grasp-inputs-", delete=False) as f:
+            temporary = f.name
+            f.write((json.dumps(sorted(set(names)), ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
+        os.replace(temporary, os.path.join(workdir, INPUTS_FILE))
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def install(cfg, workdir):
     """在 workdir (不存在或为空) 中写入附带文件和目录记录；目录非空时抛出 FileExistsError。"""
+    cfg, _ = check(cfg)
     if os.path.isdir(workdir) and os.listdir(workdir):
         raise FileExistsError(T("目录不是空的：{p}", p=workdir))
     os.makedirs(workdir, exist_ok=True)
@@ -248,6 +291,7 @@ def install(cfg, workdir):
             out.write(f["text"])
     if not core.save_session(workdir, session(cfg)):
         raise OSError(T("无法写入 {p}", p=os.path.join(workdir, core.SESSION_FILE)))
+    save_inputs(workdir, (f["name"] for f in cfg.get("files", [])))
 
 
 # ---------------------------------------------------------------------------
