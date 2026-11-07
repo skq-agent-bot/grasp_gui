@@ -39,7 +39,17 @@ Host cluster
 ```
 
 列表读取 `~/.ssh/config` 中的具体 Host 别名和 Include，也能直接输入 `user@host`。OpenSSH ≥ 8.4 使用
-`SSH_ASKPASS_REQUIRE=force`，密码、密钥口令、验证码由独立输入框交给 ssh，不保存、不记录。首次主机确认默认拒绝。
+`SSH_ASKPASS_REQUIRE=force`，密码、密钥口令、验证码由隐藏内容的独立输入框交给 ssh，不保存、不记录。
+首次连接确认主机密钥时，普通输入框完整显示 OpenSSH 提示及指纹，默认不填回答。先通过管理员或其他可信渠道
+核对指纹，一致后再输入 `yes` 或粘贴指纹；不确定时取消，不要仅因连接需要就接受。
+OpenSSH 的 `confirm` 提示仍用默认“否”的确认框；`none` (如 FIDO 硬件密钥按键) 仅显示通知，不提供输入框，
+不向 ssh 回答，完成后由 ssh 结束通知进程。
+
+判断依据为 [OpenSSH 10.0p2 sshconnect.c 的主机确认及重试提示](https://github.com/openssh/openssh-portable/blob/V_10_0_P2/sshconnect.c#L542-L566)
+和[首次连接提示](https://github.com/openssh/openssh-portable/blob/V_10_0_P2/sshconnect.c#L1130-L1148)：
+主机确认走 `RP_ECHO`，并非 `SSH_ASKPASS_PROMPT=confirm`。
+`none` 通知及其退出由 [readpass.c 的 notify_start / notify_complete](https://github.com/openssh/openssh-portable/blob/V_10_0_P2/readpass.c#L264-L315)
+定义。
 更旧的 OpenSSH 使用 BatchMode，仅允许密钥/agent，并在界面说明；需要密码时先升级本机 OpenSSH。
 
 每个远程窗口使用一个常驻 SSH stdio 会话；额外的查看器窗口共享它。ControlMaster/ControlPersist=60 仅用于复用认证，
@@ -130,6 +140,12 @@ full path, browse the server directories and choose **Use this directory**. Inst
 executable manually with the scp commands above; the desktop never uploads it. Defaults try `~/.local/bin/grasp_gui`
 then PATH. A successful connection remembers the executable's full path and working directory per host.
 OpenSSH retains key/agent/ProxyJump behavior; ≥8.4 additionally supports password and verification-code dialogs.
+On first contact, a normal input field shows the full host-key prompt and fingerprint. Verify that fingerprint
+with your administrator or another trusted channel before typing `yes` or pasting it; cancel if unsure. Empty
+input does not accept the host key. Passwords, key passphrases and verification codes remain hidden. OpenSSH
+`confirm` requests use a default-No confirmation; `none` requests display only a notification, without input or
+stdout, until ssh terminates the helper after the hardware-key operation. Source references are in the login
+section above.
 Older clients use keys only. Passwords are never saved or logged. No forwarding, server listening socket or outbound
 server connection is required; all traffic uses the desktop-initiated stdio session.
 

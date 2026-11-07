@@ -964,6 +964,10 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     # SSH 远程连接
     "SSH 登录": "SSH login",
     "SSH 主机确认": "SSH host confirmation",
+    "SSH 提示": "SSH notification",
+    "请通过管理员或其他可信渠道核对主机指纹；一致后再输入 yes 或指纹，不确定请取消。":
+        "Verify the host fingerprint with your administrator or another trusted channel. "
+        "Enter yes or the fingerprint only if it matches; otherwise cancel.",
     "服务器端程序请填写完整路径或 ~/ 路径": "Enter a full server executable path or a ~/ path",
     "连接服务器…": "Connect to server…",
     "连接服务器": "Connect to server",

@@ -81,7 +81,9 @@ MCP 打开时，打开该来源的计算会在输出区显示来源；关闭时�
 server executable (default discovery or full path), directory, Connect/refresh, Parent directory, file metadata,
 and Use this directory. Double-click directories to browse. Host-specific executable/directory preferences persist;
 credentials do not. Errors show the server diagnostic and manual installation guidance. Password/verification-code
-prompts use OpenSSH ASKPASS; old OpenSSH supports keys only. Details and installation: [REMOTE.md](REMOTE.md).
+prompts use OpenSSH ASKPASS; old OpenSSH supports keys only. First-contact host-key confirmation shows the full
+prompt/fingerprint with a visible input field and a verification reminder; passwords remain hidden. Hardware-key
+notifications have no input or reply and close when ssh finishes the operation. Details and installation: [REMOTE.md](REMOTE.md).
 
 The separate remote window shows **Server host:/path (服务器 host:/path)** above all three tabs and in its title.
 Calculation is read-only: select a pipeline step to inspect parameters/input, run all/from selection, stop, refresh,
