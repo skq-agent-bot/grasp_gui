@@ -1,6 +1,6 @@
 from PySide2.QtGui import *  # noqa: F401,F403
-from PySide2.QtGui import (QFontDatabase, QGuiApplication, QHoverEvent, QMouseEvent, QPageSize, QPalette,
-                           QPdfWriter)
+from PySide2.QtGui import (QFontDatabase, QGuiApplication, QHoverEvent, QMouseEvent, QNativeGestureEvent, QPageSize,
+                           QPalette, QPdfWriter)
 from PySide2.QtWidgets import QAction, QActionGroup, QShortcut  # noqa: F401  Qt 6 移到了 QtGui
 
 from . import QtCore  # noqa: F401
@@ -11,6 +11,7 @@ QGuiApplication.exec = QGuiApplication.exec_
 QMouseEvent.position = QMouseEvent.localPos
 QMouseEvent.globalPosition = QMouseEvent.screenPos
 QHoverEvent.position = QHoverEvent.posF
+QNativeGestureEvent.position = QNativeGestureEvent.localPos
 
 # Qt 6 中 families() 是静态函数
 _families = QFontDatabase.families
