@@ -575,3 +575,14 @@ def test_cache_identity_uses_discovered_executable(tmp_path):
                 assert any(e.get("cached") for e in list(client.events.queue))
         finally:
             client.close()
+
+
+def test_ssh_version_probe_uses_clean_environment(monkeypatch):
+    calls = []
+    monkeypatch.setattr(core, "child_env", lambda: {"PATH": "/system/bin"})
+    def run(argv, **kwargs):
+        calls.append(kwargs)
+        return subprocess.CompletedProcess(argv, 0, "", "OpenSSH_10.0p2")
+    monkeypatch.setattr(ssh.subprocess, "run", run)
+    assert ssh.modern_ssh()
+    assert calls[0]["env"] == {"PATH": "/system/bin"}

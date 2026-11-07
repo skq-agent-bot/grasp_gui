@@ -89,7 +89,7 @@ def startup(program=""):
 
 def modern_ssh(binary="ssh"):
     try:
-        result = subprocess.run([binary, "-V"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([binary, "-V"], capture_output=True, text=True, timeout=5, env=core.child_env())
         match = re.search(r"OpenSSH_(\d+)\.(\d+)", result.stderr + result.stdout)
         return bool(match and (int(match[1]), int(match[2])) >= (8, 4))
     except (OSError, subprocess.SubprocessError):
