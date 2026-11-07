@@ -89,7 +89,8 @@ and follow pushed logs. Custom commands require confirmation. Logging-out polici
 Slurm export or explicit normal startup. Radial and level tabs reuse the existing viewers with remote data;
 levels/compositions and coarse/fine curves appear progressively. Hover, selection, zoom and pan use cached data.
 Load more components explicitly requests up to 500 items. Remote transitions display existing results; drawing a
-pair never starts a new transition calculation. Diagram marks are temporary. Window opens extra viewers sharing
+pair never starts a new transition calculation. Diagram marks are temporary. Export CSV/figures locally;
+original GRASP transition-file export is unavailable because raw data stays on the server. Window opens extra viewers sharing
 the same session, with the same source in their titles, and offers Reconnect after bounded automatic retries.
 Closing the remote window closes its viewers and connection; it does not stop a background calculation.
 

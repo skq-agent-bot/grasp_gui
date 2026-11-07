@@ -54,6 +54,7 @@ Host cluster
 停止和查看日志。含自定义命令时必须在桌面确认；服务器在启动时再次核对目录记录的修订号。
 能级图先显示能量，再补 jj/LSJ 主要组成和已算跃迁；需要更多组成时点“读取更多组成” (最多 500 项)。
 拖动能级只选择已算跃迁，不在这里另建跃迁计算。图上标记仅保留在当前窗口。
+可导出分析数据 CSV 和能级图；原始 GRASP 跃迁文件不传输，远程页会提示改用这两种导出。
 波函数先显示粗线，再补细线 (默认每轨道最多 1000 点，服务器按原网格索引作线性插值)；
 表中的积分、节点数和原始点数仍由服务器在原始网格上计算。勾选缺少曲线的轨道时才请求曲线。
 
@@ -134,7 +135,8 @@ server connection is required; all traffic uses the desktop-initiated stdio sess
 
 The source is shown as **Server host:/path**. The pipeline is read-only, with parameter/input previews, run/stop and
 pushed logs. Existing level and radial viewers render structured remote results; select **Load more components**
-for additional data. Curves are resampled on the server; numerical properties use the original grid.
+for additional data. CSV/figure export uses analysed data; original GRASP transition files stay on the server.
+Curves are resampled on the server; numerical properties use the original grid.
 Selection, hover, zoom and pan use local cached data. Reopening a view validates the bounded cache in one request.
 The status bar reports request latency, including processing time. **Window → Reconnect** retries after automatic
 reconnects have stopped. Running calculations normally continue through disconnection, including during startup;

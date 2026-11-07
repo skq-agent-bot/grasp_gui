@@ -967,6 +967,8 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "远程结果过大，请减少文件或行数": "Remote result too large; request fewer files or rows",
     "远程请求超时，正在重新连接": "Remote request timed out; reconnecting",
     "远程运行": "Remote run",
+    "远程模式不导出原始 GRASP 跃迁文件；可导出 CSV 或能级图。":
+        "Remote mode cannot export original GRASP transition files; export CSV or a level diagram instead.",
     "连接 / 刷新": "Connect / refresh",
     "重新连接": "Reconnect",
     # 共享配置

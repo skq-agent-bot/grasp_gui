@@ -308,10 +308,14 @@ class RemoteLevels(LevelPanel):
         return lv._leading_csf[0] or T("组成尚在读取"), 100 * lv._leading_coeff ** 2
 
     def load_marked(self):
-        self.marked = []
+        self.marked = [(a, b) for a, b in self.marked if a in self.levels and b in self.levels]
+        self.update_arrows()
 
     def save_marked(self):
         pass  # 远程图上的标记仅在当前窗口保留，不写本机或服务器路径。
+
+    def export_grasp(self):
+        self.status(T("远程模式不导出原始 GRASP 跃迁文件；可导出 CSV 或能级图。"))
 
     def load_transitions(self):
         self.tr_by_pair, self.tr_by_level = {}, {}
@@ -341,8 +345,9 @@ class RemoteLevels(LevelPanel):
 
     def connect_pair(self, a, b):
         if a in self.levels and b in self.levels:
-            self.pair = (a, b) if self.levels[a][2].energy >= self.levels[b][2].energy else (b, a)
-            self.show_pair()
+            self.select_pair(a, b)
+            if self.tr_by_pair.get(frozenset(self.pair)):
+                self.mark(*self.pair)
 
     def more_composition(self):
         key = self.current

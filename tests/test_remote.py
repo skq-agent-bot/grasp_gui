@@ -517,6 +517,8 @@ def test_fake_server_directory_does_not_exist_on_desktop(tmp_path, qapp, monkeyp
     wavefunction(tmp_path / "state.w")
     op = remote.Operations()
     data = {kind: op.view(str(tmp_path), kind) for kind in ("levels", "wfn")}
+    data["levels"]["data"]["transitions"] = [dict(kind="M1", upper=["state.cm", 1, -1, 2],
+        lower=["state.cm", 1, -1, 1], wavelength_angstrom=100, values={"M": [1e8, 0.1, 0.1]})]
 
     class Source(QObject):
         push, notice = Signal(object), Signal(str)
@@ -541,10 +543,17 @@ def test_fake_server_directory_does_not_exist_on_desktop(tmp_path, qapp, monkeyp
     monkeypatch.setattr(wfn, "read_w", forbidden)
     monkeypatch.setattr(mix, "open_mix", forbidden)
     win = RemoteWindow(Source(), "/remote-only/not-a-local-directory")
+    monkeypatch.setattr(win.levels, "workspace", forbidden)
     try:
         assert win.levels.level_table.rowCount() == 2 and win.waves.table.rowCount() == 1
         win.levels.select(next(iter(win.levels.levels)))
         assert win.levels.jj_table.rowCount() > 0
+        keys = list(win.levels.levels)
+        win.levels.connect_pair(*keys)
+        assert win.levels.level_tr_table.rowCount() == 1
+        win.levels.redraw()
+        assert win.levels.marked and win.levels.diagram.arrows
+        win.levels.export_grasp()
         assert "remote.example:/remote-only/" in win.windowTitle()
         assert "server log" in win.calc.output.toPlainText()
     finally:
