@@ -59,6 +59,10 @@ If a step has to change, edit the configuration and generate the script again; d
    are not covered by the configuration; mention them in `summary`.
 9. `reference`: the output of `grasp_gui reference` for the final mixing coefficient files (Hartree, all levels in
    file order), unchanged.
+10. **State names: at most 23 characters**, letters, digits, `_`, `.`, `-` only. GRASP programs such as jj2lsj, rhfs
+   and rtransition read names into 24-character variables and open the wrong file otherwise. File-name limits of
+   other fields: [CONFIG_FORMAT.md, Name lengths](CONFIG_FORMAT.md#name-lengths--名称长度). `grasp_gui check`
+   reports violations.
 
 1. 顶层写 `format`、`version` (2)、`package` (GRASP2018)、`title`、`summary` (体系、能级、模型、计算内容)、`runtime`、
    `created_by` (agent 名称)、`jobs`，有结果时写 `reference`。
@@ -73,6 +77,80 @@ If a step has to change, edit the configuration and generate the script again; d
 7. `files` 只放界面不能生成的输入 (自定义步骤用到的)，普通文件名，UTF-8 文本，每个不超过 1 MB。
 8. 影响结果的每个手工操作都要是配置中的一步；配置以外的计算在 `summary` 中说明。
 9. `reference` 原样填入 `grasp_gui reference` 对最终混合系数文件的输出 (Hartree，按文件中的顺序列出全部能级)。
+10. **态名最多 23 个字符**，只用英文字母、数字、`_`、`.`、`-`。jj2lsj、rhfs、rtransition 等程序把态名读入 24 个字符的变量，
+   超长时会打开错误的文件。其他字段的长度限制见 [CONFIG_FORMAT.md 的“名称长度”](CONFIG_FORMAT.md#name-lengths--名称长度)；
+   `grasp_gui check` 会报告超限。
+
+## Layer-by-layer work / 逐层工作
+
+For each new layer, deliver the **complete configuration**, including the unchanged earlier steps, rather
+than a fragment. The user imports from the clipboard in **Update current directory** mode, checks the
+change summary, and runs only the appended steps. The input-file check reports missing prerequisites;
+undeclared/custom steps need manual checking. It assumes declared producers finish successfully and checks
+existence rather than physical correctness or file freshness. A missing file can therefore also mean the
+starting step is too late. The user decides whether to run anyway.
+
+After checking results in the GUI, use **Calculation → Export → Copy configuration and results summary
+(for an agent)**. First choose configuration metadata, attached inputs and references as for ordinary
+configuration export; then preview and select summary sections. Return this text to the agent for planning
+the next layer. The agent must not infer convergence from an exit code or a successful pipeline alone.
+
+每一层都给出**完整配置**，保留前面的步骤和参数。用户从剪贴板选择“更新当前目录”，核查只新增了一层，
+再运行新增步骤。文件检查按执行顺序推算已声明的输入/输出，假定前序步骤成功；只查文件存在性，不查物理正确性
+或新旧。缺失也可能是运行起点太晚；自定义等未声明步骤需人工核查。是否仍然运行由用户决定。
+在界面核查后，通过“计算 → 导出 → 复制配置和结果摘要（给 agent）”交给 agent，决定下一层。
+先按普通配置导出选择说明、附带输入和参考结果，再预览和勾选摘要。不能把退出码或流程成功当作收敛证明。
+
+### Summary format / 摘要格式
+
+The clipboard contains Markdown with separate JSON code blocks. The first block records generation time,
+`omissions`, `warnings` and evidence limitations. Each selected section follows in this fixed order:
+
+| Section / 部分 | JSON content / 内容 |
+|---|---|
+| Current complete configuration / 当前完整配置 | The unchanged shared-configuration object / 原格式完整配置 |
+| Step run status / 各步运行状态 | Step number, title, `status`, `basis`, run times / 步号、标题、状态、依据、时间 |
+| SCF convergence / SCF 收敛情况 | Log path, iteration count, last 3 iterations, `converged` / 日志、次数、最后三次迭代、是否收敛 |
+| CSF counts / 各态的 CSF 数 | `.c` files, counts for each J/parity block / 各态每个 J、宇称块的 CSF 数 |
+| Levels / 能级与主要成分 | Ordered result files; J, parity, index, Hartree, relative cm⁻¹, purity, top 3 jj components, LSJ labels |
+| Layer changes / 能级随层的变化 | Per-group (odd/even) matches by J, parity, index; Hartree and consecutive-layer differences in cm⁻¹ |
+
+`status` is `success`, `failed`, `not_run`, `running`, `stopped` or `unknown`. The latest matching record
+wins. Current-GUI-session records compare parameter fingerprints; the persisted background state contains
+only titles, so its fallback requires a unique contiguous title match and explicitly states that parameters
+were not verified. Earlier runs are not reconstructed after restarting the GUI. No record means `unknown`,
+not proof that the step was never run.
+
+`converged` is `true`, `false` or `null`. Missing/reused/incomplete logs are explicitly identified, not assumed
+converged. Rules follow compas/grasp **9006157**, `rmcdhf90/scf.f90:154–235,292–295`,
+`improv.f90:173–185`, `newco.f90:116–128`, and `rscfvu.f90:161–168`: iteration headers, printed
+self-consistency, optimized level energies/weights, weighted energies, iteration exhaustion/error markers
+and normal program completion. `optimized_levels` follows the printed order; the log does not identify
+their J/parity blocks. `block_average_energies_hartree` preserves the separate `Average energy` output
+(`matrix.f90:315`), rather than labelling it as optimized eigenvalues. A single optimized level also has
+its consecutive-iteration energy difference; multiple levels retain their individual values and weighted difference.
+The printed maximum self-consistency is the maximum over printed orbital updates, not a reconstructed SCF
+threshold. Normal completion with iterations and no exhaustion/error marker indicates the SCF convergence
+path in that source. A running or partial log remains inconclusive.
+
+Results use the indexed readers. Layers follow producer steps in the pipeline, **not filename sorting**.
+Missing levels are marked unmatched; matching by J/parity/index does not guarantee the same physical state
+through crossings. Repeated writes to the same result filename retain only its last producer; older values
+cannot be recovered. Files without a known producer are shown without inferring a group or layer. Relative
+energies use the lowest included energy as zero. Each symmetry block defaults to the first 5 levels
+(adjustable 1–200), with an explicit omitted count; partially written files are marked.
+
+The text limit is **200 KiB of UTF-8**. Leading components are omitted first, followed by earlier or
+unassociated results and their corresponding SCF/CSF information, with an explicit omission list. Full configuration JSON is never cut in the middle.
+If the remaining selection cannot fit, copying is disabled until fewer sections/levels are selected;
+export the full configuration separately when needed.
+
+摘要整体是 Markdown，各部分用 JSON 代码块。首块含时间、省略清单、读入警告和证据边界。各步状态以最近可对应的记录
+为准：会话内记录核对参数指纹，后台存档仅能按唯一连续标题对应，会明确说明未核验参数；重启后不能恢复更早的运行历史，
+无记录标为 unknown。收敛 true/false/null 分别表示有据可判的收敛、未收敛、无法判断；读取日志仅保留最后三次迭代，
+不把正常退出直接当作收敛。层序取自流程，缺失标记不对应，同名覆盖无法恢复旧值，未关联文件不猜组别；能级交叉时仍需核验
+物理态身份。相对能量统一以已包含的最低能量为零。每块能级有省略计数，尚未写完的混合系数文件注明 partial。
+200 KiB 上限先省主要成分、再省较早或未关联结果，并列明；完整配置不截断，放不下时需少选内容或单独导出配置。
 
 ## Minimal example / 最小示例
 
@@ -113,9 +191,9 @@ all* recomputes everything; the *Levels* tab shows the resulting levels for comp
 > specified in docs/AGENT_SPEC.md of https://github.com/skq1998/grasp_gui. Write the configuration first, check it
 > with `grasp_gui check`, run GRASP only through the script from `grasp_gui script`, and add the output of
 > `grasp_gui reference` for the final `.cm`/`.m` files. Use the field names of `grasp_gui steps`, no absolute paths,
-> and `custom` steps only for programs without a tab.
+> `custom` steps only for programs without a tab, and state names of at most 23 characters.
 
 > 运行 GRASP2018 计算时，按 https://github.com/skq1998/grasp_gui 的 docs/AGENT_SPEC.md 同时给出 GRASP GUI 配置文件
 > (`grasp-gui-config`，版本 2)：先写配置并用 `grasp_gui check` 检查，只通过 `grasp_gui script` 生成的脚本运行 GRASP，
 > 再把 `grasp_gui reference` 对最终 `.cm`/`.m` 文件的输出填入配置。参数名以 `grasp_gui steps` 为准，不写绝对路径，
-> 只有没有程序页的程序才用 `custom` 步骤。
+> 只有没有程序页的程序才用 `custom` 步骤，态名不超过 23 个字符。
