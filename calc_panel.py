@@ -1263,6 +1263,8 @@ class CalcPanel(QWidget):
         try:
             while True:
                 s, tag = self.q.get_nowait()
+                if s == T("[此计算由 MCP agent 启动]") + "\n" and not core.load_config().get("mcp_enabled", False):
+                    continue
                 if tag in ("done", "step"):
                     if segs:                       # 先显示此前的输出
                         self.q_segments(segs)
@@ -1415,6 +1417,17 @@ class CalcPanel(QWidget):
         self.update_progress()
         grasp_bg.mark_seen(self.cur_workdir)
         self.runFinished.emit(ok)
+
+    def hide_mcp_origin(self):
+        """关闭开关后移去来源提示，保留已有计算输出及其格式。"""
+        self.poll()
+        for text in ("[此计算由 MCP agent 启动]", core.EN["[此计算由 MCP agent 启动]"]):
+            cursor = self.out.document().find(text)
+            while not cursor.isNull():
+                cursor.select(QTextCursor.BlockUnderCursor)
+                cursor.removeSelectedText()
+                cursor.deleteChar()
+                cursor = self.out.document().find(text)
 
     def show_background(self, d):
         """打开目录时：有计算在运行就接上；上次在后台结束的计算 (尚未看过结果) 显示其输出的末尾和结果。"""

@@ -153,4 +153,7 @@ def test_completed_source_hint_survives_log_loading(qapp, tmp_path, settings, no
     w.calc.poll()
     assert ("MCP agent" in w.calc.out.toPlainText()) is enabled
     assert len(w.calc.pipeline) == 1
+    w.mcp_action.setChecked(False)
+    w.calc.poll()
+    assert "MCP agent" not in w.calc.out.toPlainText()
     assert w.close() and not no_dialogs

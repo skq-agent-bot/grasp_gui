@@ -283,6 +283,8 @@ class MainWindow(QMainWindow):
             self.mcp_action.blockSignals(False)
             QMessageBox.warning(self, T("设置"), T("无法保存 MCP 开关"))
             return
+        if not enabled:
+            self.calc.hide_mcp_origin()
         if enabled:
             import grasp_mcp
             box = QMessageBox(self)
@@ -298,6 +300,8 @@ class MainWindow(QMainWindow):
             self.mcp_action.blockSignals(True)
             self.mcp_action.setChecked(core.load_config().get("mcp_enabled", False))
             self.mcp_action.blockSignals(False)
+            if not self.mcp_action.isChecked():
+                self.calc.hide_mcp_origin()
             self.calc.check_external()
 
     def restore_layout(self):

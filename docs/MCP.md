@@ -131,6 +131,10 @@ atomic units.
 | `plot_levels` | `directory`, optional `files`, `limit`, `output` | PNG image; optional PNG/SVG/PDF file |
 | `plot_wavefunctions` | `directory`, optional `files`, `output` | PNG image of up to 20 P(r) curves; optional PNG/SVG/PDF file |
 
+`slurm` 使用 GUI 的同名设置：`job`, `partition`, `nodes`, `ntasks`, `time`, `mem`, `mail`,
+`extra`, `modules`, `bindir`, `mpirun`, `mpitmp`；省略的项采用原有默认值。
+`slurm` uses those GUI settings; omitted fields retain the existing defaults.
+
 结构化结果同时放在 JSON 文本和 `structuredContent` 中 (2025-03-26 客户端只有 JSON 文本)。
 工具失败返回 `isError: true`；不要把协议成功误认成计算成功。后台 `status: "ok"` 表示流程结束，
 仍需检查输出文件和参考能量。日志和脚本文本上限 65536 字符，响应上限 8 MiB；有截断标志。

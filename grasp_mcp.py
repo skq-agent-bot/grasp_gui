@@ -11,7 +11,6 @@ import sys
 import grasp_config as config
 import grasp_core as core
 import grasp_service as service
-import grasp_session as sessions
 from grasp_core import T
 
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26")
@@ -201,7 +200,7 @@ class Server:
                 response = dict(jsonrpc="2.0", id=None, error=dict(code=-32700, message="Message too large"))
             else:
                 try:
-                    message = json.loads(raw)
+                    message = json.loads(raw.decode("utf-8"))
                 except (ValueError, RecursionError):
                     response = dict(jsonrpc="2.0", id=None, error=dict(code=-32700, message="Parse error"))
                 else:

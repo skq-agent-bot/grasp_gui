@@ -132,6 +132,9 @@ def test_stdio_protocol_config_and_live_disable(tmp_path, settings):
         assert len(plan["config"]["jobs"]) == 27
         script = data(client.call("export_script", directory="calc"))
         assert "rnucleus" in script["text"] and not script["truncated"]
+        slurm = data(client.call("export_script", directory="calc", slurm=dict(job="mcp", ntasks="2")))
+        assert "#SBATCH --job-name=mcp" in slurm["text"]
+        assert "#SBATCH --ntasks-per-node=2" in slurm["text"]
         core.save_config(mcp_enabled=False)
         assert client.call("create_workdir", directory="forbidden", example="example1")["isError"]
         assert not (root / "forbidden").exists()
@@ -198,6 +201,9 @@ def test_bad_frames_and_protocol_negotiation(tmp_path, settings):
     assert rows[0]["error"]["code"] == -32700
     assert rows[1]["error"]["code"] == -32600
     assert rows[2]["result"]["protocolVersion"] == mcp.PROTOCOLS[0]
+    output = io.StringIO()
+    assert mcp.Server(tmp_path).serve(io.BytesIO(b"\xff\n"), output) == 0
+    assert json.loads(output.getvalue())["error"]["code"] == -32700
     for value in (0, 1001, True, "10"):
         with pytest.raises(ValueError):
             mcp.arguments("levels", dict(directory=".", limit=value))
@@ -265,6 +271,7 @@ def test_result_tools_and_png_svg_pdf(tmp_path, settings):
         assert levels["levels"][0]["J"] == "1/2"
         orbitals = data(client.call("orbitals", directory="calc"))["orbitals"]
         assert orbitals[0]["name"] == "1s" and orbitals[0]["norm"] > 0
+        pytest.importorskip("PySide6.QtWidgets")
         for tool in ("plot_levels", "plot_wavefunctions"):
             for extension in ("png", "svg", "pdf"):
                 result = client.call(tool, directory="calc", output=tool + "." + extension)
@@ -350,5 +357,35 @@ def test_transition_units_gauges_and_branching(tmp_path, settings):
         assert rows[0]["A"] == 3.0 and rows[0]["gf"] == 0.25 and rows[0]["S"] == 0.5
         assert [row["branching_ratio"] for row in rows] == [0.75, 0.25]
         assert rows[0]["upper"] == ["upper", 2, 1, 1]
+    finally:
+        client.close()
+
+
+@pytest.mark.grasp
+def test_mcp_example1_reproduces_reference(tmp_path, settings, grasp_bindir, monkeypatch):
+    monkeypatch.setenv("GRASP_BINDIR", grasp_bindir)
+    core.save_config(np=1)
+    client = Client(tmp_path, settings)
+    try:
+        client.initialize()
+        data(client.call("create_workdir", directory="example1", example="example1"))
+        data(client.call("run", directory="example1"))
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            state = data(client.call("status", directory="example1"))["state"]
+            if state["status"] != "running":
+                break
+            time.sleep(0.05)
+        assert state["status"] == "ok" and state["started_by"] == "mcp"
+        cfg, _ = config.load(Path(ROOT) / "demos" / "example1.json")
+        for ref in cfg["reference"]:
+            rows = data(client.call("levels", directory="example1", files=[ref["file"]]))["levels"]
+            got = sorted(row["energy_hartree"] for row in rows)
+            expected = sorted(ref["energies"])
+            assert len(got) == len(expected)
+            assert max(abs(a - b) for a, b in zip(got, expected)) < 1e-7
+        pytest.importorskip("PySide6.QtWidgets")
+        result = client.call("plot_levels", directory="example1")
+        assert not result["isError"] and any(c["type"] == "image" for c in result["content"])
     finally:
         client.close()
