@@ -168,7 +168,7 @@ def scf_log(path, cancel=None):
                 if current is not None:
                     samples.append(current)
                 count = int(match[1])
-                current = dict(iteration=count, energies_hartree=[],
+                current = dict(iteration=count, block_average_energies_hartree=[], optimized_levels=[],
                                max_printed_self_consistency=None)
             if "Maximum iterations in SCF Exceeded" in line or "Convergence not obtained" in line:
                 exceeded = True
@@ -181,10 +181,18 @@ def scf_log(path, cancel=None):
                 current["weighted_energy_hartree"] = number(match[1])
             match = re.search(r"Average energy\s*=\s*(" + NUMBER + ")", line)
             if match:
-                if len(current["energies_hartree"]) < 50:
-                    current["energies_hartree"].append(number(match[1]))
+                if len(current["block_average_energies_hartree"]) < 50:
+                    current["block_average_energies_hartree"].append(number(match[1]))
                 else:
-                    current["omitted_average_energies"] = current.get("omitted_average_energies", 0) + 1
+                    current["omitted_block_averages"] = current.get("omitted_block_averages", 0) + 1
+            match = re.search(r"Level\s+(\d+|\*+)\s+Energy\s*=\s*(" + NUMBER +
+                              r")\s+Weight\s*=\s*(" + NUMBER + ")", line)
+            if match:
+                if len(current["optimized_levels"]) < 50:
+                    current["optimized_levels"].append(dict(index=int(match[1]) if match[1].isdigit() else None,
+                                                            energy_hartree=number(match[2]), weight=number(match[3])))
+                else:
+                    current["omitted_optimized_levels"] = current.get("omitted_optimized_levels", 0) + 1
             if re.match(r"\s*\d+[spdfghiklmnoqrtuvwxyz]-?\s", line):
                 parts = line.split()
                 if len(parts) >= 6:
@@ -197,12 +205,17 @@ def scf_log(path, cancel=None):
     if current is not None:
         samples.append(current)
     unchanged = before == index.stamp(path)
-    previous = None
+    previous = previous_single = None
     for row in samples:
         energy = row.get("weighted_energy_hartree")
         if energy is not None and previous is not None:
             row["delta_weighted_energy_hartree"] = energy - previous
         previous = energy
+        levels = row["optimized_levels"]
+        single = levels[0]["energy_hartree"] if len(levels) == 1 and not row.get("omitted_optimized_levels") else None
+        if single is not None and previous_single is not None:
+            row["delta_optimized_energy_hartree"] = single - previous_single
+        previous_single = single
     converged = False if exceeded else True if complete and count and unchanged else None
     return dict(converged=converged,
                 iterations=count, completed=complete, changed_while_reading=not unchanged,

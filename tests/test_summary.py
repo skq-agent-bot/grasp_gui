@@ -240,3 +240,15 @@ def test_omitted_layers_drop_corresponding_result_sections(tmp_path):
     assert len(levels) < 10 and meta["omissions"]
     assert {r["step"] for r in scf} == {r["step"] for r in levels}
     assert {Path(r["file"]).stem for r in csfs} == {Path(r["file"]).stem for r in levels}
+
+
+def test_scf_distinguishes_block_averages_and_optimized_levels(tmp_path):
+    p = tmp_path / "energies.txt"
+    p.write_text("Iteration number 1\nAverage energy = -7.0D+00 Hartrees\n"
+                 "Level  1    Energy = -7.5D+00    Weight = 1.00000D+00\n"
+                 "Iteration number 2\nAverage energy = -7.1D+00 Hartrees\n"
+                 "Level  1    Energy = -7.6D+00    Weight = 1.00000D+00\nRMCDHF: Execution complete.\n")
+    last = summary.scf_log(p)["last_iterations"][-1]
+    assert last["block_average_energies_hartree"] == [-7.1]
+    assert last["optimized_levels"] == [dict(index=1, energy_hartree=-7.6, weight=1.0)]
+    assert last["delta_optimized_energy_hartree"] == pytest.approx(-0.1)

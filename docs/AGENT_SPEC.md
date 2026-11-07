@@ -117,7 +117,11 @@ not proof that the step was never run.
 `converged` is `true`, `false` or `null`. Missing/reused/incomplete logs are explicitly identified, not assumed
 converged. Rules follow compas/grasp **9006157**, `rmcdhf90/scf.f90:154–235,292–295`,
 `improv.f90:173–185`, `newco.f90:116–128`, and `rscfvu.f90:161–168`: iteration headers, printed
-self-consistency, weighted energies, iteration exhaustion/error markers and normal program completion.
+self-consistency, optimized level energies/weights, weighted energies, iteration exhaustion/error markers
+and normal program completion. `optimized_levels` follows the printed order; the log does not identify
+their J/parity blocks. `block_average_energies_hartree` preserves the separate `Average energy` output
+(`matrix.f90:315`), rather than labelling it as optimized eigenvalues. A single optimized level also has
+its consecutive-iteration energy difference; multiple levels retain their individual values and weighted difference.
 The printed maximum self-consistency is the maximum over printed orbital updates, not a reconstructed SCF
 threshold. Normal completion with iterations and no exhaustion/error marker indicates the SCF convergence
 path in that source. A running or partial log remains inconclusive.
