@@ -244,6 +244,15 @@ files). Bottom: *Import into directory (导入到目录)* + *Browse…* (default
 `~/grasp_calcs/<name>` for files; must be empty or new), *Import (导入)*, *Cancel*. Importing a file with custom
 commands asks for confirmation. After import the GUI switches to that directory; *▶ Run all* computes it.
 
+*From clipboard (从剪贴板读入)* beside *Open configuration file…* reads the normal CLIPBOARD (Ctrl+C),
+not X11's mouse PRIMARY selection. It accepts one JSON object, optionally wrapped in a `json` or plain Markdown
+code block. Preview, warnings, attached files and custom-command confirmation are the same as file import;
+the source is shown as *Clipboard (剪贴板)*. *File → Import configuration file…* opens this dialog so either
+source can be chosen. The shared text/file limit is 32 MiB; the existing attached-file limits still apply.
+
+中文：从剪贴板读入支持纯 JSON 和 Markdown 代码块，使用 Ctrl+C 的剪贴板，不读鼠标选中的 PRIMARY。
+读取后照常预览并确认自定义命令，来源显示“剪贴板”；文件和文本采用相同检查，文本总上限为 32 MiB。
+
 新增示例：case2 为 C IV (Z=6)，case3 为 Fe XV (Z=26)，只计算所选元素；manual_csfs 为 §5.1–5.8 的 CSF 教学例，
 只生成组态列表；manual_zf 为 §14.1 的 Fe XIII 零阶 / 一阶能量计算。[完整清单 / Full inventory](MANUAL_EXAMPLES.md)。
 
@@ -255,6 +264,15 @@ level energies are stored); *Attached files*: small text input files the GUI can
 ≤ 1 MB each, ≤ 4 MB total); *Notes (提示)*: portability problems (steps stored as commands, absolute paths, custom
 commands) or *No portability problems found*. *Export…* asks for the file name (default: the title). Format:
 `docs/CONFIG_FORMAT.md`.
+
+*Save to file… (保存为文件…)* and *Copy to clipboard (复制到剪贴板)* use identical JSON, including the selected
+attachments and reference results. The pipeline's *Export ▾* menu also has *Copy configuration to clipboard…
+(复制配置到剪贴板…)*, which opens the same dialog with copy as the default action. Successful copying is shown
+in the status bar. An oversized copy keeps the previous clipboard and asks the user to save a file instead.
+Clipboard output is limited to 4 MiB; file output and both input routes allow 32 MiB.
+
+中文：保存和复制使用同一份配置与排版，包含所选附带文件和参考结果；流程的“导出 ▾”也可打开复制入口。
+复制成功会在状态栏提示；太大时不改动原剪贴板，可继续选择保存为文件。
 
 ## Radial wave functions tab / 径向波函数页
 

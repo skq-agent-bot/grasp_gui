@@ -18,6 +18,9 @@ fields of every program tab are listed in [STEPS.md](STEPS.md).
 
 A UTF-8 JSON object. Current version: **2**.
 
+File and clipboard input share a 32 MiB UTF-8 text limit, including any Markdown wrapper; attached-file limits
+below still apply. 文件与剪贴板共用 32 MiB 的 UTF-8 文本上限（含 Markdown 包裹）；附带文件仍遵守下述限制。
+
 ```json
 {
   "format": "grasp-gui-config",

@@ -13,7 +13,7 @@ import threading
 import time
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit,
                                QPushButton, QScrollArea, QSplitter, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
@@ -294,7 +294,7 @@ def esc(s):
 
 class ConfigDialog(QDialog):
     """选择一个配置 (手册算例或打开的配置文件)，导入到一个空目录。
-    entries：[dict(cfg, warnings, path)]，path 为 None 表示随程序提供的示例。"""
+    entries：[dict(cfg, warnings, path)]；剪贴板条目另带 clipboard=True，按外部配置确认。"""
 
     def __init__(self, parent, entries, bindir):
         super().__init__(parent)
@@ -315,7 +315,10 @@ class ConfigDialog(QDialog):
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list.setSpacing(2)
         ll.addWidget(self.list)
-        ll.addWidget(button("打开配置文件…", self.open_file))
+        source_buttons = QHBoxLayout()
+        source_buttons.addWidget(button("打开配置文件…", self.open_file))
+        source_buttons.addWidget(button("从剪贴板读入", self.open_clipboard))
+        ll.addLayout(source_buttons)
         split.addWidget(left)
         self.info = QTextBrowser()
         split.addWidget(self.info)
@@ -331,9 +334,10 @@ class ConfigDialog(QDialog):
         lay.addLayout(row)
         bar = QHBoxLayout()
         bar.addStretch()
-        ok = button("导入", self.accept)
-        ok.setDefault(True)
-        bar.addWidget(ok)
+        self.ok = button("导入", self.accept)
+        self.ok.setDefault(True)
+        self.ok.setEnabled(bool(self.entries))
+        bar.addWidget(self.ok)
         bar.addWidget(button("取消", self.reject))
         lay.addLayout(bar)
         self.dir_edited = False
@@ -345,7 +349,8 @@ class ConfigDialog(QDialog):
 
     def add_item(self, e):
         title = grasp_config.text(e["cfg"], "title") or os.path.basename(e["path"] or "")
-        self.list.addItem(title if e["path"] is None else f"{title}\n({os.path.basename(e['path'])})")
+        source = T("剪贴板") if e.get("clipboard") else os.path.basename(e["path"] or "")
+        self.list.addItem(title if e["path"] is None and not e.get("clipboard") else f"{title}\n({source})")
 
     def open_file(self, path=None):
         if not path:
@@ -358,24 +363,40 @@ class ConfigDialog(QDialog):
         except grasp_config.ConfigError as e:
             QMessageBox.warning(self, T("导入配置"), str(e))
             return False
-        self.entries.insert(0, dict(cfg=cfg, warnings=warnings, path=os.path.abspath(path)))
+        self.add_entry(dict(cfg=cfg, warnings=warnings, path=os.path.abspath(path)))
+        return True
+
+    def open_clipboard(self):
+        content = QGuiApplication.clipboard().text()
+        try:
+            cfg, warnings = grasp_config.loads(content)
+        except grasp_config.ConfigError as e:
+            preview = repr(content.strip()[:80])
+            QMessageBox.warning(self, T("导入配置"), T("无法读取剪贴板：{e}\n内容开头：{text}", e=e, text=preview))
+            return False
+        self.add_entry(dict(cfg=cfg, warnings=warnings, path=None, clipboard=True))
+        return True
+
+    def add_entry(self, entry):
+        self.entries.insert(0, entry)
         self.list.clear()
         for e in self.entries:
             self.add_item(e)
         self.dir_edited = False
         self.list.setCurrentRow(0)
-        return True
 
     def entry(self):
         return self.entries[max(self.list.currentRow(), 0)]
 
     def show_entry(self, row):
+        self.ok.setEnabled(row >= 0)
         if row < 0:
             return
         e = self.entries[row]
         d = e["cfg"]
         html = [f"<h3>{esc(grasp_config.text(d, 'title') or T('(无标题)'))}</h3>"]
-        source = T("随程序提供的示例") if e["path"] is None else esc(e["path"])
+        source = T("剪贴板") if e.get("clipboard") else (
+            T("随程序提供的示例") if e["path"] is None else esc(e["path"]))
         html.append(f"<p style='color:gray'>{source}</p>")
         if grasp_config.text(d, "summary"):
             html.append(f"<p>{esc(grasp_config.text(d, 'summary'))}</p>")
@@ -415,16 +436,20 @@ class ConfigDialog(QDialog):
             html.append("</ul>")
         self.info.setHtml("".join(html))
         if not self.dir_edited:
-            if e["path"] is None:
+            if e.get("clipboard"):
+                self.dir.setText(free_dir(os.path.join(CALC_ROOT, "clipboard")))
+            elif e["path"] is None:
                 self.dir.setText(free_dir(os.path.join(DEMO_ROOT, d.get("id") or "demo")))
             else:
                 stem = os.path.basename(e["path"]).split(".")[0] or "calc"
                 self.dir.setText(free_dir(os.path.join(CALC_ROOT, stem)))
 
     def accept(self):
+        if not self.entries:
+            return
         e = self.entry()
         commands = grasp_config.custom_commands(e["cfg"])
-        if e["path"] is not None and commands and QMessageBox.question(
+        if (e["path"] is not None or e.get("clipboard")) and commands and QMessageBox.question(
                 self, T("导入配置"), T("这个配置含有 {n} 条自定义命令 (见右侧)，运行流程时会执行它们。确定导入吗？",
                                       n=len(commands))) != QMessageBox.Yes:
             return
@@ -443,11 +468,12 @@ class ConfigDialog(QDialog):
 class ExportDialog(QDialog):
     """把当前目录的流程导出为共享配置：填写说明，选择参考结果和附带文件。"""
 
-    def __init__(self, parent, workdir, pipeline):
+    def __init__(self, parent, workdir, pipeline, clipboard=False):
         super().__init__(parent)
         self.setWindowTitle(T("导出配置"))
         self.resize(820, 680)
         self.workdir, self.pipeline = workdir, pipeline
+        self.to_clipboard, self.cfg = clipboard, None
         lay = QVBoxLayout(self)
         note = QLabel(T("配置保存当前流程中各步的参数，不含计算结果，也不含 GRASP bin 目录、MPI 进程数等与机器有关的设置。"
                         "别人导入后可以从头重复这个计算。"))
@@ -497,8 +523,11 @@ class ExportDialog(QDialog):
         lay.addWidget(self.notes)
         bar = QHBoxLayout()
         bar.addStretch()
-        ok = button("导出…", self.accept)
-        ok.setDefault(True)
+        copy = button("复制到剪贴板", lambda: self.accept(True))
+        copy.setDefault(clipboard)
+        bar.addWidget(copy)
+        ok = button("保存为文件…", self.accept)
+        ok.setDefault(not clipboard)
         bar.addWidget(ok)
         bar.addWidget(button("取消", self.reject))
         lay.addLayout(bar)
@@ -535,10 +564,22 @@ class ExportDialog(QDialog):
         return [os.path.join(self.workdir, self.refs.item(i).text()) for i in range(self.refs.count())
                 if self.refs.item(i).checkState() == Qt.Checked]
 
-    def accept(self):
+    def accept(self, clipboard=False):
         if not self.title.text().strip():
             QMessageBox.information(self, T("导出配置"), T("请填写标题。"))
             return
+        try:
+            cfg = grasp_config.export(self.pipeline, self.meta(), self.file_paths(), self.reference_paths())
+            content = grasp_config.dumps(cfg)
+        except (grasp_config.ConfigError, OSError, ValueError) as e:
+            QMessageBox.warning(self, T("导出配置"), str(e))
+            return
+        if clipboard and len(content.encode("utf-8")) > grasp_config.MAX_CLIPBOARD:
+            QMessageBox.warning(self, T("导出配置"), T("配置太大，无法复制到剪贴板；请保存为文件。"))
+            return
+        self.cfg, self.to_clipboard = cfg, clipboard
+        if clipboard:
+            QGuiApplication.clipboard().setText(content)
         core.save_config(config_author=self.author.text().strip())
         super().accept()
 
@@ -739,6 +780,7 @@ class CalcPanel(QWidget):
         menu = QMenu(export)
         menu.addAction(T("导出脚本…")).triggered.connect(self.export_script)
         menu.addAction(T("导出 Slurm 作业脚本…")).triggered.connect(self.export_slurm)
+        menu.addAction(T("复制配置到剪贴板…")).triggered.connect(lambda: self.export_config(True))
         export.setMenu(menu)
         pl.addWidget(ButtonColumn([[button("▶ 运行全部", self.run_pipeline), button("▶ 从选中开始", self.run_from_selected)],
                                    [button("编辑", self.edit_job), button("更新所选", self.update_job),
@@ -1298,7 +1340,7 @@ class CalcPanel(QWidget):
             QMessageBox.warning(self, T("导入示例"), T("找不到示例文件 ({p})", p=grasp_config.DEMO_DIR))
             return
         dlg = ConfigDialog(self, entries, self.run.bindir())
-        if not examples and not dlg.open_file(path):
+        if not examples and path and not dlg.open_file(path):
             return
         if dlg.exec() != QDialog.Accepted:
             return
@@ -1314,18 +1356,17 @@ class CalcPanel(QWidget):
             self.workdirRequested.emit(path)
         self.status(T("已导入“{t}”到 {p}；点“▶ 运行全部”开始计算", t=grasp_config.text(cfg, "title"), p=path))
 
-    def export_config(self):
+    def export_config(self, clipboard=False):
         """把当前流程导出为共享配置文件。"""
         if not self.need_pipeline():
             return
         self.flush_group()
-        dlg = ExportDialog(self, self.cur_workdir, self.pipeline)
+        dlg = ExportDialog(self, self.cur_workdir, self.pipeline, clipboard)
         if dlg.exec() != QDialog.Accepted:
             return
-        try:
-            cfg = grasp_config.export(self.pipeline, dlg.meta(), dlg.file_paths(), dlg.reference_paths())
-        except (grasp_config.ConfigError, OSError, ValueError) as e:
-            QMessageBox.warning(self, T("导出配置"), str(e))
+        cfg = dlg.cfg
+        if dlg.to_clipboard:
+            self.status(T("已复制配置到剪贴板 ({n} 步)", n=len(cfg["jobs"])))
             return
         name = re.sub(r"[^\w.-]+", "_", cfg["title"]).strip("_") or "config"
         path, _ = QFileDialog.getSaveFileName(self, T("导出配置"), os.path.join(self.cur_workdir, name + ".json"),
