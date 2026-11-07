@@ -102,7 +102,8 @@ def test_continued_records(tmp_path, split):
 
 
 @pytest.mark.parametrize("workers", [1, 2, 4])
-def test_parallel_matches_serial(tmp_path, workers):
+def test_parallel_matches_serial(tmp_path, workers, monkeypatch):
+    monkeypatch.setattr(index, "PARALLEL_MIN_COEFFICIENTS", 0)
     path = make_files(tmp_path, 20000, 4)
     got = mix.open_mix(path, summary=True, workers=workers)
     expected = old.read_mix(path)
@@ -182,7 +183,8 @@ def test_csf_empty_blocks_and_blank_coupling(tmp_path):
         assert a.read_bytes() == b.read_bytes()
 
 
-def test_cancel_running_processes(tmp_path):
+def test_cancel_running_processes(tmp_path, monkeypatch):
+    monkeypatch.setattr(index, "PARALLEL_MIN_COEFFICIENTS", 0)
     path = make_files(tmp_path, 300000, 4)
     stop = threading.Event()
     seen = []
@@ -255,3 +257,38 @@ def test_subset_cannot_overwrite_source(tmp_path):
         with pytest.raises(ValueError):
             writer(source, source, keep)
         assert source.read_bytes() == before
+
+
+
+@pytest.mark.parametrize("workers", [None, 2, 4])
+def test_small_files_do_not_start_process_pool(tmp_path, monkeypatch, workers):
+    path = make_files(tmp_path, 50, 4)
+
+    def unexpected_pool(*args, **kwargs):
+        pytest.fail("small files must not create a process pool")
+
+    monkeypatch.setattr(index, "ProcessPoolExecutor", unexpected_pool)
+    got = mix.open_mix(path, summary=True, workers=workers)
+    expected = old.read_mix(path)
+    for a, b in zip(got[0].levels, expected[0].levels):
+        assert a.leading() == b.leading()
+        assert a.top_components(500) == b.components()[:500]
+
+
+@pytest.mark.parametrize("ncf,expected_pools", [(3, 0), (4, 1), (5, 1)])
+def test_parallel_threshold_boundary(tmp_path, monkeypatch, ncf, expected_pools):
+    path = make_files(tmp_path, ncf, 3)
+    monkeypatch.setattr(index, "PARALLEL_MIN_COEFFICIENTS", 12)
+    pool = index.ProcessPoolExecutor
+    started = []
+
+    def observe(*args, **kwargs):
+        started.append(args[0])
+        assert kwargs["mp_context"].get_start_method() == "spawn"
+        return pool(*args, **kwargs)
+
+    monkeypatch.setattr(index, "ProcessPoolExecutor", observe)
+    result = mix.open_mix(path, summary=True, workers=2)
+    assert len(started) == expected_pools
+    assert result[0].levels[0].top_components(500) == old.read_mix(path)[0].levels[0].components()[:500]
+    assert not multiprocessing.active_children()

@@ -68,7 +68,9 @@ def timed(function):
     return result, dict(seconds=round(elapsed, 4), tree_peak_rss_mib=round(peak[0] / 2**20, 2))
 
 
-def probe(directory, workers, cache):
+def probe(directory, workers, cache, force_parallel=False):
+    if force_parallel:
+        index.PARALLEL_MIN_COEFFICIENTS = 0
     # 每次使用独立的缓存命名空间，避免删除真实用户的索引，也保证首次读入无摘要缓存。
     index.cache_dirs = lambda path: [Path(cache) / hashlib.sha256(os.fsencode(os.path.dirname(path))).hexdigest()]
     paths = [os.path.join(directory, n) for n in mix.find_mix_files(directory)]
@@ -100,7 +102,8 @@ def probe(directory, workers, cache):
 
     count, composition = timed(switch)
     size = sum(p.stat().st_size for p in Path(cache).rglob("*.json"))
-    print(json.dumps(dict(workers=workers, levels=len(rows), components=count, first=first, cached=second,
+    print(json.dumps(dict(workers=workers, parallel_min_coefficients=index.PARALLEL_MIN_COEFFICIENTS,
+                          levels=len(rows), components=count, first=first, cached=second,
                           all_level_compositions=composition, cache_bytes=size), ensure_ascii=False))
 
 
@@ -108,11 +111,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory")
     parser.add_argument("--workers", type=int, choices=(1, 2, 4), help="只测这个进程数")
+    parser.add_argument("--force-parallel", action="store_true", help="测量启动开销：忽略小文件串行阈值")
     parser.add_argument("--probe-cache", help=argparse.SUPPRESS)
     args = parser.parse_args()
     directory = os.path.abspath(args.directory)
     if args.probe_cache:
-        probe(directory, args.workers, args.probe_cache)
+        probe(directory, args.workers, args.probe_cache, args.force_parallel)
         return
     candidates = index.cache_dirs(os.path.join(directory, "_"))
     base = None
@@ -130,6 +134,8 @@ def main():
     for workers in [args.workers] if args.workers else (1, 2, 4):
         with tempfile.TemporaryDirectory(prefix="bench-", dir=base) as cache:
             command = [sys.executable, __file__, directory, "--workers", str(workers), "--probe-cache", cache]
+            if args.force_parallel:
+                command.append("--force-parallel")
             result = subprocess.run(command, text=True, capture_output=True)
             if result.returncode:
                 raise RuntimeError(result.stderr)

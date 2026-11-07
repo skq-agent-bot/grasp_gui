@@ -19,6 +19,8 @@ STRIDE = 256
 TOP_K = 500
 CACHE_VERSION = 1
 CHUNK = 1024 * 1024
+# 小文件的 spawn 开销高于系数分析；阈值依据源码和 onefile 的实测。
+PARALLEL_MIN_COEFFICIENTS = 4_000_000
 _worker_stop = None
 _worker_progress = None
 
@@ -327,11 +329,13 @@ def prepare_mix(path, k=TOP_K, workers=None, cancel=None, progress=None):
                 targets.append((b, i))
             b["top"] = [None] * b["nev"]
             b["leading"] = [None] * b["nev"]
-    if workers is None:
+    total = max(1, sum(t[4] for t in tasks))
+    if total < PARALLEL_MIN_COEFFICIENTS:
+        workers = 1
+    elif workers is None:
         from grasp_core import physical_cpu_count
         workers = min(physical_cpu_count() or 1, 4)
     workers = max(1, min(workers, len(tasks)))
-    total = max(1, sum(t[4] for t in tasks))
     if progress:
         progress(str(path), 0)
 
