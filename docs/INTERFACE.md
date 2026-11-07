@@ -169,7 +169,8 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   It shows the command, the here-document with the program's stdin and the file actions, e.g.
   `rmcdhf <<'EOF' … EOF` followed by `rsave odd4`.
 * **Program output (程序输出)**: dark terminal-style pane, last 5000 lines (set a log file in the form for the full
-  output); *List files (查看文件)*, *Clear (清屏)*. Errors in red, step headers in blue.
+  output); *Working directory (工作目录)* (update, restore record, clear directory; see below),
+  *List files (查看文件)*, *Clear (清屏)*. Errors in red, step headers in blue.
 * **Background runs (后台运行)**: every run (a program or the pipeline) is executed by a separate background process
   (`grasp_gui _run`); the tab shows its output live and *■ Stop* stops it. A permanent label at the right of the
   status bar shows *Running: step i/n title, this step h:mm:ss (运行中：第 i/n 步 …，本步 …)*, updated every second,
@@ -255,6 +256,46 @@ source can be chosen. The shared text/file limit is 32 MiB; the existing attache
 
 新增示例：case2 为 C IV (Z=6)，case3 为 Fe XV (Z=26)，只计算所选元素；manual_csfs 为 §5.1–5.8 的 CSF 教学例，
 只生成组态列表；manual_zf 为 §14.1 的 Fe XIII 零阶 / 一阶能量计算。[完整清单 / Full inventory](MANUAL_EXAMPLES.md)。
+
+### Update an existing directory / 更新现有工作目录
+
+The import dialog defaults to a new, empty directory. Check *Update current working directory (更新当前工作目录)*
+to use the current directory, or open *Program output → Working directory → Update current directory from
+configuration… (程序输出 → 工作目录 → 用配置更新当前目录…)*. Running directories cannot be updated or cleared.
+The update preview shows a copyable list of added, removed, moved and changed steps (field values before → after),
+with other program-form changes listed separately. Steps are matched by content after filling defaults, so an
+insertion keeps later steps unchanged. Attached files are added when absent, skipped when identical; conflicts show
+a text diff and are kept unless checked. *Update only (只更新)* retains existing results and highlights the first
+changed step. For an unchanged prefix followed by new steps, *Update and run added steps (更新并运行新增的步骤)* starts
+at the first new step; overwriting existing inputs disables this shortcut so the required recomputation can be
+reviewed first. Before updating, the original record is backed up as `.grasp_gui.json.bak-<timestamp>` (last five
+retained). *Restore previous working-directory record (恢复上一次的工作目录记录)* restores parameters and pipeline,
+retaining results and attached files. Shared configuration and session formats are unchanged.
+
+导入默认写入新的空目录；勾选“更新当前工作目录”可改为原目录，也可在“程序输出 → 工作目录 → 用配置更新当前目录…”进入。
+预览按内容比较流程，列出新增、删除、移动、各参数的前后值，其他程序页参数另列；摘要可复制。附带文件不存在则新增、相同则跳过，
+冲突显示文本差异并默认保留，勾选才覆盖。“只更新”保留已有结果，并选中首个受影响的步骤；仅在末尾追加时可“更新并运行新增的步骤”，
+覆盖旧输入时需先核对重算范围。每次更新前备份原记录，最多保留五份；“恢复上一次的工作目录记录”只恢复流程和参数。
+正在运行的目录禁止更新、恢复和清空。
+
+### Clear a working directory / 清空工作目录
+
+*Program output → Working directory → Clear working directory… (程序输出 → 工作目录 → 清空工作目录…)* lists items to
+delete (left, uncheck to retain), retained items (right), and the selected count and total bytes. Results-only mode
+is the default: preserve the session, its backups, and known attached inputs; run-state/log files and `.grasp_gui/`
+caches can be removed. Input names are known only for imports/updates performed in this GUI session. If the complete
+input list is unknown (including after restarting), ordinary items are initially unchecked; newly attached inputs
+are still protected. Select the actual results explicitly. No input-list sidecar or session-format change is made.
+*Delete everything (全部删除)* includes inputs and the record, and requires typing the directory name. Deletion is
+permanent, including selected subdirectories; symbolic links are only unlinked. Root, home and system directories
+are refused; a directory without a session requires a separate confirmation. Clearing everything also clears the
+visible pipeline, and closing the window does not recreate the removed record.
+
+“清空工作目录…”先列出删除与保留项、总数量和大小，可取消勾选；默认只删结果，保留工作目录记录、备份及已知附带输入，
+运行状态、日志和缓存可以清理。输入清单仅在本次界面导入/更新后已知；旧目录或重启后无法确定的普通项目默认不勾选，需明确选择结果，
+更新中新增的附带输入仍会保留。“全部删除”包括输入和记录，必须输入目录名确认；删除不能恢复，选中的子目录会递归删除，
+符号链接只删除链接本身。根目录、家目录、系统目录禁止清空；没有工作目录记录的目录另行确认。
+全部删除后界面流程也清空，关闭窗口不会重新生成记录。
 
 ### Export configuration (导出配置)
 
