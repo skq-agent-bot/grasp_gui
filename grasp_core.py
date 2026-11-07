@@ -738,6 +738,7 @@ EN = {
   grasp_gui 文件             按文件内容打开对应的页并只勾选这个文件：
                              混合系数文件 (.m、.cm) → 能级图，径向波函数文件 (.w) → 径向波函数
   grasp_gui check|script|steps|reference …   共享配置的命令行工具 (不打开窗口)，见 grasp_gui check --help
+  grasp_gui mcp …                           MCP stdio 服务 (默认关闭)，见 grasp_gui mcp --help
   选项 --lang zh|en          界面语言
 
 以 grasp_levels 或 grasp_wfn 为名的符号链接直接打开对应的页，例如：
@@ -749,6 +750,7 @@ EN = {
   grasp_gui FILE             open the page for the file's contents with only this file checked:
                              mixing coefficient file (.m, .cm) -> levels, radial wave functions (.w) -> wfn
   grasp_gui check|script|steps|reference …   command-line tools for shared configurations (no window), see grasp_gui check --help
+  grasp_gui mcp …                           MCP stdio service (off by default), see grasp_gui mcp --help
   option --lang zh|en        interface language
 
 A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
