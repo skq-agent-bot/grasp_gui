@@ -226,3 +226,17 @@ def test_selected_duplicate_steps_keep_their_pipeline_position():
     a, b = job("rnucleus"), job("rnucleus")
     assert summary.locate([a, b], [b]) == 1
     assert summary.locate([a, b], [copy.deepcopy(b)]) is None
+
+
+def test_omitted_layers_drop_corresponding_result_sections(tmp_path):
+    data = results(tmp_path)
+    source = data["levels"][0]
+    data["levels"] = [dict(copy.deepcopy(source), file=f"layer{i}.cm", step=i + 1) for i in range(10)]
+    data["scf"] = [dict(step=i + 1, converged=True, details="SCF" * 80) for i in range(10)]
+    data["csfs"] = [dict(file=f"layer{i}.c", blocks=[dict(J_parity="1/2-", count=12)]) for i in range(10)]
+    text = summary.render(data, ["levels", "scf", "csfs"], max_bytes=6000)
+    parts = [json.loads(block.split("\n```", 1)[0]) for block in text.split("```json\n")[1:]]
+    meta, scf, csfs, levels = parts
+    assert len(levels) < 10 and meta["omissions"]
+    assert {r["step"] for r in scf} == {r["step"] for r in levels}
+    assert {Path(r["file"]).stem for r in csfs} == {Path(r["file"]).stem for r in levels}

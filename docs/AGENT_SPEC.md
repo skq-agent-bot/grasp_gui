@@ -130,7 +130,7 @@ energies use the lowest included energy as zero. Each symmetry block defaults to
 (adjustable 1–200), with an explicit omitted count; partially written files are marked.
 
 The text limit is **200 KiB of UTF-8**. Leading components are omitted first, followed by earlier or
-unassociated results, with an explicit omission list. Full configuration JSON is never cut in the middle.
+unassociated results and their corresponding SCF/CSF information, with an explicit omission list. Full configuration JSON is never cut in the middle.
 If the remaining selection cannot fit, copying is disabled until fewer sections/levels are selected;
 export the full configuration separately when needed.
 

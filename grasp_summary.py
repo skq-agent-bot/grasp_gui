@@ -359,8 +359,13 @@ def render(data, sections=None, max_bytes=MAX_BYTES):
     while len(out.encode("utf-8")) > max_bytes and len(data["levels"]) > 1:
         position = next((i for i, r in enumerate(data["levels"]) if r["step"] is None), 0)
         old = data["levels"].pop(position)
+        data["scf"] = [r for r in data["scf"] if r["step"] != old["step"]]
+        state = Path(old["file"]).stem
+        if not any(Path(r["file"]).stem == state for r in data["levels"]):
+            data["csfs"] = [r for r in data["csfs"] if r["file"] != state + ".c"]
         if not omitted_files:
-            omissions.append(dict(reason=T("为满足大小上限，省略较早或未关联的结果"), files=omitted_files))
+            omissions.append(dict(reason=T("为满足大小上限，省略较早或未关联的结果"), files=omitted_files,
+                                  sections=["levels", "layer_changes", "scf", "csfs"]))
         omitted_files.append(old["file"])
         out = text()
     if len(out.encode("utf-8")) > max_bytes:

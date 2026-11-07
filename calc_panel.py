@@ -1329,8 +1329,12 @@ class CalcPanel(QWidget):
         jobs = self.pipeline[self.selected() or 0:] if self.pipeline else [self.current_job()]
         if not all(jobs) or not self.check_dirs():
             return
-        result = summary.check_files(self.cur_workdir, jobs, run=self.run.values(),
-                                     offset=summary.locate(self.pipeline, jobs) or 0)
+        try:
+            result = summary.check_files(self.cur_workdir, jobs, run=self.run.values(),
+                                         offset=summary.locate(self.pipeline, jobs) or 0)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, T("检查输入文件"), str(e))
+            return
         text = summary.check_text(result) if result["missing"] else T("没有发现缺失的输入文件。")
         if not result["missing"] and result["skipped"]:
             text += "\n" + "\n".join(T("第 {n} 步 {p}：{why}", n=r["step"], p=r["program"], why=r["reason"])
@@ -1362,7 +1366,11 @@ class CalcPanel(QWidget):
         if not self.save_session(require_saved=True):
             return
         first = summary.locate(self.pipeline, jobs)
-        checked = summary.check_files(self.cur_workdir, jobs, run=cfg, offset=first or 0)
+        try:
+            checked = summary.check_files(self.cur_workdir, jobs, run=cfg, offset=first or 0)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, T("检查输入文件"), str(e))
+            return
         if checked["missing"] and QMessageBox.question(
                 self, T("缺少输入文件"), summary.check_text(checked) + "\n\n" + T("仍然运行吗？"),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:

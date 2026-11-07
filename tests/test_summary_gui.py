@@ -81,7 +81,7 @@ def test_missing_input_prompt_and_run_anyway(qapp, tmp_path, monkeypatch, no_dia
     assert w.close()
 
 
-def test_appended_steps_are_checked_and_history_covers_previous_run(qapp, tmp_path, monkeypatch, no_dialogs):
+def test_appended_steps_are_checked_before_run(qapp, tmp_path, monkeypatch, no_dialogs):
     original = config.export([job("rnucleus")], dict(title="test"))
     config.install(original, str(tmp_path / "calc"))
     w = window(tmp_path / "calc")
@@ -96,4 +96,21 @@ def test_appended_steps_are_checked_and_history_covers_previous_run(qapp, tmp_pa
     w.calc.update_workdir(updated)
     assert len(w.calc.pipeline) == 2 and not w.calc.busy
     assert any(kind == "question" and "next.c" in text[1] for kind, text in no_dialogs)
+    assert w.close()
+
+
+def test_file_check_read_error_is_visible(qapp, tmp_path, monkeypatch, no_dialogs):
+    import grasp_summary as summary
+
+    w = window(tmp_path)
+    w.calc.pipeline = [job("rnucleus")]
+
+    def fail(*args, **kwargs):
+        raise OSError("cannot inspect directory")
+
+    monkeypatch.setattr(summary, "check_files", fail)
+    monkeypatch.setattr(bg, "launch", lambda *args, **kwargs: pytest.fail("failed check must be reported first"))
+    w.calc.check_inputs()
+    w.calc.run_pipeline()
+    assert len(no_dialogs) == 2 and all("cannot inspect directory" in x[1][1] for x in no_dialogs)
     assert w.close()
