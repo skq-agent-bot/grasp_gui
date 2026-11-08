@@ -21,6 +21,7 @@ RUN pyinstaller --noconfirm --clean --strip --log-level WARN --onedir --name gra
         --exclude-module calc_panel --exclude-module level_panel --exclude-module wfn_panel \
         --add-data "/src/demos/*.json:demos" grasp_server.py \
     && cp LICENSE dist/grasp_gui-server/LICENSE \
-    && python3 -VV > dist/grasp_gui-server/PYTHON_VERSION
+    && python3 -VV > dist/grasp_gui-server/PYTHON_VERSION \
+    && dist/grasp_gui-server/grasp_gui-server --version > dist/grasp_gui-server/SERVER_VERSION
 FROM scratch
 COPY --from=build /src/dist/grasp_gui-server /grasp_gui-server
