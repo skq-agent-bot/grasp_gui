@@ -577,15 +577,18 @@ class RemoteWaves(WfnPanel):
 
 
 class RemoteCalculation(QWidget):
-    def __init__(self, source, directory):
+    editRequested = Signal(str)
+
+    def __init__(self, source, directory, run_after_load=False):
         super().__init__()
         self.source, self.directory, self.jobs = source, directory, []
         self.revision = None
+        self.run_after_load = run_after_load
         self.server_type = getattr(source, "server_type", "workstation")
         self.submitting = False
         self.slurm_state = None
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(T("远程流程只读；可启动、停止和查看，修改请在服务器上完成。")))
+        layout.addWidget(QLabel(T("远程流程只读；可取出到本机编辑，再确认上传。")))
         layout.addWidget(QLabel(T("服务器类型：{kind}", kind=T("Slurm 集群") if self.server_type == "slurm" else
                                  T("工作站"))))
         bar = QHBoxLayout()
@@ -598,6 +601,11 @@ class RemoteCalculation(QWidget):
         self.stop_button = button("■ 停止", self.stop)
         bar.addWidget(self.stop_button)
         bar.addWidget(button("刷新", self.load))
+        self.edit_button = button("在本机编辑…", self.edit_local)
+        self.edit_button.setEnabled("workdir_write_v1" in getattr(source, "server", {}).get("capabilities", []))
+        if not self.edit_button.isEnabled():
+            self.edit_button.setToolTip(T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
+        bar.addWidget(self.edit_button)
         self.state = QLabel()
         self.state.setWordWrap(True)
         bar.addWidget(self.state, 1)
@@ -633,6 +641,9 @@ class RemoteCalculation(QWidget):
             self.steps.clear()
             self.steps.addItems([f"{i + 1}. {j.get('title', '')}" for i, j in enumerate(self.jobs)])
             self.steps.setCurrentRow(0)
+            if self.run_after_load:
+                self.run_after_load = False
+                self.prepare_run(1)
         self.source.submit("pipeline", dict(directory=self.directory), loaded)
 
         def watched(value, error):
@@ -645,6 +656,10 @@ class RemoteCalculation(QWidget):
             self.output.setPlainText(value["text"])
             self.show_state(value["state"])
         self.source.submit("watch", dict(directory=self.directory), watched)
+
+    def edit_local(self):
+        from remote_edit_panel import take_out
+        take_out(self.source, self.directory, self, self.editRequested.emit)
 
     def show_job(self, position):
         if not 0 <= position < len(self.jobs):
@@ -792,7 +807,7 @@ class RemoteCalculation(QWidget):
 
 
 class RemoteWindow(QMainWindow):
-    def __init__(self, source, directory, parent=None):
+    def __init__(self, source, directory, parent=None, run_after_load=False):
         super().__init__(parent)
         self.source, self.directory, self.detached = source, directory, []
         self.transfer_dialogs = []
@@ -806,7 +821,18 @@ class RemoteWindow(QMainWindow):
         label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(label)
         self.tabs = QTabWidget()
-        self.calc = RemoteCalculation(source, directory)
+        self.calc = RemoteCalculation(source, directory, run_after_load)
+        if parent and hasattr(parent, "open_path"):
+            def open_local(path):
+                if getattr(parent, "cur_workdir", None) == path:
+                    parent.calc.open_workdir(path)
+                else:
+                    parent.open_path(path)
+                if hasattr(parent, "show_tab"):
+                    parent.show_tab("calc")
+                parent.show()
+                parent.raise_()
+            self.calc.editRequested.connect(open_local)
         self.waves = RemoteWaves(source, directory)
         self.levels = RemoteLevels(source, directory)
         for widget, title in ((self.calc, "计算"), (self.waves, "径向波函数"), (self.levels, "能级图")):

@@ -19,6 +19,8 @@ GRASP2018 的图形界面：在表单中填写各程序的参数，界面自动�
 
 Remote hosts can be classified as workstations (background runs) or Slurm clusters (submit, monitor and cancel
 batch jobs). / 远程主机可分类为工作站（后台直跑）或 Slurm 集群（批作业提交、状态查询与取消）。
+Edit a fetched server pipeline with the normal local forms, or upload a new local calculation; revision checks
+protect remote updates. / 可取出服务器流程到本机编辑，或上传新计算；按修订号检查冲突，再确认上传与运行。
 Selected files can be uploaded/downloaded with system rsync; large files are excluded by default.
 
 ## Screenshots / 截图

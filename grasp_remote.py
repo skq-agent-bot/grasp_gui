@@ -3,6 +3,7 @@
 import argparse
 import base64
 import codecs
+import fnmatch
 import inspect
 import json
 import os
@@ -29,7 +30,8 @@ MAX_FRAME = 32 << 20
 COMPRESS_AT = 16384
 READ_ONLY = {"hello", "list_dir", "levels", "transitions", "orbitals", "wavefunctions", "composition",
              "run_status", "tail_log", "pipeline", "run_plan", "export_script", "view", "watch", "summary",
-             "transfer_files"}
+             "transfer_files", "get_pipeline", "preview_upload"}
+MUTATIONS = {"run", "stop", "clear_slurm_record", "create_workdir", "update_workdir"}
 
 
 def pack(data):
@@ -79,7 +81,73 @@ class Operations(service.Service):
         executable = os.environ.get("GRASP_GUI_REMOTE_EXECUTABLE") or (
             sys.executable if getattr(sys, "frozen", False) else sys.argv[0])
         return dict(protocol=PROTOCOL, version=core.VERSION, executable=os.path.abspath(executable),
-                    home=str(Path.home()), server_types=["workstation", "slurm"])
+                    home=str(Path.home()), server_types=["workstation", "slurm"], capabilities=["workdir_write_v1"])
+
+    def get_pipeline(self, directory):
+        root, data, revision = self.record(directory)
+        with sessions.locked(root):
+            root, data, revision = self.record(directory)
+            files, warnings, size = [], [], 0
+            for name in sorted(config.load_inputs(str(root)) or []):
+                path = self.path(str(root / name))
+                try:
+                    if (root / name).is_symlink():
+                        raise ValueError(T("工作目录记录不能是符号链接"))
+                    text = config.read_text_file(path)
+                    size += len(text.encode())
+                    if size > config.MAX_FILES_TOTAL:
+                        raise ValueError(T("附带输入文件超过总大小限制"))
+                    files.append(dict(name=name, text=text))
+                except (OSError, ValueError) as error:
+                    warnings.append(dict(file=name, error=str(error)))
+            cfg = config.export(data.get("pipeline", []), dict(title=root.name))
+            if files:
+                cfg["files"] = files
+            return dict(directory=str(root), revision=revision, config=cfg, warnings=warnings)
+
+    def create_workdir(self, directory, configuration, allow_custom=False):
+        if type(allow_custom) is not bool:
+            raise ValueError("confirmation must be boolean")
+        root = self.path(directory)
+        return service.Service("/", allow_custom=allow_custom).create_workdir(str(root), configuration)
+
+    def update_workdir(self, directory, revision, configuration, allow_custom=False):
+        if type(allow_custom) is not bool:
+            raise ValueError("confirmation must be boolean")
+        root = self.path(directory, directory=True)
+        return service.Service("/", allow_custom=allow_custom).update_workdir(str(root), revision, configuration)
+
+    def preview_upload(self, directory, configuration, revision=None, uploads=None):
+        import grasp_summary as summary
+        import grasp_transfer as transfer
+        import grasp_workdir as work
+        cfg, warnings = config.check(configuration)
+        root = self.path(directory)
+        names = [] if uploads is None else uploads
+        if not isinstance(names, list) or len(names) > 50000:
+            raise ValueError("invalid upload names")
+        names = [transfer.relative(name) for name in names]
+        with sessions.locked(root):
+            if revision is None:
+                if root.exists() and (not root.is_dir() or any(root.iterdir())):
+                    raise ValueError(T("目标目录不是空的；已有流程请先在本机取出编辑。"))
+                work.idle(root)
+                changes, kept = T("新建服务器流程：{n} 步", n=len(cfg["jobs"])), []
+            else:
+                if self.record(str(root))[2] != revision:
+                    raise sessions.Conflict(T("服务器流程已改变，请重新取出；可先导出本机修改。"))
+                plan = work.prepare_update(root, cfg)
+                changes = plan["text"]
+                kept = [f["name"] for f in plan["files"] if f["kind"] == "conflict"]
+            transfer.safe_targets(root, names)
+            checked = summary.check_files(str(root), cfg["jobs"], run=core.saved_run_settings(), path_check=self.path)
+            planned = names + [f["name"] for f in cfg.get("files", [])]
+            pending = [row for row in checked["missing"] if any(fnmatch.fnmatchcase(n, row["file"]) for n in planned)]
+            checked["missing"] = [row for row in checked["missing"] if row not in pending]
+            checked.update(pending=pending, issues=checked["invalid"] + checked["missing"])
+            return dict(directory=str(root), revision=revision, changes=changes, kept_files=kept, checked=checked,
+                        custom_commands=config.custom_commands(cfg), warnings=warnings,
+                        existing=[n for n in names if (root / n).exists()])
 
     def list_dir(self, directory):
         root = self.path(directory, directory=True)
@@ -156,7 +224,7 @@ class Operations(service.Service):
         except (OSError, subprocess.SubprocessError):
             pass  # 无 systemd 的服务器不提供 scope 选项，仍可按普通方式运行。
         return dict(revision=revision, custom_commands=config.custom_commands(cfg),
-                    logout_kills=bg.logout_kills(), lingering=linger)
+                    logout_kills=bg.logout_kills(), lingering=linger, run_settings=core.saved_run_settings())
 
     def run(self, directory, revision, start=1, allow_custom=False, user_scope=False, accept_logout=False,
             server_type="workstation", slurm=None):
@@ -386,7 +454,7 @@ class Server:
             ident = request.get("id")
             try:
                 method, args = request["method"], request.get("args", {})
-                if method not in READ_ONLY | {"run", "stop", "clear_slurm_record"} or not isinstance(args, dict):
+                if method not in READ_ONLY | MUTATIONS or not isinstance(args, dict):
                     raise ValueError("unsupported remote method or arguments")
                 if type(ident) not in (int, str):
                     raise ValueError("invalid request id")
@@ -397,7 +465,7 @@ class Server:
                 if method == "view":
                     args = dict(args, emit=lambda value: self.send(dict(event="progress", id=ident, **value)))
                 inspect.signature(function).bind(**args)
-                if method in ("run", "stop", "clear_slurm_record"):
+                if method in MUTATIONS:
                     with self.mutations:
                         result = function(**args)
                 else:

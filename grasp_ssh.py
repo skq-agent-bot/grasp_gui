@@ -315,6 +315,8 @@ class Client:
                     item["future"].set_exception(UnknownOutcome(
                         T("清除记录的结果无法确认；重连后请先核对状态，不要直接重复操作")
                         if item["method"] == "clear_slurm_record" else
+                        T("写入结果未确认；先读取服务器流程核对，不能重发。")
+                        if item["method"] in ("create_workdir", "update_workdir") else
                         T("启动或停止的结果无法确认；重连后请先核对状态，不要直接重复操作")))
                 uncertain.add(item["args"].get("directory"))
         self.pending.clear()
@@ -369,7 +371,8 @@ class Client:
                         for item in self.pending.values():
                             # Slurm 调度器可比分析请求更慢，不能先于服务器的 sbatch 超时断线。
                             slow = item["method"] in ("view", "levels", "composition", "wavefunctions", "summary",
-                                "transfer_files", "watch", "run_status", "stop", "clear_slurm_record")
+                                "transfer_files", "watch", "run_status", "stop", "clear_slurm_record",
+                                "get_pipeline", "preview_upload", "create_workdir", "update_workdir")
                             slow |= item["method"] == "run" and item["args"].get("server_type") == "slurm"
                             base = 180 if slow else 30
                             if now - item["sent"] > base + 20 * self.rtt:

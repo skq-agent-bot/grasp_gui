@@ -117,6 +117,12 @@ the record unchanged. Valid records copied from a different directory are ignore
 选择“工作站”沿用后台直跑；选择“Slurm 集群”后通过资源设置及默认否确认提交 sbatch，按作业 ID 查询调度状态，
 停止调用 scancel。排队、运行或状态未知时禁止重复提交；更换电脑或登录节点后，打开同一集群的原目录可恢复状态和日志。
 类型和资源偏好按主机保存在本机，作业记录保存在服务器。调度状态不表示每步物理计算均成功。
+**Edit locally… (在本机编辑…)** fetches the shared pipeline and revision into a local working directory, defaulting
+to the same `~/grasp_calcs/remote/<host>/<directory>/` location as downloads. An unrelated nonempty local directory
+is refused. Re-fetching the same copy asks default-No before replacing pipeline edits; local input conflicts remain.
+The main window opens its original Calculation tab, with a persistent Server copy host:/path label and title.
+Old servers without `workdir_write_v1` show an update instruction and receive no write requests.
+远程“在本机编辑…”取出流程、附带小输入和修订号，用本机原计算页编辑；不提供第二套远程表单或新标签页。
 无作业号时按队列 comment 找回；离队且无记账时可用 EXIT 标记判定脚本退出。未知/损坏状态显示“我已核对，清除此作业记录…”，
 默认否确认后由服务器重查队列和记录修订号，通过后归档原记录，保留日志与脚本。清除不取消任务，也不代表计算成功。
 路径不匹配的有效记录不属于当前目录，不影响副本使用。新连接提示说明集群登录节点不宜直接运行计算。
@@ -567,6 +573,26 @@ cannot handle paths longer than 128 characters; the GUI then falls back to the s
   occupations they are replaced by the abbreviation, with a live preview. Core orbitals of the CSF file count.
 * **CSV**: UTF-8, NIST-style configurations (`[Ne]3s.3p`) and terms (`1P*`).
 
+### Upload local pipeline / 上传本机流程
+
+The pipeline run-button group also contains **Upload to server… (上传到服务器…)** and **Upload and run…
+(上传并运行…)**. Unlinked directories select a host and a new/empty target using the connection browser plus
+an editable target field. Linked copies reconnect to their saved host/directory. The upload dialog reuses the
+rsync file table, threshold and progress. Small inputs default on; generated outputs, large files, internal
+records and server-existing names default off/excluded. Existing server files are retained in this workflow.
+
+The dialog previews server changes/input checks before its default-No confirmation; custom commands have a
+separate default-No confirmation. It saves the record before transferring files. Failed transfer keeps the record
+and association and offers retry; the next attempt checks the current server revision again. Upload and run
+opens the remote window and invokes its ordinary run-confirmation flow after the pipeline loads, once only.
+Conflict offers **Fetch server pipeline again**; users can export local edits first. **Unlink local copy…**
+asks default-No, changes only desktop preferences, and never deletes server data.
+
+本机计算页流程运行按钮旁增加“上传到服务器…”和“上传并运行…”。新目录先选主机和新建/空目标；关联副本沿用主机与路径。
+确认前显示服务器预览、选中的输入、待上传/缺失与冲突文件；默认否，自定义命令单独确认。先写记录再传输入，同名服务器文件保留。
+失败后提示补传，不删记录。写入失去回答时先比对服务器流程，相同才关联，不同或无记录交用户核对，绝不重发新建。
+副本常驻来源标识，本机缺少输入标明“由服务器检查”；本机直接运行另有默认否确认。
+
 ## Saved state / 保存的内容
 
 | Where | What |
@@ -580,6 +606,7 @@ cannot handle paths longer than 128 characters; the GUI then falls back to the s
 | `<workdir>/.grasp_gui_slurm_<token>.sh`, `.log` | preserved batch script and its Slurm output |
 | `<workdir>/.grasp_gui_slurm_<token>.done` | atomic token/job ID/exit-status marker; optional for older version-1 submissions |
 | `<workdir>/.grasp_gui_slurm.json.cleared.<id>` | archived original bytes after confirmed queue/revision checks |
+| `~/.config/grasp_gui.json` → `remote_copies` | local path → host, remote directory, revision; pending write fingerprint for reconnect verification |
 | `<workdir>/.grasp_gui/tr/` | cached transition calculations |
 | `<workdir>/.grasp_gui/marked.json` | transitions drawn as arrows |
 
