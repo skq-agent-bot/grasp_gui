@@ -212,11 +212,13 @@ The remote window File menu transfers only confirmed files using the system **rs
 Analysis still runs on the server; no raw files are downloaded merely to view results. There is no scp/sftp
 fallback and no bundled rsync or Python dependency. A custom server rsync path is stored per host.
 
-The dialog recursively lists regular files with sizes. Symbolic links and special files are excluded and their skipped count is shown; links are never followed. Files **larger than 100 MB** are unchecked by default; 1 MB is 1,000,000 bytes. The editable
+The dialog recursively lists regular files with sizes. Symbolic links and special files are excluded and their
+skipped count is shown; links are never followed. Files **larger than 100 MB** are unchecked by default;
+1 MB is 1,000,000 bytes. The editable
 per-host threshold resets selections, and large files can be selected individually or with Include large files.
 The large-file reminder explains that .w/.c/.cm/angular files can usually stay on the server. Confirmation
 separately reports selected small files, selected large files and unselected large files, with counts and totals.
-Upload uses the same rules. Download initially targets ~/grasp_calcs/remote/<host>/<remote-directory-name>/,
+Upload uses the same rules. Download initially targets `~/grasp_calcs/remote/<host>/<remote-directory-name>/`,
 which can be changed. Selecting local directories preserves their basename; selecting files preserves their
 relative paths from the common parent. Existing files default to Skip; Resume / verify and Overwrite are explicit.
 
@@ -228,7 +230,8 @@ Source size/mtime is checked again before transfer; destination paths with symli
 
 The -e command derives from the existing SSH Client options, including ControlPath, aliases, identity and jump
 host settings in the master. Explicit -J is omitted from the auxiliary command because that route is already
-established; otherwise SSH rejects -J together with the no-fallback ProxyCommand. Prepending ControlMaster=no, ProxyCommand=false and BatchMode=yes permits only the already
+established; otherwise SSH rejects -J together with the no-fallback ProxyCommand. Prepending ControlMaster=no,
+ProxyCommand=false and BatchMode=yes permits only the already
 authenticated master: if it vanishes, transfer fails instead of authenticating again. rsync needs a second SSH
 session; MaxSessions 1 reports an explicit administrator-action message and leaves analysis usable. Missing
 rsync reports installation/path guidance. Cancellation interrupts only the rsync process group, retains partial

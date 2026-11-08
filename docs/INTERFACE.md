@@ -115,7 +115,7 @@ server rsync path are saved per host. Changing the threshold resets the selectio
 selection or Include large files. Confirmation separately counts selected small, selected large and unselected
 large files. Skip existing files is the default, with Resume / verify and Overwrite alternatives. The background
 progress shows speed and remaining time, and can be cancelled; partial data is kept for a later resume. Closing
-the remote window cancels its transfers. The default download location is ~/grasp_calcs/remote/<host>/<directory>/.
+the remote window cancels its transfers. The default download location is `~/grasp_calcs/remote/<host>/<directory>/`.
 
 远程窗口“文件”菜单提供下载、上传文件和上传目录；清单列出全部普通文件和字节数，跳过符号链接及特殊文件。
 单个文件大于 100 MB 默认不勾选，可逐个勾选或使用“包括大文件”；阈值按主机保存，修改后重置勾选。
