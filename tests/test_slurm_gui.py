@@ -50,6 +50,49 @@ def test_host_classification_saved_without_losing_other_preferences(qapp, tmp_pa
         qapp.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
+def test_clear_unknown_job_defaults_no_and_sends_revision(qapp, tmp_path, monkeypatch):
+    from PySide6.QtCore import QEvent, QObject, Signal
+    from PySide6.QtWidgets import QMessageBox
+    from remote_panel import RemoteCalculation
+
+    monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "settings.json"))
+    class Source(QObject):
+        push = Signal(object)
+        server_type = "slurm"
+        client = SimpleNamespace(host="cluster")
+        def __init__(self):
+            super().__init__()
+            self.calls = []
+        def submit(self, method, args, callback):
+            self.calls.append((method, args))
+            if method == "pipeline":
+                callback(dict(jobs=[], revision="pipeline"), None)
+            elif method == "watch":
+                callback(dict(text="", state=dict(backend="slurm", status="unknown", active=True,
+                              can_cancel=False, can_clear=True, record_revision="record")), None)
+    source = Source()
+    panel = RemoteCalculation(source, "/calc")
+    source.setParent(panel)
+    try:
+        assert not panel.clear_record.isHidden() and not panel.run_button.isEnabled()
+        def no(*args):
+            assert args[-1] == QMessageBox.No
+            return QMessageBox.No
+        monkeypatch.setattr(QMessageBox, "question", no)
+        panel.clear_slurm_record()
+        assert not any(method == "clear_slurm_record" for method, _ in source.calls)
+        monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+        panel.clear_slurm_record()
+        assert source.calls[-1] == ("clear_slurm_record", dict(directory="/calc", revision="record", confirmed=True))
+        assert not panel.clear_record.isEnabled()
+        panel.show_state(None)
+        assert panel.clear_record.isHidden()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
 def test_slurm_submission_confirmation_and_scheduler_button_states(qapp, tmp_path, monkeypatch):
     from PySide6.QtCore import QEvent, QObject, Signal
     from PySide6.QtWidgets import QDialog, QMessageBox

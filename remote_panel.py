@@ -116,6 +116,9 @@ class ConnectDialog(QDialog):
         self.server_type.addItem(T("Slurm 集群"), "slurm")
         form.addRow(T("SSH 主机（沿用 ~/.ssh/config）"), self.host)
         form.addRow(T("服务器类型"), self.server_type)
+        hint = QLabel(T("请先选择服务器类型；集群登录节点不宜直接运行计算。"))
+        hint.setWordWrap(True)
+        form.addRow(hint)
         form.addRow(T("服务器端程序"), self.program)
         form.addRow(T("服务器目录"), self.path)
         layout.addLayout(form)
@@ -580,6 +583,7 @@ class RemoteCalculation(QWidget):
         self.revision = None
         self.server_type = getattr(source, "server_type", "workstation")
         self.submitting = False
+        self.slurm_state = None
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(T("远程流程只读；可启动、停止和查看，修改请在服务器上完成。")))
         layout.addWidget(QLabel(T("服务器类型：{kind}", kind=T("Slurm 集群") if self.server_type == "slurm" else
@@ -595,6 +599,7 @@ class RemoteCalculation(QWidget):
         bar.addWidget(self.stop_button)
         bar.addWidget(button("刷新", self.load))
         self.state = QLabel()
+        self.state.setWordWrap(True)
         bar.addWidget(self.state, 1)
         layout.addLayout(bar)
         split = QSplitter()
@@ -614,6 +619,9 @@ class RemoteCalculation(QWidget):
         self.details.addTab(self.output, T("程序输出"))
         split.addWidget(self.details)
         layout.addWidget(split, 1)
+        self.clear_record = button("我已核对，清除此作业记录…", self.clear_slurm_record)
+        self.clear_record.setVisible(False)
+        layout.addWidget(self.clear_record)
         self.source.push.connect(self.push)
         self.load()
 
@@ -659,6 +667,9 @@ class RemoteCalculation(QWidget):
             self.output.setTextCursor(cursor)
 
     def show_state(self, state):
+        self.slurm_state = state if (state or {}).get("backend") == "slurm" else None
+        self.clear_record.setVisible(bool(self.slurm_state and state.get("can_clear")))
+        self.clear_record.setEnabled(not self.submitting)
         busy = self.submitting or state and (state.get("active", False) or state.get("status") == "running")
         self.run_button.setEnabled(not busy)
         self.run_selected.setEnabled(not busy)
@@ -679,6 +690,19 @@ class RemoteCalculation(QWidget):
         pos = state.get("step", 0)
         title = titles[pos] if 0 <= pos < len(titles) else ""
         self.state.setText(f"{state['status']} · {pos + 1}/{len(titles)} · {title}")
+
+    def clear_slurm_record(self):
+        state = self.slurm_state
+        if not state or not state.get("can_clear") or self.submitting:
+            return
+        if QMessageBox.question(self, T("清除 Slurm 作业记录"),
+                T("确认已人工核对任务？服务器将重新查询队列，仅在没有相关作业时归档记录；这不会取消任务，也不代表计算成功。"),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        self.submitting = True
+        self.show_state(state)
+        self.source.submit("clear_slurm_record", dict(directory=self.directory,
+                           revision=state["record_revision"], confirmed=True), self.started)
 
     def prepare_run(self, start):
         if not self.jobs or not self.revision or start < 1 or self.submitting:

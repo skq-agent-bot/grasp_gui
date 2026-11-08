@@ -1070,6 +1070,19 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "服务器端不可用": "Server executable unavailable",
     "使用已有的路径": "Use an existing path",
     # 服务器分类与 Slurm 作业
+    "请先选择服务器类型；集群登录节点不宜直接运行计算。": (
+        "Choose a server type first; cluster login nodes should not run calculations directly."),
+    "Slurm 结束标记无效": "Invalid Slurm completion marker",
+    "清除记录的结果无法确认；重连后请先核对状态，不要直接重复操作": (
+        "The record-clearing outcome is unknown. Reconnect and check the state before repeating the operation."),
+    "请先确认已人工核对 Slurm 作业": "Confirm that you have checked the Slurm job manually first",
+    "Slurm 作业记录已改变，请刷新": "The Slurm job record has changed. Refresh first",
+    "队列中仍有相关作业，不能清除记录": "Related jobs remain in the queue; the record cannot be cleared",
+    "我已核对，清除此作业记录…": "I have checked; clear this job record…",
+    "清除 Slurm 作业记录": "Clear Slurm job record",
+    "确认已人工核对任务？服务器将重新查询队列，仅在没有相关作业时归档记录；这不会取消任务，也不代表计算成功。": (
+        "Have you checked the job manually? The server will query the queue again and archive the record only "
+        "if no related job remains. This does not cancel a job or establish calculation success."),
     "工作站": "Workstation",
     "Slurm 集群": "Slurm cluster",
     "服务器类型": "Server type",

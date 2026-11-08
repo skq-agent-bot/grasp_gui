@@ -386,7 +386,7 @@ class Server:
             ident = request.get("id")
             try:
                 method, args = request["method"], request.get("args", {})
-                if method not in READ_ONLY | {"run", "stop"} or not isinstance(args, dict):
+                if method not in READ_ONLY | {"run", "stop", "clear_slurm_record"} or not isinstance(args, dict):
                     raise ValueError("unsupported remote method or arguments")
                 if type(ident) not in (int, str):
                     raise ValueError("invalid request id")
@@ -397,7 +397,7 @@ class Server:
                 if method == "view":
                     args = dict(args, emit=lambda value: self.send(dict(event="progress", id=ident, **value)))
                 inspect.signature(function).bind(**args)
-                if method in ("run", "stop"):
+                if method in ("run", "stop", "clear_slurm_record"):
                     with self.mutations:
                         result = function(**args)
                 else:

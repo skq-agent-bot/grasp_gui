@@ -13,6 +13,7 @@ Choose **Workstation (工作站)** or **Slurm cluster (Slurm 集群)** in the co
 per SSH host, alongside the existing executable/directory preferences. New and previously unclassified profiles
 ask for a type once before using the directory.
 The choice is explicit: the presence of Slurm client binaries alone does not classify a computer.
+The dialog explains why: cluster login nodes should not run calculations directly.
 
 | Type / 类型 | Submit / 提交 | State / 状态 | Stop / 停止 |
 |---|---|---|---|
@@ -42,9 +43,22 @@ Only the recorded job is tracked; this is not a list of all jobs in the user's q
 
 Disappearance from squeue is **not** success. Accounting delay, missing sacct, unavailable accounting, query
 failure or mismatched job identity shows Unknown and blocks a new submission. Explicit sbatch rejection can
-be corrected and retried; timeout or an unreadable submission reply is uncertain and is never retried
-automatically. Check the queue before manually reconciling such a record. The saved token corresponds to the
-`grasp-gui:<token>` job comment. Job arrays are not supported by this submission dialog.
+be corrected and retried; a timeout or unreadable submission reply is never retried automatically. Instead,
+the server searches the current user's queue for the exact `grasp-gui:<token>` comment and saves the recovered
+job ID. sbatch has a 60-second timeout; queue/accounting commands have 30 seconds, and the desktop allows time
+for these operations.
+
+New submissions install an EXIT trap before any batch commands. It atomically writes
+`.grasp_gui_slurm_<token>.done` containing the token, job ID and shell exit status. After the job leaves the
+queue, validated accounting takes precedence; unavailable/delayed accounting can fall back to this marker.
+The state then reports `BATCH_EXITED`, identifying script exit evidence rather than a scheduler completion
+record. A killed node or SIGKILL may prevent the marker; absence is still Unknown. Existing version-1 records
+without markers remain readable. Job arrays are not supported by this submission dialog.
+
+未知状态提供“我已核对，清除此作业记录…”：人工核对后默认否确认，服务器在目录锁内核对记录修订号，
+重新查询当前用户队列，确认没有同 token 的作业后把原记录改名为 `.grasp_gui_slurm.json.cleared.<id>`。
+原字节、脚本、日志和结束标记保留；这既不取消作业，也不把计算标为成功。损坏的记录会显示错误，并提供同一入口；
+如果无法识别 token，必须确认该用户队列为空才能归档。查询失败时拒绝清除，需先恢复 Slurm 客户端/调度连接。
 
 Slurm 的 COMPLETED/退出码 0 仅表示作业正常退出，不证明物理结果正确；逐步运行摘要不会把调度状态当作每步成功的证据。
 本机日志和现有后台记录的格式不变；Slurm 使用独立记录。关闭远程窗口只断开查看，不会 scancel 作业。
@@ -52,13 +66,49 @@ Slurm 的 COMPLETED/退出码 0 仅表示作业正常退出，不证明物理结
 Screenshots / 截图：[English](images/en_server_type.png) / [中文](images/zh_server_type.png)。
 Resources / 资源设置：[English](images/en_slurm_submit.png) / [中文](images/zh_slurm_submit.png)。
 Pending / 排队状态：[English](images/en_slurm_pending.png) / [中文](images/zh_slurm_pending.png)。
+Unknown / 未知状态：[English](images/en_slurm_unknown.png) / [中文](images/zh_slurm_unknown.png)。
+Clear confirmation / 归档确认：[English](images/en_slurm_clear.png) / [中文](images/zh_slurm_clear.png)。
 
-复制或重命名目录不会迁移调度器中的作业。记录与目录不匹配时，不会据此查询或取消其他目录的作业；
-需先核对原任务，再人工处理副本中的记录。不要删除活动目录的记录以绕过重复提交检查。
+复制或重命名目录不会迁移调度器中的作业。格式正确但路径不匹配的记录视为不属于当前目录，不查询、取消原作业，
+也不阻止副本查看结果、更新或清理。原目录的状态不受影响。格式损坏仍显示错误，需要显式归档解除，不能静默忽略。
+
+For Unknown, **I have checked; clear this job record…** asks for default-No confirmation. The server checks
+the record revision under the directory lock and queries the queue again. It archives the original bytes only
+when no matching token remains; a malformed record without a readable token requires an empty user queue.
+Queue errors prevent clearing. Clearing is neither cancellation nor evidence of calculation success.
+A valid record for another directory is ignored in a copied/moved directory, leaving result viewing and updates usable.
 
 Command references: [sbatch](https://slurm.schedmd.com/sbatch.html),
 [squeue](https://slurm.schedmd.com/squeue.html), [sacct](https://slurm.schedmd.com/sacct.html),
 [scancel](https://slurm.schedmd.com/scancel.html).
+
+### Optional real Slurm acceptance / 可选真实 Slurm 验收
+
+`tools/slurm/` contains a single-node Docker fixture: slurmctld and slurmd in one container; the second mode
+also starts MariaDB/slurmdbd. Runtime uses only container loopback networking, publishes no ports and mounts
+neither the Docker socket nor the host cgroup. Build installs test-only OS packages, without product/CI changes.
+
+With Docker available, provide a GRASP source checkout (standard `compas/grasp` commit `9006157` is the reference)
+and a report directory outside this repository:
+
+```sh
+bash tools/slurm/run.sh /path/to/grasp-source /path/to/slurm-reports
+```
+
+GRASP source and this checkout are mounted read-only; compilation is inside the disposable container, including
+MPI. The fixture does not modify Fortran source; source SHA and local changes are printed in the logs. Supply
+any locally required allocation patch explicitly and retain it with the acceptance evidence. Both modes build
+from the same supplied source; allow several minutes and sufficient compiler/GRASP memory.
+
+The opt-in `tests/test_slurm_live.py` covers held/PENDING → RUNNING → example1 completion with reference energies,
+running-job cancellation, no-accounting completion via EXIT marker, actual sacct evidence with accounting,
+and `mpirun -np 1` producing `000/mcp000.30`. Accounting mode removes the completion marker before requiring
+sacct evidence. Cancellation without a marker exercises explicit archival after the queue is empty.
+Without `GRASP_SLURM_TEST=1` these tests skip. **The fixture is prepared but has not been executed in this
+development environment; Docker and real MPI/Slurm acceptance are still required.**
+
+负责人可运行上述脚本，回传两份 `slurm-0/1.xml` 和日志。0 模式没有 slurmdbd，1 模式启用记账。
+当前开发环境没有容器运行时，因此不能把替身测试或此脚本的静态检查当作真实验收通过。
 
 ### 安装服务器端
 
@@ -183,6 +233,7 @@ Two server workers permit pipelined reads; run/stop are serialized. Server code 
 | `view` | `kind: levels` or `wfn`; a whole view in one request, optional file/name selection and known signature |
 | `pipeline` | Read-only saved jobs and revision |
 | `run_plan` | Revision and custom commands; optional `server_type: slurm` returns server-side Slurm defaults |
+| `clear_slurm_record` | Mutation: explicit `confirmed: true`, matching record revision, fresh queue check, then archival |
 | `run` | Revision, one-based start, explicit custom/logout/scope confirmations; Slurm also accepts reviewed `slurm` settings |
 | `stop` | Existing background stop, or verified scancel for the recorded Slurm job |
 | `run_status` / `tail_log` | Background/Slurm state and the matching bounded log tail |

@@ -175,7 +175,9 @@ def test_invalid_records_do_not_reach_scheduler(submitted, monkeypatch, job):
     (root / slurm.RECORD).write_text(json.dumps(record))
     monkeypatch.setattr(slurm, "command", lambda *args: pytest.fail("invalid record reached scheduler"))
     with pytest.raises(ValueError):
-        slurm.status(root)
+        slurm.read(root)
+    state = slurm.status(root)
+    assert state["record_invalid"] and state["active"] and state["can_clear"]
 
 
 def test_new_background_run_takes_precedence_over_old_job_record(submitted, monkeypatch):

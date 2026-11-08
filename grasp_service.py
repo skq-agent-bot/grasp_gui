@@ -215,6 +215,8 @@ class Service:
         state = self.status(directory)["state"] if state is None else state
         name = root / bg.RUN_LOG
         if (state or {}).get("backend") == "slurm":
+            if state.get("record_invalid"):
+                return root / (".grasp_gui_slurm_" + state["record_revision"] + ".log")
             record = slurm.read(root)
             if record is None:
                 raise ValueError(T("Slurm 作业记录无效"))
@@ -238,6 +240,10 @@ class Service:
                 stream.seek(max(0, stream.tell() - MAX_TEXT))
                 text = "\n".join(stream.read().decode("utf-8", "replace").splitlines()[-min(lines, 1000):])
         return dict(text=text[-MAX_TEXT:], truncated=len(text) > MAX_TEXT)
+
+    def clear_slurm_record(self, directory, revision, confirmed=False):
+        root = self.path(directory, directory=True)
+        return slurm.clear(root, revision, confirmed)
 
     def stop(self, directory):
         root = self.path(directory, directory=True)
