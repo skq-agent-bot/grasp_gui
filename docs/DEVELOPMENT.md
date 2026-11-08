@@ -409,6 +409,13 @@ Coupling 是独立外部程序：`COUPLING_BINDIR=/path/to/coupling/bin GRASP_BI
 
 ## 发布流程
 
+普通桌面版可用 `build.sh --server-bundle ARCHIVE.tar.gz` 捆绑服务器目录包；先核对 sha256 和包内版本/协议记录，
+缺包仍可构建，运行时明确提示安装功能不可用。服务器版继续单独发布，legacy 的 GUI 构建不捆绑。
+发布顺序为先构建服务器目录包，再构建带包的普通桌面版，最后构建供 ssh -X 使用的旧系统版。
+冒烟测试增加受限 SSH（MaxSessions 1、禁转发和外网）下首次安装、更新、取消清理、连接读取和卸载；
+同时检查未捆绑的桌面构建、特殊字符家目录、架构/glibc/noexec/空间错误和校验失败不切换链接。
+
+
 服务器版使用独立入口 `grasp_server.py`，不导入 Qt；命令复用配置、remote、MCP 和后台运行模块。
 发布前先在含最新 main 的 legacy 源码树运行 `legacy/build_server.sh`，生成目录版压缩包及 sha256。
 目录版直接从安装目录加载库，避免集群 `/tmp` 的 noexec 限制；不采用每次解压的单文件形式。

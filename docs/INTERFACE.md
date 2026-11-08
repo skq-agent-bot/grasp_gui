@@ -108,6 +108,13 @@ Closing the remote window closes its viewers and connection; it does not stop a 
 标题显示服务器来源，保存从本机家目录开始选择；不使用桌面会话历史，不在桌面读取服务器目录，取消或旧回答不改变剪贴板。
 关闭远程窗口同时关闭这些查看器和连接，后台计算继续。完整协议、缓存/重连限制见 [REMOTE.md](REMOTE.md)。
 
+The connection dialog also has **Install / update server…** and **Remove from server…**. They show the host,
+bundled version/size, editable installation root, checks and exact paths before a default-No confirmation.
+Transfer progress and Cancel are available; returning from installation verifies the server and saves its path.
+No-bundle builds display a clear message. Version differences can be declined when the protocol is compatible.
+“连接服务器”另有安装/更新与移除入口：先检查并列出主机、版本、大小、目录、链接及服务器检查结果，
+默认不确认；可取消传输。安装成功核验后保存路径并重新连接。移除只处理列出的本程序文件，计算结果保留。
+
 ### Command line / 命令行
 
 ```

@@ -117,6 +117,8 @@ class ConnectDialog(QDialog):
         self.connect_button = button("连接 / 刷新", self.connect_server)
         bar.addWidget(self.connect_button)
         bar.addWidget(button("上一级", self.parent_directory))
+        bar.addWidget(button("安装 / 更新服务器版…", self.install_server))
+        bar.addWidget(button("从服务器移除…", lambda: self.install_server(remove=True)))
         layout.addLayout(bar)
         self.files = QListWidget()
         self.files.itemDoubleClicked.connect(self.enter)
@@ -133,6 +135,35 @@ class ConnectDialog(QDialog):
         layout.addLayout(bar)
         self.host.currentTextChanged.connect(self.profile)
         self.profile(self.host.currentText())
+
+    def install_server(self, remove=False):
+        from install_panel import InstallDialog
+        if self.source and self.source.client.host != self.host.currentText().strip():
+            self.source.close()
+            self.source = None
+        if self.source is None:
+            try:
+                self.source = Source(ssh.Client(self.host.currentText().strip(), self.program.text().strip()), self)
+                self.source.notice.connect(self.status.setText)
+            except (OSError, ValueError) as error:
+                self.status.setText(str(error))
+                return
+        source = self.source
+        source.close()
+        self.source, self.directory = None, None
+        self.use.setEnabled(False)
+        dialog = InstallDialog(source.client, self, remove)
+        saved = core.load_config().get("remote_hosts", {}).get(source.client.host, {})
+        dialog.root.setText(saved.get("install_root", dialog.root.text()))
+        if dialog.exec() == QDialog.Accepted:
+            self.program.setText(dialog.installed_path or "")
+            profiles = core.load_config().get("remote_hosts", {})
+            profile = profiles.setdefault(source.client.host, {})
+            profile["program"] = dialog.installed_path or ""
+            profile["install_root"] = dialog.root.text().strip()
+            core.save_config(remote_hosts=profiles)
+            if dialog.installed_path:
+                self.connect_server()
 
     def profile(self, host):
         saved = core.load_config().get("remote_hosts", {}).get(host, {})
@@ -161,6 +192,18 @@ class ConnectDialog(QDialog):
         self.connect_button.setEnabled(True)
         if error:
             self.status.setText(str(error) + "\n" + T("请手动安装或更新服务器端，并在此设置完整路径；程序不会自动上传。"))
+            box = QMessageBox(self)
+            box.setWindowTitle(T("服务器端不可用"))
+            box.setText(str(error))
+            upload = box.addButton(T("安装 / 更新服务器版…"), QMessageBox.ActionRole)
+            existing = box.addButton(T("使用已有的路径"), QMessageBox.ActionRole)
+            cancel = box.addButton(T("取消"), QMessageBox.RejectRole)
+            box.setDefaultButton(cancel)
+            box.exec()
+            if box.clickedButton() == upload:
+                self.install_server()
+            elif box.clickedButton() == existing:
+                self.program.setFocus()
             return
         self.directory = value["directory"]
         self.parent_path = value["parent"]
@@ -173,7 +216,14 @@ class ConnectDialog(QDialog):
             item.setToolTip(f"{row['type']} · {row['size']} bytes")
             self.files.addItem(item)
         self.use.setEnabled(True)
+        version = self.source.server.get("version", core.VERSION)
         self.status.setText(T("服务器 {h}:{p}", h=self.source.client.host, p=self.directory))
+        if version != core.VERSION and getattr(self, "offered_version", None) != version:
+            self.offered_version = version
+            if QMessageBox.question(self, T("服务器版本不同"),
+                    T("服务器 {v}，桌面 {d}；协议兼容，可继续使用。现在安装捆绑版本吗？", v=version, d=core.VERSION),
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
+                self.install_server()
 
     def enter(self, item):
         row = item.data(Qt.UserRole)
@@ -190,8 +240,8 @@ class ConnectDialog(QDialog):
         if not self.source or not self.directory:
             return
         profiles = core.load_config().get("remote_hosts", {})
-        profiles[self.source.client.host] = dict(program=self.source.server.get("executable", "") or
-                                                 self.program.text().strip(), directory=self.directory)
+        profiles.setdefault(self.source.client.host, {}).update(
+            program=self.source.server.get("executable", "") or self.program.text().strip(), directory=self.directory)
         core.save_config(remote_hosts=profiles)
         super().accept()
 
