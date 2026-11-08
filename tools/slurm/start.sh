@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 单容器、单节点；仅本地回环通信，不挂载宿主套接字或 cgroup。
+# 单容器、单节点；使用 Docker 内部网络，不挂载宿主套接字或 cgroup。
 set -euo pipefail
 export OMPI_ALLOW_RUN_AS_ROOT=1 OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 mode=${GRASP_SLURM_TEST_ACCOUNTING:?Choose accounting mode 0 or 1}
@@ -13,11 +13,12 @@ fi
 chown munge:munge /etc/munge/munge.key
 chmod 600 /etc/munge/munge.key
 runuser -u munge -- munged
-slurmctld --version
+slurmctld -V
 git -c safe.directory=/grasp-source -C /grasp-source rev-parse HEAD
 git -c safe.directory=/grasp-source -C /grasp-source diff --stat
 cmake -S /grasp-source -B /opt/grasp-build -DCMAKE_Fortran_FLAGS=-fallow-argument-mismatch
 cmake --build /opt/grasp-build -j "${GRASP_BUILD_JOBS:-2}"
+install -m 755 /grasp-source/src/tool/rsave /opt/grasp-build/bin/rsave
 export GRASP_BINDIR=/opt/grasp-build/bin GRASP_REQUIRED=1 GRASP_SLURM_TEST=1
 
 cat > /etc/slurm/slurm.conf <<'CONF'
@@ -40,6 +41,7 @@ ReturnToService=2
 MinJobAge=2
 KillWait=2
 CONF
+printf 'CgroupPlugin=disabled\n' > /etc/slurm/cgroup.conf
 slurmd -C | python3 -c '
 import sys
 fields = sys.stdin.readline().split()

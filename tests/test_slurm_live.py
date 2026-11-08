@@ -104,7 +104,7 @@ def test_real_slurm_running_cancel(tmp_path):
             # 被 SIGKILL 的批处理可能无法写 trap 标记；必须能显式归档解除。
             assert slurm.clear(root, state["record_revision"], confirmed=True)["cleared"]
         else:
-            assert state["status"] == "failed" and state["evidence"] == "batch_exit_marker"
+            assert state["status"] == "stopped" and state["evidence"] == "batch_exit_marker"
     print("cancel state:", state)
 
 

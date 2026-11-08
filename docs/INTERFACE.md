@@ -110,8 +110,11 @@ scancel only after verifying the saved job identity. The log belongs to that sub
 desktop connection. Missing queue/accounting information stays Unknown; it never becomes Completed merely
 because the login-node process is absent. Resource settings persist per host; job identity persists on the server.
 Lost submission replies recover by the saved queue comment. When accounting is unavailable after leaving the
-queue, an atomic EXIT marker may establish script exit (`BATCH_EXITED`). Unknown/malformed records expose
-**I have checked; clear this job record…**: default-No confirmation, a fresh server queue check and revision check,
+queue, an atomic EXIT marker may establish script exit (`BATCH_EXITED`). After successful scancel,
+a saved cancellation request plus a 130/143 exit marker displays Cancelled without accounting;
+other failures and successful completion retain their own states. The request alone is not a terminal result.
+Unknown/malformed records expose **I have checked; clear this job record…**: default-No confirmation,
+a fresh server queue check and revision check,
 then archival, with logs/scripts retained. Clearing does not cancel a job or establish success. Failed checks leave
 the record unchanged. Valid records copied from a different directory are ignored in the copy.
 选择“工作站”沿用后台直跑；选择“Slurm 集群”后通过资源设置及默认否确认提交 sbatch，按作业 ID 查询调度状态，

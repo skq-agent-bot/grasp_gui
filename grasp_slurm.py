@@ -145,7 +145,9 @@ def finished(workdir, record):
             or record["job_id"] and match[2].decode() != record["job_id"]):
         raise ValueError(T("Slurm 结束标记无效"))
     code = int(match[3])
-    return dict(job_id=match[2].decode(), scheduler_state="BATCH_EXITED", status="ok" if code == 0 else "failed",
+    cancelled = code in (130, 143) and record.get("cancel_requested") is True
+    result = "ok" if code == 0 else "stopped" if cancelled else "failed"
+    return dict(job_id=match[2].decode(), scheduler_state="BATCH_EXITED", status=result,
                 active=False, can_cancel=False, exit_code=f"{code}:0", evidence="batch_exit_marker")
 
 
@@ -268,7 +270,7 @@ def status(workdir, background=None, refresh=False):
     if not record["job_id"]:
         if record.get("rejected"):
             return dict(base, status="failed", active=False, error=record.get("error", ""))
-    key = (str(Path(workdir).resolve()), record["token"])
+    key = (str(Path(workdir).resolve()), record["token"], record.get("cancel_requested") is True)
     with _lock:
         cached = _cache.get(key)
         if cached and not refresh and cached[0] > time.monotonic():
@@ -330,12 +332,17 @@ def clear(workdir, revision, confirmed=False):
 
 
 def cancel(workdir):
-    record = read(workdir)
-    if record is None or not record["job_id"] or queued(workdir, record) is None:
-        raise ValueError(T("无法确认 Slurm 作业，请先刷新并核对队列"))
-    try:
-        command(["scancel", *cluster_args(record), record["job_id"]], workdir)
-    finally:
-        with _lock:
-            _cache.pop((str(Path(workdir).resolve()), record["token"]), None)
+    with sessions.locked(workdir):
+        record = read(workdir)
+        if record is None or not record["job_id"] or queued(workdir, record) is None:
+            raise ValueError(T("无法确认 Slurm 作业，请先刷新并核对队列"))
+        try:
+            command(["scancel", *cluster_args(record), record["job_id"]], workdir)
+            # 只有成功发出取消后，TERM/INT 的结束标记才可解释为用户取消；普通失败仍保持失败。
+            record["cancel_requested"] = True
+            sessions.atomic(Path(workdir) / RECORD, json.dumps(record).encode())
+        finally:
+            with _lock:
+                for requested in (False, True):
+                    _cache.pop((str(Path(workdir).resolve()), record["token"], requested), None)
     return dict(stop_requested=True, confirmed=False, backend="slurm", job_id=record["job_id"])

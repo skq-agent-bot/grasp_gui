@@ -76,6 +76,43 @@ def test_accounting_failure_takes_precedence_over_shell_success_marker(submitted
     assert state["status"] == "failed" and state["evidence"] == "accounting"
 
 
+@pytest.mark.parametrize("code, expected", [(130, "stopped"), (143, "stopped"), (7, "failed"), (0, "ok")])
+def test_requested_cancel_is_restored_without_accounting(submitted, monkeypatch, code, expected):
+    root, record = submitted
+    def active(args, wd):
+        return queue(record) if args[0] == "squeue" else ""
+    monkeypatch.setattr(slurm, "command", active)
+    slurm.cancel(root)
+    assert slurm.read(root)["cancel_requested"] is True
+    slurm.finish_file(root, record).write_text(record["token"] + f"|42|{code}\n")
+    def ended(args, wd):
+        if args[0] == "squeue":
+            return ""
+        raise slurm.CommandFailed("no accounting")
+    monkeypatch.setattr(slurm, "command", ended)
+    assert slurm.status(root)["status"] == expected
+
+
+@pytest.mark.parametrize("code", [130, 143])
+def test_signal_exit_without_successful_cancel_stays_failed(submitted, monkeypatch, code):
+    root, record = submitted
+    slurm.finish_file(root, record).write_text(record["token"] + f"|42|{code}\n")
+    monkeypatch.setattr(slurm, "command", lambda *args: "")
+    assert slurm.status(root)["status"] == "failed"
+
+
+def test_rejected_cancel_does_not_record_successful_request(submitted, monkeypatch):
+    root, record = submitted
+    def rejected(args, wd):
+        if args[0] == "squeue":
+            return queue(record)
+        raise slurm.CommandFailed("scancel refused")
+    monkeypatch.setattr(slurm, "command", rejected)
+    with pytest.raises(slurm.CommandFailed):
+        slurm.cancel(root)
+    assert not slurm.read(root).get("cancel_requested")
+
+
 @pytest.mark.parametrize("raw", ["wrong|42|0\n", "TOKEN|17|0\n", "TOKEN|42|999\n", "TOKEN|42|0"])
 def test_invalid_finish_marker_cannot_unlock_directory(submitted, monkeypatch, raw):
     root, record = submitted
