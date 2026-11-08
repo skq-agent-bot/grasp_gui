@@ -10,9 +10,16 @@ mkdir -p "$report_directory"
 report_directory="$(cd -- "$report_directory" && pwd)"
 docker info > /dev/null
 docker build -t grasp-gui-slurm-fixture "$repo_root/tools/slurm"
+if ! docker network inspect grasp-slurm-internal > /dev/null 2>&1; then
+    docker network create --internal grasp-slurm-internal
+fi
+if [ "$(docker network inspect --format '{{.Internal}}' grasp-slurm-internal)" != true ]; then
+    echo 'grasp-slurm-internal must be an internal network; stopped.' >&2
+    exit 1
+fi
 failed=0
 for mode in 0 1; do
-    if ! docker run --rm --hostname slurmfixture --network none --ulimit memlock=-1:-1 \
+    if ! docker run --rm --hostname slurmfixture --network grasp-slurm-internal --ulimit memlock=-1:-1 \
         --mount "type=bind,source=$repo_root,target=/app,readonly" \
         --mount "type=bind,source=$grasp_source,target=/grasp-source,readonly" \
         --mount "type=bind,source=$report_directory,target=/reports" \

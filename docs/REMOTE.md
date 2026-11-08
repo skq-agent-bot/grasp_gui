@@ -54,6 +54,9 @@ queue, validated accounting takes precedence; unavailable/delayed accounting can
 The state then reports `BATCH_EXITED`, identifying script exit evidence rather than a scheduler completion
 record. A killed node or SIGKILL may prevent the marker; absence is still Unknown. Existing version-1 records
 without markers remain readable. Job arrays are not supported by this submission dialog.
+After a successful scancel request, an optional `cancel_requested` flag is persisted in the version-1 record.
+A later exit marker with status 130/143 then displays Cancelled even without accounting; the same exit codes
+without this flag remain Failed. The request alone never establishes a terminal state, and accounting remains authoritative.
 
 未知状态提供“我已核对，清除此作业记录…”：人工核对后默认否确认，服务器在目录锁内核对记录修订号，
 重新查询当前用户队列，确认没有同 token 的作业后把原记录改名为 `.grasp_gui_slurm.json.cleared.<id>`。
@@ -85,8 +88,10 @@ Command references: [sbatch](https://slurm.schedmd.com/sbatch.html),
 ### Optional real Slurm acceptance / 可选真实 Slurm 验收
 
 `tools/slurm/` contains a single-node Docker fixture: slurmctld and slurmd in one container; the second mode
-also starts MariaDB/slurmdbd. Runtime uses only container loopback networking, publishes no ports and mounts
+also starts MariaDB/slurmdbd. Runtime uses a Docker `--internal` network, publishes no ports and mounts
 neither the Docker socket nor the host cgroup. Build installs test-only OS packages, without product/CI changes.
+The fixture uses Debian trixie / Slurm 24.11, with the cgroup plugin disabled; an existing named network must
+also be internal, or the runner stops.
 
 With Docker available, provide a GRASP source checkout (standard `compas/grasp` commit `9006157` is the reference)
 and a report directory outside this repository:
@@ -104,11 +109,14 @@ The opt-in `tests/test_slurm_live.py` covers held/PENDING → RUNNING → exampl
 running-job cancellation, no-accounting completion via EXIT marker, actual sacct evidence with accounting,
 and `mpirun -np 1` producing `000/mcp000.30`. Accounting mode removes the completion marker before requiring
 sacct evidence. Cancellation without a marker exercises explicit archival after the queue is empty.
-Without `GRASP_SLURM_TEST=1` these tests skip. **The fixture is prepared but has not been executed in this
-development environment; Docker and real MPI/Slurm acceptance are still required.**
+Without `GRASP_SLURM_TEST=1` these tests skip. The maintainer ran the corrected fixture with Slurm 24.11.5:
+**3 passed without accounting and 3 passed with slurmdbd**, including reference energies, cancellation and
+the single-rank MPI file location. See the [acceptance review](https://github.com/skq1998/grasp_gui/pull/46#pullrequestreview-5820086033).
+These fixture corrections are now included here. The development environment still lacks Docker; the added
+no-accounting Cancelled display has unit coverage and should be rechecked with the updated fixture assertion.
 
-负责人可运行上述脚本，回传两份 `slurm-0/1.xml` 和日志。0 模式没有 slurmdbd，1 模式启用记账。
-当前开发环境没有容器运行时，因此不能把替身测试或此脚本的静态检查当作真实验收通过。
+负责人已在 Slurm 24.11.5 下完成真实验收：无记账和带 slurmdbd 各 3 passed，MPI 单进程文件位置已核对。
+本次纳入其已验证的夹具修正，并补齐无记账时用户取消的状态显示；后者仍请用更新后的断言复验。
 
 ### Local editing and upload / 在本机编辑并上传
 
