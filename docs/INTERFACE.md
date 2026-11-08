@@ -211,16 +211,6 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   *Clear (清空)*, *Export ▾ (导出)*: shell script / Slurm job script. Steps imported as commands have no form and
   cannot be edited. The buttons stand in one column, grouped (run; edit / update / show; move; remove / clear;
   export); when the pane is too low for one column they rearrange into two.
-  *Export* also offers **Copy configuration and results summary (for an agent) (复制配置和结果摘要（给 agent）)**.
-  It uses the configuration export dialog for metadata, reference results and attached inputs, then opens a
-  separate preview. Select sections and 1–200 levels per symmetry block (default 5); reading is performed
-  in the background. The Markdown/JSON text is capped at 200 KiB. If needed, leading components and earlier
-  results are omitted with an explicit list; if the remaining content still cannot fit, reduce the selection
-  or export the complete configuration separately. Copying happens only after accepting the preview; cancel
-  preserves the clipboard.
-  “复制配置和结果摘要”先选配置的说明、参考结果及附带输入，再预览、勾选摘要部分。每块默认前 5 个能级
-  (可选 1–200)，后台读取；超出 200 KiB 先省主要成分、再省较早结果并列明。仍放不下时需减少内容，
-  完整配置可单独导出。取消预览不改剪贴板。
 * **Check input files (检查输入文件)**, next to *Preview input*: checks the pipeline from the selected step
   (or the current form if there is no pipeline). Starting a run also checks its selected steps, including
   *Update and run added steps*. Existing files and files declared as produced by earlier selected steps are
@@ -228,9 +218,14 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   unavailable afterwards. The angular-file check uses the same `.30` sentinel convention as the existing
   runner, including each MPI rank; it is not an integrity or physics check. Custom/undeclared steps are
   marked unchecked; a non-modal notice in program output reports their count on run. Missing files produce a step/filename report with similar names; **Run anyway (仍然运行吗？)**
-  defaults to No. A complete check is silent on run; the manual button shows the report.
+  defaults to No. The same report includes invalid names/parameters with step, program, field, name and limit.
+  Derived names are traced to the producer and identify the downstream step that cannot read them. Name/parameter
+  issues always block the run, with no Run anyway option, even if files are also missing. Without issues the run
+  check is silent; the manual button reports no missing inputs or name issues. It does not generate invalid stdin.
   “检查输入文件”检查从选中开始的流程；流程为空时检查当前表单。运行前也检查，包括更新后运行新增步骤。
   未声明依赖的步骤标为无法检查；缺失时列步骤、文件及相近文件名，默认取消，可选仍然运行。
+  名称/参数问题与缺文件合在一份报告，列步号、程序、字段、名字及上限；派生名称追溯到写出它的步骤，并注明后续
+  哪一步会失败。只要有名称或参数问题就禁止运行，不提供“仍然运行”，不会先生成错误输入再执行。
 * **Input preview (输入预览)**: when the lower area is at least 1300 pixels wide it is a column of its own between the
   pipeline and the program output (the three widths are remembered); when narrower it is a tab next to *Pipeline*.
   It shows the command, the here-document with the program's stdin and the file actions, e.g.
@@ -411,6 +406,21 @@ Clipboard output is limited to 4 MiB; file output and both input routes allow 32
   *Grid points (网格点数)*; orbital names in their plot colour.
 
 ## Levels tab / 能级图页
+
+**Results summary… (结果摘要…)** in the top bar opens a preview of a results summary for an agent: levels with
+leading components, energy changes between layers, rmcdhf SCF convergence (from logs, plus the final
+self-consistency and generalised occupation of each orbital from `name.sum`, with the orbitals new in the layer
+marked), CSF counts and the run status of the steps. *Include the complete configuration (附带完整配置)* is an optional extra, off by default and
+unavailable when the directory has no pipeline record. 1–200 levels per symmetry block (default 5); reading runs
+in the background. The Markdown/JSON text is capped at 200 KiB; leading components and earlier results are
+omitted first, with an explicit list. *Copy to clipboard (复制到剪贴板)* or *Save to file… (保存为文件…)*
+(`<directory>_summary.md`); cancel leaves the clipboard unchanged. For the directory open on the Calculation tab
+the summary uses its current pipeline and this session's run records; otherwise the directory record.
+Exporting a configuration alone stays under *Calculation → Export*.
+
+顶栏的“结果摘要…”：给 agent 的结果摘要，包括能级与主要成分、能级随层的变化、rmcdhf 收敛情况、CSF 数和各步运行状态。
+rmcdhf 部分另含 `name.sum` 中每个轨道最终的自洽程度和广义占据数，并标出本层新增的轨道。“附带完整配置”是可选的附加部分，默认不选；目录没有流程记录时不可选。每块默认 5 个能级 (1–200)，后台读取，文本最多
+200 KiB (先省主要成分、再省较早的结果，并写明)。可以复制到剪贴板或保存为文件 (`<目录名>_summary.md`)。单独导出配置仍在计算页的“导出”。
 
 Large mixing and CSF files are indexed in the background. The status bar shows *Reading … (正在读取 …)*
 and progress; changing the directory or file selection cancels obsolete work. Tabs and controls remain usable.

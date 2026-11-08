@@ -19,7 +19,7 @@ import subprocess
 import sys
 import threading
 
-VERSION = "2.6.0"         # 发布时改为发布的版本号 (写入导出的共享配置)
+VERSION = "2.7.1"         # 发布时改为发布的版本号 (写入导出的共享配置)
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".config", "grasp_gui.json")
 
@@ -810,6 +810,14 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "能级图中正在进行的跃迁计算会结束。": "Transition calculations in progress in the level diagram will be stopped.",
     "计算正在运行。可以让它在后台继续，以后再打开这个工作目录即可接上并查看结果。": "A run is in progress. It can continue in the background; open this working directory again later to reattach and see the results.",
     # 逐层计算的摘要和文件检查
+    "流程预检发现以下问题：": "Pipeline preflight found the following issues:",
+    "名称或参数不合法，不能运行": "Invalid names or parameters; cannot run",
+    "没有发现缺失的输入文件或名称问题。": "No missing input files or name issues found.",
+    "参数": "Parameters",
+    "第 {n} 步 {p} 的 {field}：{why}": "Step {n}, {p}, field {field}: {why}",
+    "第 {n} 步 {p} 的 {field} 写出 {file}，会使第 {next} 步 {consumer} 的 {target} 无法运行：{why}":
+        "Step {n}, {p}, field {field} writes {file}, which prevents step {next}, {consumer}, "
+        "field {target} from running: {why}",
     "检查流程中从选中开始的步骤；流程为空时检查当前表单。":
         "Check the pipeline from the selected step, or the current form if the pipeline is empty.",
     "[文件检查：{n} 个步骤未声明依赖，需人工核查]":
@@ -822,8 +830,6 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "各态的 CSF 数": "CSF counts by state",
     "能级与主要成分": "Levels and leading components",
     "能级随层的变化": "Energy changes between layers",
-    "复制配置和结果摘要（给 agent）": "Copy configuration and results summary (for an agent)",
-    "预览结果摘要…": "Preview results summary…",
     "检查输入文件": "Check input files",
     "未声明文件依赖，无法检查": "File dependencies are undeclared; cannot check",
     "以下输入文件尚不存在，且未找到所选起点之后的已声明前序输出：": (
@@ -839,10 +845,11 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "fingerprints"),
     "本次会话记录；按步骤参数指纹对应": "Current GUI session record; matched by step parameter fingerprints",
     "无日志，无法判断": "No log; cannot determine convergence",
+    "无日志，迭代过程未知；最终自洽程度见 .sum": "No log, so the iterations are unknown; final self-consistency from .sum",
+    "{f} 中没有轨道总结 (rmcdhf 可能没有正常结束)": "{f} has no orbital summary (rmcdhf may not have finished normally)",
     "该日志由后续步骤复用，无法判断此步的收敛情况": "A later step reuses this log; cannot determine convergence for this step",
     "每块能级数须为 1–200": "Levels per block must be between 1 and 200",
     "请至少选择一个摘要部分": "Select at least one summary section",
-    "配置和结果摘要": "Configuration and results summary",
     "运行成功仅指流程结束；收敛按日志判断；层间按 J、宇称和序号对应，不保证物理态身份相同；同名输出只保留最后写入。": (
         "Run success means the pipeline ended. Convergence is assessed from logs. Layers match by J, "
         "parity and index, without guaranteeing the same physical state. Reused outputs retain only the "
@@ -862,7 +869,14 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "没有发现缺失的输入文件。": "No missing input files found.",
     "缺少输入文件": "Missing input files",
     "仍然运行吗？": "Run anyway?",
-    "已复制配置和结果摘要": "Configuration and results summary copied",
+    "结果摘要…": "Results summary…",
+    "结果摘要": "Results summary",
+    "结果摘要（给 agent）": "Results summary (for an agent)",
+    "附带完整配置": "Include the complete configuration",
+    "保存结果摘要": "Save results summary",
+    "Markdown 文件 (*.md)": "Markdown files (*.md)",
+    "已保存结果摘要：{p}": "Results summary saved: {p}",
+    "已复制结果摘要": "Results summary copied",
     # MCP 与外部修改的记录
     "MCP 可读取允许目录中的结果、创建和更新方案、启动与停止计算。客户端通过标准输入输出连接，不开放端口。": (
         "MCP can read results, create and update plans, and start or stop calculations in the allowed "
@@ -1287,6 +1301,7 @@ class Step:
     prog = ""        # 程序名
     mpi = False      # 是否有 <prog>_mpi 并行版本
     fields = []
+    output_fields = ()       # 影响输出名称的字段，供预检追溯派生名称。
 
     @classmethod
     def defaults(cls):
@@ -1380,6 +1395,7 @@ class RNucleus(Step):
 
 
 class RcsfGenerate(Step):
+    output_fields = ("saveas",)
     key = name = prog = "rcsfgenerate"
     fields = [
         Note("生成 CSF 列表 rcsf.out。组态写法如 1s(2,i)2s(2,*)2p(1,*)：c=闭壳, i=不激发, *=活跃, "
@@ -1453,6 +1469,7 @@ class RcsfInteract(Step):
 
 
 class RcsfSplit(Step):
+    output_fields = ("state", "splits")
     key = name = prog = "rcsfsplit"
     fields = [
         Note("按轨道集把 name.c 拆分为 name<标签>.c 等多个文件。"),
@@ -1539,7 +1556,7 @@ class RcsfZeroFirst(Step):
 
     def validate(self, v):
         for key in ("zero", "full"):              # set_CSF_ZFlist.f90: FILNAM*256
-            file_name(v[key], 256, "rcsfzerofirst")
+            file_name(v[key], 256, "rcsfzerofirst", key)
 
     def stdin(self, v):
         self.validate(v)
@@ -1611,7 +1628,7 @@ class RWfnEstimate(Step):
 
     def validate(self, v):
         if v["use_file"]:                          # genrwf.f90: INFILE*128
-            file_name(v["wfile"].strip() or "rwfn.out", 128, "rwfnestimate")
+            file_name(v["wfile"].strip() or "rwfn.out", 128, "rwfnestimate", "wfile")
 
     def stdin(self, v):
         self.validate(v)
@@ -1631,6 +1648,7 @@ class RWfnEstimate(Step):
 
 
 class RMcdhf(Step):
+    output_fields = ("save",)
     key = name = prog = "rmcdhf"
     mpi = True
     fields = [
@@ -1704,6 +1722,7 @@ class RMcdhf(Step):
 
 
 class RSave(Step):
+    output_fields = ("state",)
     key = name = prog = "rsave"
     fields = [
         Note("把 rcsf.inp / rwfn.out / rmix.out 等保存为 name.c / name.w / name.m ..."),
@@ -1730,6 +1749,7 @@ class RSave(Step):
 
 
 class RCi(Step):
+    output_fields = ("state",)
     key = name = prog = "rci"
     mpi = True
     fields = [
@@ -1809,7 +1829,8 @@ class Jj2lsj(Step):
         if not v.get("coupling_files"):
             return
         if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,22}", v["state"].strip()):
-            raise ValueError(T("Coupling 态名称须为不含空格的 ASCII 基名，最多 23 个字符"))
+            raise NameValidationError(T("Coupling 态名称须为不含空格的 ASCII 基名，最多 23 个字符"),
+                                      v["state"].strip(), 23, "state")
         value = v.get("coupling_threshold", "0.001").strip()
         if not re.fullmatch(r"[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eEdD][+-]?[0-9]+)?", value) or not 0 <= float(value.lower().replace("d", "e")) <= 1:
             raise ValueError(T("成分打印下限必须是 0–1 的数"))
@@ -1874,7 +1895,8 @@ class Coupling(Step):
 
     def validate(self, v):
         if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,22}", v["state"].strip()):
-            raise ValueError(T("Coupling 态名称须为不含空格的 ASCII 基名，最多 23 个字符"))
+            raise NameValidationError(T("Coupling 态名称须为不含空格的 ASCII 基名，最多 23 个字符"),
+                                      v["state"].strip(), 23, "state")
         if v["shells"] not in self.SCHEMES:
             raise ValueError(T("耦合壳层数必须为 1、2 或 3"))
         if not re.fullmatch(r"[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eEdD][+-]?[0-9]+)?", v["threshold"].strip()):
@@ -1953,7 +1975,8 @@ class RHfsZeeman95(Step):
     def validate(self, v):
         # NAME 长度为 24，程序用首个空格截断态名，因此至少留一位空格。
         if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,22}", v["state"].strip()):
-            raise ValueError(T("rhfszeeman95 态名称须为不含空格的 ASCII 基名，最多 23 个字符"))
+            raise NameValidationError(T("rhfszeeman95 态名称须为不含空格的 ASCII 基名，最多 23 个字符"),
+                                      v["state"].strip(), 23, "state")
 
     def stdin(self, v):
         self.validate(v)
@@ -1992,21 +2015,31 @@ class RIs4(Step):
         return f"ris4 {v['state']}"
 
 
-def state_name(value, limit, prog):
+class NameValidationError(ValueError):
+    """保留原有异常消息，同时供 GUI/MCP 报告字段和限制；上限仍由各页提供。"""
+
+    def __init__(self, message, name, limit, field, unit="characters"):
+        super().__init__(message)
+        self.details = dict(kind="name", field=field, name=name, limit=limit, unit=unit, reason=message)
+
+
+def state_name(value, limit, prog, field="state"):
     """GRASP 把态名读入定长的字符变量，再按第一个空格截取：超长时被截断，或者截出空名字，程序打开错误的文件。
     limit 依据 compas/grasp 源码，见 docs/CONFIG_FORMAT.md 的“名称长度”。"""
     name = value.strip()
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", name) or len(name) > limit:
-        raise ValueError(T("{p} 的态名称“{s}”须为英文字母、数字、下划线、点或短横线 (不以点或短横线开头)，最多 {n} 个字符",
-                           p=prog, s=name, n=limit))
+        raise NameValidationError(
+            T("{p} 的态名称“{s}”须为英文字母、数字、下划线、点或短横线 (不以点或短横线开头)，最多 {n} 个字符",
+              p=prog, s=name, n=limit), name, limit, field)
     return name
 
 
-def file_name(value, limit, prog):
+def file_name(value, limit, prog, field="file"):
     """程序读入的文件名：不含空白，UTF-8 字节数不超过 limit (超长时 Fortran 截断后打开错误的文件)。"""
     name = value.strip()
     if not name or re.search(r"\s", name) or len(name.encode("utf-8")) > limit:
-        raise ValueError(T("{p} 的文件名“{s}”不能含空白，最多 {n} 个字节", p=prog, s=name, n=limit))
+        raise NameValidationError(T("{p} 的文件名“{s}”不能含空白，最多 {n} 个字节", p=prog, s=name, n=limit),
+                                  name, limit, field, "bytes")
     return name
 
 
@@ -2014,7 +2047,8 @@ def tool_state(value):
     """工具按态名拼接文件名；rasfsplit 还把它传给未加引号的 cp。"""
     state = value.strip()
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}", state):
-        raise ValueError(T("态名称须为 1–80 个英文字母、数字、下划线、点或短横线，且不能以点或短横线开头"))
+        raise NameValidationError(T("态名称须为 1–80 个英文字母、数字、下划线、点或短横线，且不能以点或短横线开头"),
+                                  state, 80, "state")
     return state
 
 
@@ -2098,8 +2132,11 @@ class RTabHfs(Step):
 
     def validate(self, v):
         files = nonblank_lines(v["files"])
-        if not 1 <= len(files) <= 20 or any(len(f) > 80 for f in files):
+        if not 1 <= len(files) <= 20:
             raise ValueError(T("请给出 1–20 个文件名，每个不超过 80 个字符"))
+        for name in files:
+            if len(name) > 80:
+                raise NameValidationError(T("请给出 1–20 个文件名，每个不超过 80 个字符"), name, 80, "files")
         if not re.fullmatch(r"[0-9]+", v["nskip"].strip()) or not 0 <= int(v["nskip"]) < 64:
             raise ValueError(T("跳过字符数必须是 0–63 的整数"))
 
@@ -2135,7 +2172,7 @@ class RLevels(Step):
 
     def validate(self, v):
         for f in shlex.split(v["files"]):          # rlevels.f90: strInFile*80
-            file_name(f, 80, "rlevels")
+            file_name(f, 80, "rlevels", "files")
 
     def args(self, v):
         self.validate(v)
@@ -2189,7 +2226,7 @@ class RTabTrans2(Step):
     ]
 
     def validate(self, v):
-        file_name(v["tfile"], 80, "rtabtrans2")       # rtabtrans2.f90: FILENAME1*80
+        file_name(v["tfile"], 80, "rtabtrans2", "tfile")       # rtabtrans2.f90: FILENAME1*80
 
     def stdin(self, v):
         self.validate(v)
@@ -2212,7 +2249,7 @@ class RBioTransform(Step):
 
     def validate(self, v):
         for key in ("init", "final"):              # fname.f90: NAME(2)*24
-            state_name(v[key], 23, "rbiotransform")
+            state_name(v[key], 23, "rbiotransform", key)
 
     def stdin(self, v):
         self.validate(v)
@@ -2243,7 +2280,7 @@ class RTransition(Step):
 
     def validate(self, v):
         for key in ("init", "final"):              # fname.f90: NAME(2)*24
-            state_name(v[key], 23, "rtransition")
+            state_name(v[key], 23, "rtransition", key)
 
     def stdin(self, v):
         self.validate(v)

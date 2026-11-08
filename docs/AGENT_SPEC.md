@@ -90,30 +90,37 @@ undeclared/custom steps need manual checking. It assumes declared producers fini
 existence rather than physical correctness or file freshness. A missing file can therefore also mean the
 starting step is too late. The user decides whether to run anyway.
 
-After checking results in the GUI, use **Calculation → Export → Copy configuration and results summary
-(for an agent)**. First choose configuration metadata, attached inputs and references as for ordinary
-configuration export; then preview and select summary sections. Return this text to the agent for planning
-the next layer. The agent must not infer convergence from an exit code or a successful pipeline alone.
+After checking results in the GUI, use **Levels → Results summary…**: preview, select sections (the complete
+configuration is an optional extra), then copy it or save it as a Markdown file. Return this text to the agent
+for planning the next layer. The agent must not infer convergence from an exit code or a successful pipeline alone.
 
 每一层都给出**完整配置**，保留前面的步骤和参数。用户从剪贴板选择“更新当前目录”，核查只新增了一层，
 再运行新增步骤。文件检查按执行顺序推算已声明的输入/输出，假定前序步骤成功；只查文件存在性，不查物理正确性
 或新旧。缺失也可能是运行起点太晚；自定义等未声明步骤需人工核查。是否仍然运行由用户决定。
-在界面核查后，通过“计算 → 导出 → 复制配置和结果摘要（给 agent）”交给 agent，决定下一层。
-先按普通配置导出选择说明、附带输入和参考结果，再预览和勾选摘要。不能把退出码或流程成功当作收敛证明。
+在界面核查后，通过“能级图 → 结果摘要…”交给 agent，决定下一层：预览、勾选要包含的部分 (完整配置是可选的附加部分)，
+再复制或保存为 Markdown 文件。不能把退出码或流程成功当作收敛证明。
 
 ### Summary format / 摘要格式
 
-The clipboard contains Markdown with separate JSON code blocks. The first block records generation time,
-`omissions`, `warnings` and evidence limitations. Each selected section follows in this fixed order:
+The summary (clipboard or `<directory>_summary.md`) is Markdown with separate JSON code blocks. The first block
+records generation time, `omissions`, `warnings` and evidence limitations. Each selected section follows in this
+fixed order; the complete configuration is an optional extra and comes last:
 
 | Section / 部分 | JSON content / 内容 |
 |---|---|
-| Current complete configuration / 当前完整配置 | The unchanged shared-configuration object / 原格式完整配置 |
-| Step run status / 各步运行状态 | Step number, title, `status`, `basis`, run times / 步号、标题、状态、依据、时间 |
-| SCF convergence / SCF 收敛情况 | Log path, iteration count, last 3 iterations, `converged` / 日志、次数、最后三次迭代、是否收敛 |
-| CSF counts / 各态的 CSF 数 | `.c` files, counts for each J/parity block / 各态每个 J、宇称块的 CSF 数 |
 | Levels / 能级与主要成分 | Ordered result files; J, parity, index, Hartree, relative cm⁻¹, purity, top 3 jj components, LSJ labels |
 | Layer changes / 能级随层的变化 | Per-group (odd/even) matches by J, parity, index; Hartree and consecutive-layer differences in cm⁻¹ |
+| SCF convergence / SCF 收敛情况 | Log path, iteration count, last 3 iterations, `converged`; `sum`: final self-consistency and generalised occupation of every orbital from `name.sum`, `new` for orbitals added since the previous rmcdhf of the same group |
+| CSF counts / 各态的 CSF 数 | `.c` files, counts for each J/parity block / 各态每个 J、宇称块的 CSF 数 |
+| Step run status / 各步运行状态 | Step number, title, `status`, `basis`, run times / 步号、标题、状态、依据、时间 |
+| Current complete configuration / 当前完整配置 | Optional; the unchanged shared-configuration object / 可选；原格式完整配置 |
+
+`sum` comes from the rmcdhf summary file (`rmcdhf.sum`, renamed `name.sum` by rsave; compas/grasp 9006157
+`endsum.f90:44–60,74–79`). It has no iteration history, only the final values. A small generalised occupation
+of the orbitals new in this layer means the layer adds little; `possibly_stale` marks a `.sum` much older than the
+mixing file. Without a log, `converged` stays `null` and `sum` is the only convergence evidence.
+`sum` 取自 rmcdhf 的总结文件 (rsave 改名为 `name.sum`)，只有最终值，没有迭代过程。本层新增轨道 (`new`) 的广义占据数小，
+说明这一层的贡献已经不大；没有日志时 `converged` 为 `null`，最终自洽程度是唯一的收敛线索。
 
 `status` is `success`, `failed`, `not_run`, `running`, `stopped` or `unknown`. The latest matching record
 wins. Current-GUI-session records compare parameter fingerprints; the persisted background state contains
