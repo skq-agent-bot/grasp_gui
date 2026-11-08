@@ -111,7 +111,7 @@ Closing the remote window closes its viewers and connection; it does not stop a 
 The connection dialog also has **Install / update server…** and **Remove from server…**. They show the host,
 bundled version/size, editable installation root, checks and exact paths before a default-No confirmation.
 Transfer progress and Cancel are available; returning from installation verifies the server and saves its path.
-No-bundle builds disable the installation button with a clear message; removal remains available.
+Development or self-built binaries without a bundle disable the installation button with a clear message; removal remains available.
 Only older compatible server versions offer an update, which can be declined. Authentication, host-key and
 network failures remain in the status area and do not open the installer.
 “连接服务器”另有安装/更新与移除入口：先检查并列出主机、版本、大小、目录、链接及服务器检查结果，

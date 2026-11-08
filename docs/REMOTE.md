@@ -235,7 +235,8 @@ while an installed version is running and keeps unrelated files, calculation dir
 Build the server archive on legacy first, then use
 `./build.sh [--onedir] --server-bundle /path/to/grasp_gui-server-linux-x86_64.tar.gz`
 (or GRASP_SERVER_BUNDLE). The adjacent .sha256 file and SERVER_VERSION inside the archive must match this
-desktop release/protocol. Omitting the option builds normally; installation says **This build does not include
+desktop release/protocol. Every published desktop release must include the server archive. For development,
+CI or self-built binaries, omitting the option still builds normally; installation is disabled and says **This build does not include
 the server package**. Legacy builds do not bundle it. No runtime downloads or external server connections occur.
 
 “连接服务器”中的“安装 / 更新服务器版…”和“从服务器移除…”沿用每台主机的设置。程序不自动安装；
@@ -244,12 +245,12 @@ the server package**. Legacy builds do not bundle it. No runtime downloads or ex
 分析会话先关闭，安装通过 SSH 标准输入传输，不需要 scp、sftp、端口转发、管理员权限或外网。
 校验、解压及版本/握手检查通过后才原子切换链接；保留上一版及仍运行的旧版，取消或失败清理临时目录。
 移除前列出本程序安装的版本和链接，运行中的版本拒绝移除；不动工作目录、计算结果、无所有权标记的目录和管理员程序。
-没有捆绑包的构建仍可连接已有程序，安装入口明确显示“本构建不含服务器版”。
+正式桌面发行版全部捆绑服务器包。开发、CI 或自行构建时可不捆绑，仍可连接已有程序，安装入口禁用并明确显示“本构建不含服务器版”。
 
-安装入口在没有捆绑包时禁用并说明原因，移除入口仍可用。检查只在最近已存在的上级目录测试权限、
+开发或自行构建中，安装入口在没有捆绑包时禁用并说明原因，移除入口仍可用。检查只在最近已存在的上级目录测试权限、
 空间和执行能力，不创建安装目录；移除不存在的目录时直接结束。移除后也清理程序的上一版记录。
 取消导致的管道关闭统一报告“安装已取消”。新版服务器以及认证、主机密钥、网络和超时错误均不触发安装提示。
 
-Without a bundle, the installation button is disabled with an explanation; removal remains available.
+In development or self-built binaries without a bundle, the installation button is disabled with an explanation; removal remains available.
 Checking an absent install root tests its nearest existing parent without creating the root. Removal of an absent
 root is a no-op and successful removal also clears the previous-version record. Cancelled broken pipes report cancellation.
