@@ -27,7 +27,8 @@ GREETING = "GRASP_GUI_REMOTE 1"
 MAX_FRAME = 32 << 20
 COMPRESS_AT = 16384
 READ_ONLY = {"hello", "list_dir", "levels", "transitions", "orbitals", "wavefunctions", "composition",
-             "run_status", "tail_log", "pipeline", "run_plan", "export_script", "view", "watch", "summary", "transfer_files"}
+             "run_status", "tail_log", "pipeline", "run_plan", "export_script", "view", "watch", "summary",
+             "transfer_files"}
 
 
 def pack(data):

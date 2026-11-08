@@ -125,7 +125,7 @@ class TransferDialog(QDialog):
             item = QTableWidgetItem(row["name"])
             item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
             self.table.setItem(i, 0, item)
-            for col, text in ((1, str(row["size"]) + " B"), (2, "")):
+            for col, text in ((1, f"{row['size'] / 1_000_000:.2f} MB"), (2, "")):
                 cell = QTableWidgetItem(text)
                 cell.setFlags(Qt.ItemIsEnabled)
                 self.table.setItem(i, col, cell)
@@ -241,7 +241,17 @@ class TransferDialog(QDialog):
             pass
 
     def done(self, result):
+        if self.busy and not self.closed:
+            if QMessageBox.question(self, T("取消传输"),
+                                    T("传输仍在进行，关闭窗口将取消传输。是否取消并关闭？"),
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+                return
         self.closed = True
         self.cancel_transfer()
         self.timer.stop()
         super().done(result)
+
+    def shutdown(self):
+        # 远程窗口关闭时连接也会结束，直接取消其传输，不再逐个确认。
+        self.closed = True
+        self.done(QDialog.Rejected)

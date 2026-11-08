@@ -142,6 +142,7 @@ def test_gui_threshold_confirmation_progress_and_cancel(qapp, monkeypatch, tmp_p
         assert dialog.threshold.value() == 100 and dialog.policy.currentData() == "skip"
         assert [row["name"] for row in dialog.selected()] == ["small"]
         assert dialog.total["skipped_large"]["count"] == 1
+        assert dialog.table.item(1, 1).text() == "200.00 MB"
         dialog.large.click()
         assert len(dialog.selected()) == 2
         dialog.threshold.setValue(250)
@@ -173,6 +174,104 @@ def test_gui_threshold_confirmation_progress_and_cancel(qapp, monkeypatch, tmp_p
         assert core.load_config()["remote_hosts"]["fixture"]["transfer_threshold_mb"] == 50
     finally:
         dialog.reject()
+
+
+@pytest.mark.gui
+def test_transfer_close_requires_confirmation(qapp, monkeypatch, tmp_path):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QMessageBox
+    from transfer_panel import TransferDialog
+
+    monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "settings.json"))
+    source = SimpleNamespace(client=SimpleNamespace(host="fixture"), submit=lambda *args: None)
+    dialog = TransferDialog(source, "/server")
+    cancelled, questions = [], []
+    dialog.job = SimpleNamespace(cancel=lambda: cancelled.append(True))
+    dialog.controls(True)
+    dialog.show()
+    def decline(*args):
+        questions.append(args)
+        assert args[-1] == QMessageBox.No
+        return QMessageBox.No
+    monkeypatch.setattr(QMessageBox, "question", decline)
+    try:
+        dialog.close()
+        assert dialog.isVisible() and not dialog.closed and not cancelled
+        QTest.keyClick(dialog, Qt.Key_Escape)
+        assert len(questions) == 2 and dialog.timer.isActive() and not cancelled
+        monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+        dialog.close()
+        assert dialog.closed and not dialog.isVisible() and cancelled == [True]
+        assert not dialog.timer.isActive()
+    finally:
+        if not dialog.closed:
+            dialog.shutdown()
+        dialog.deleteLater()
+        qapp.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
+@pytest.mark.gui
+def test_modeless_transfer_keeps_windows_usable_and_parent_close_cancels(qapp, monkeypatch, tmp_path):
+    from PySide6.QtCore import QEvent, QObject, Qt, Signal
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QWidget
+    import remote_panel
+    from transfer_panel import TransferDialog
+
+    monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "settings.json"))
+    class Source(QObject):
+        notice = Signal(str)
+        client = SimpleNamespace(host="fixture")
+        def submit(self, *args):
+            pass
+        def reconnect(self):
+            pass
+        def close(self):
+            self.closed = True
+    class Panel(QWidget):
+        message = Signal(str)
+        def __init__(self, *args):
+            super().__init__()
+        def shutdown(self):
+            pass
+    for name in ("RemoteCalculation", "RemoteWaves", "RemoteLevels"):
+        monkeypatch.setattr(remote_panel, name, Panel)
+    monkeypatch.setattr(TransferDialog, "exec", lambda self: pytest.fail("transfer must be modeless"))
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: pytest.fail("parent close must cancel directly"))
+    main = QMainWindow()
+    action = main.menuBar().addAction("test")
+    invoked, cancelled = [], []
+    action.triggered.connect(lambda: invoked.append(True))
+    source = Source()
+    win = remote_panel.RemoteWindow(source, "/server", main)
+    main.show()
+    win.show()
+    try:
+        win.open_transfer()
+        dialog = win.transfer_dialogs[0]
+        dialog.job = SimpleNamespace(cancel=lambda: cancelled.append(True))
+        dialog.controls(True)
+        assert dialog.isVisible() and not dialog.isModal()
+        assert QApplication.activeModalWidget() is None
+        QTest.mouseClick(win.tabs.tabBar(), Qt.LeftButton, pos=win.tabs.tabBar().tabRect(1).center())
+        assert win.tabs.currentIndex() == 1
+        QTest.mouseClick(main.menuBar(), Qt.LeftButton, pos=main.menuBar().actionGeometry(action).center())
+        assert invoked == [True]
+        dialog.events.put(("progress", dict(percent=40, speed="2MB/s", eta="0:00:30")))
+        dialog.poll()
+        assert "2MB/s" in win.statusBar().currentMessage()
+        win.open_transfer()
+        idle = win.transfer_dialogs[-1]
+        idle.reject()
+        assert win.transfer_dialogs == [dialog]
+        win.close()
+        assert cancelled == [True] and not win.transfer_dialogs and source.closed
+    finally:
+        win.close()
+        main.close()
+        main.deleteLater()
+        qapp.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 @pytest.mark.gui
