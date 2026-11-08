@@ -213,9 +213,9 @@ MCP 开关仍由用户控制，绘图工具在没有 Qt 时返回明确错误。
 ## Bundled installation / 从桌面端安装服务器版
 
 In **Connect to server**, **Install / update server…** opens an explicit installation dialog;
-**Remove from server…** uses the same host settings. The application never installs automatically. A missing
-executable offers installation, an existing path, or cancel; compatible version differences offer an update
-with No as the default. An incompatible protocol requires updating or choosing another server executable.
+**Remove from server…** uses the same host settings. The application never installs automatically. An unavailable server program offers installation, an existing path, or cancel when a bundle is available;
+authentication, host-key, network and timeout errors only update the status. Only a numerically older compatible
+server version offers an update, with No as the default; newer servers never prompt for a downgrade. An incompatible protocol requires updating or choosing another server executable.
 
 The dialog displays the host, bundled version/size, install root, executable link, architecture, glibc and free
 space. **Check server** closes this dialog's analysis session before using SSH, so MaxSessions 1 works. It checks
@@ -245,3 +245,11 @@ the server package**. Legacy builds do not bundle it. No runtime downloads or ex
 校验、解压及版本/握手检查通过后才原子切换链接；保留上一版及仍运行的旧版，取消或失败清理临时目录。
 移除前列出本程序安装的版本和链接，运行中的版本拒绝移除；不动工作目录、计算结果、无所有权标记的目录和管理员程序。
 没有捆绑包的构建仍可连接已有程序，安装入口明确显示“本构建不含服务器版”。
+
+安装入口在没有捆绑包时禁用并说明原因，移除入口仍可用。检查只在最近已存在的上级目录测试权限、
+空间和执行能力，不创建安装目录；移除不存在的目录时直接结束。移除后也清理程序的上一版记录。
+取消导致的管道关闭统一报告“安装已取消”。新版服务器以及认证、主机密钥、网络和超时错误均不触发安装提示。
+
+Without a bundle, the installation button is disabled with an explanation; removal remains available.
+Checking an absent install root tests its nearest existing parent without creating the root. Removal of an absent
+root is a no-op and successful removal also clears the previous-version record. Cancelled broken pipes report cancellation.

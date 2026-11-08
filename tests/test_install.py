@@ -99,6 +99,7 @@ def test_install_checksum_failure_never_switches_and_cleans(package, tmp_path):
     marker.parent.mkdir()
     marker.write_text("keep")
     peer.remove(root)
+    assert not (Path(root) / ".grasp-gui-previous").exists()
     assert not link.is_symlink() and marker.read_text() == "keep"
 
 
@@ -182,3 +183,136 @@ def test_unmanaged_executable_is_never_replaced(package, tmp_path):
         assert link.read_text() == "administrator installation"
     finally:
         link.unlink()
+
+
+@pytest.mark.parametrize("value,current,expected", [("2.9.0", "2.10.0", True), ("2.10.0", "2.9.0", False),
+    ("2.8.0", "2.8.0", False), ("newer", "2.8.0", False), (None, "2.8.0", False)])
+def test_numeric_upgrade_only(value, current, expected):
+    assert install.older_version(value, current) is expected
+
+
+def test_probe_and_remove_missing_root_do_not_create_it(tmp_path):
+    root = tmp_path / "missing" / "install"
+    peer = install.Installer(LocalClient())
+    result = peer.probe(root=str(root))
+    assert result["root"] == str(root) and result["versions"] == []
+    assert not root.parent.exists()
+    peer.remove(str(root))
+    assert not root.parent.exists()
+    assert not list(tmp_path.glob(".probe.*"))
+
+
+def test_cancelled_broken_pipe_is_reported_as_cancel(tmp_path, monkeypatch):
+    peer = install.Installer(LocalClient())
+    payload = tmp_path / "archive"
+    payload.write_bytes(b"payload")
+    class Pipe:
+        def write(self, value):
+            peer.cancelled.set()
+            raise BrokenPipeError("Broken pipe")
+        def close(self):
+            raise BrokenPipeError("Broken pipe")
+    class Process:
+        stdin = Pipe()
+        stdout, stderr = io.BytesIO(), io.BytesIO()
+        def poll(self):
+            return 1
+        def wait(self, *args):
+            return 1
+    monkeypatch.setattr(install.subprocess, "Popen", lambda *a, **k: Process())
+    with pytest.raises(InterruptedError, match="安装已取消"):
+        peer.run(install.INSTALL, str(tmp_path), archive=str(payload))
+
+
+@pytest.mark.gui
+@pytest.mark.parametrize("version,bundled,prompt", [("2.7.9", True, True), ("2.9.0", True, False),
+                                                   ("2.10.0", True, False), ("2.7.9", False, False)])
+def test_connection_offers_only_bundled_upgrades(qapp, monkeypatch, package, version, bundled, prompt):
+    from PySide6.QtWidgets import QMessageBox
+    from remote_panel import ConnectDialog
+    def bundle():
+        if not bundled:
+            raise ValueError("本构建不含服务器版")
+        return package
+    monkeypatch.setattr(install, "bundle", bundle)
+    shown = []
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: shown.append(args) or QMessageBox.No)
+    dialog = ConnectDialog()
+    from types import SimpleNamespace
+    dialog.source = SimpleNamespace(server=dict(version=version), client=SimpleNamespace(host="fixture"),
+                                    close=lambda: None)
+    try:
+        dialog.loaded(dict(directory="/calc", parent="/", files=[]), None)
+        assert bool(shown) is prompt
+        assert dialog.install_button.isEnabled() is bundled
+        if not bundled:
+            assert "不含服务器版" in dialog.install_button.toolTip()
+    finally:
+        dialog.reject()
+
+
+@pytest.mark.gui
+@pytest.mark.parametrize("error,offered", [
+    (ConnectionError("Permission denied"), False), (ConnectionError("Host key verification failed"), False),
+    (TimeoutError("Connection timed out"), False), (ConnectionError("No route to host"), False),
+    (ConnectionError("grasp_gui not found"), False),
+])
+def test_transport_errors_only_update_status(qapp, monkeypatch, package, error, offered):
+    from remote_panel import ConnectDialog
+    import remote_panel
+    monkeypatch.setattr(install, "bundle", lambda: package)
+    dialog = ConnectDialog()
+    def unexpected(*args):
+        pytest.fail("transport errors must not offer installation")
+    monkeypatch.setattr(remote_panel, "QMessageBox", unexpected)
+    try:
+        dialog.loaded(None, error)
+        assert dialog.status.text() == str(error)
+    finally:
+        dialog.reject()
+
+
+@pytest.mark.parametrize("code,unavailable", [(1, True), (127, True), (255, False)])
+def test_program_exit_and_ssh_failure_are_distinguished(tmp_path, code, unavailable):
+    import sys
+    import grasp_ssh as ssh
+    client = ssh.Client("fixture", command=[sys.executable, "-c", f"import sys;sys.exit({code})"],
+                        cache=ssh.Cache(str(code), root=tmp_path / "cache"))
+    try:
+        with pytest.raises(ConnectionError) as caught:
+            client.request("list_dir", dict(directory=str(tmp_path))).result(20)
+        assert isinstance(caught.value, ssh.ServerUnavailable) is unavailable
+    finally:
+        client.close()
+
+
+@pytest.mark.gui
+def test_unavailable_program_offers_explicit_installation(qapp, monkeypatch, package):
+    import remote_panel
+    import grasp_ssh as ssh
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(install, "bundle", lambda: package)
+    shown = []
+    class Box:
+        ActionRole, RejectRole = QMessageBox.ActionRole, QMessageBox.RejectRole
+        def __init__(self, *args):
+            shown.append(self)
+        def setWindowTitle(self, value):
+            pass
+        def setText(self, value):
+            pass
+        def addButton(self, *args):
+            return object()
+        def setDefaultButton(self, value):
+            self.default = value
+        def exec(self):
+            pass
+        def clickedButton(self):
+            return self.default
+    dialog = remote_panel.ConnectDialog()
+    monkeypatch.setattr(remote_panel, "QMessageBox", Box)
+    try:
+        dialog.loaded(None, ssh.ServerUnavailable("grasp_gui not found"))
+        assert len(shown) == 1 and "可安装捆绑服务器版" in dialog.status.text()
+    finally:
+        dialog.reject()

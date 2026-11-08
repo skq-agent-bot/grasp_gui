@@ -982,6 +982,9 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "服务器版命令：remote、mcp、check、script、steps、reference、_run；--version 显示程序和协议版本。": (
         "Server commands: remote, mcp, check, script, steps, reference, _run; "
         "--version shows the application and protocol versions."),
+    "可安装捆绑服务器版，或在此设置已有程序的完整路径。": (
+        "Install the bundled server, or enter the absolute path of an existing executable here."),
+    "服务器版本较旧": "Older server version",
     # 捆绑服务器版的显式安装
     "本构建不含服务器版": "This build does not include the server package",
     "服务器压缩包校验失败": "Server archive checksum failed",

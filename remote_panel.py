@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLa
                                QTabWidget, QVBoxLayout, QWidget)
 
 import grasp_config as config
+import grasp_install as install
 import grasp_core as core
 import grasp_mix as mix
 import grasp_ssh as ssh
@@ -117,7 +118,15 @@ class ConnectDialog(QDialog):
         self.connect_button = button("连接 / 刷新", self.connect_server)
         bar.addWidget(self.connect_button)
         bar.addWidget(button("上一级", self.parent_directory))
-        bar.addWidget(button("安装 / 更新服务器版…", self.install_server))
+        self.package, self.bundle_error = None, ""
+        try:
+            self.package = install.bundle()
+        except (OSError, ValueError) as error:
+            self.bundle_error = str(error)
+        self.install_button = button("安装 / 更新服务器版…", self.install_server)
+        self.install_button.setEnabled(self.package is not None)
+        self.install_button.setToolTip(self.bundle_error)
+        bar.addWidget(self.install_button)
         bar.addWidget(button("从服务器移除…", lambda: self.install_server(remove=True)))
         layout.addLayout(bar)
         self.files = QListWidget()
@@ -125,6 +134,8 @@ class ConnectDialog(QDialog):
         layout.addWidget(self.files, 1)
         self.status = QLabel(T("密钥或 ssh-agent 优先；密码和验证码仅在 OpenSSH 输入框中输入，不保存。"))
         self.status.setWordWrap(True)
+        if self.bundle_error:
+            self.status.setText(self.status.text() + "\n" + self.bundle_error)
         layout.addWidget(self.status)
         bar = QHBoxLayout()
         bar.addStretch()
@@ -137,6 +148,9 @@ class ConnectDialog(QDialog):
         self.profile(self.host.currentText())
 
     def install_server(self, remove=False):
+        if not remove and self.package is None:
+            self.status.setText(self.bundle_error)
+            return
         from install_panel import InstallDialog
         if self.source and self.source.client.host != self.host.currentText().strip():
             self.source.close()
@@ -191,7 +205,10 @@ class ConnectDialog(QDialog):
     def loaded(self, value, error):
         self.connect_button.setEnabled(True)
         if error:
-            self.status.setText(str(error) + "\n" + T("请手动安装或更新服务器端，并在此设置完整路径；程序不会自动上传。"))
+            self.status.setText(str(error))
+            if not isinstance(error, ssh.ServerUnavailable) or self.package is None:
+                return
+            self.status.setText(str(error) + "\n" + T("可安装捆绑服务器版，或在此设置已有程序的完整路径。"))
             box = QMessageBox(self)
             box.setWindowTitle(T("服务器端不可用"))
             box.setText(str(error))
@@ -218,9 +235,10 @@ class ConnectDialog(QDialog):
         self.use.setEnabled(True)
         version = self.source.server.get("version", core.VERSION)
         self.status.setText(T("服务器 {h}:{p}", h=self.source.client.host, p=self.directory))
-        if version != core.VERSION and getattr(self, "offered_version", None) != version:
+        if (self.package is not None and install.older_version(version, core.VERSION)
+                and getattr(self, "offered_version", None) != version):
             self.offered_version = version
-            if QMessageBox.question(self, T("服务器版本不同"),
+            if QMessageBox.question(self, T("服务器版本较旧"),
                     T("服务器 {v}，桌面 {d}；协议兼容，可继续使用。现在安装捆绑版本吗？", v=version, d=core.VERSION),
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
                 self.install_server()

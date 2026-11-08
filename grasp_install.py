@@ -47,13 +47,19 @@ def bundle(directory=None):
     return dict(path=str(archive), sha256=digest, size=archive.stat().st_size, expanded=size, version=core.VERSION)
 
 
+def older_version(value, current):
+    """只接受完整的数字发布版本；未知格式不触发安装提示。"""
+    if not all(isinstance(v, str) and re.fullmatch(r"\d+\.\d+\.\d+", v) for v in (value, current)):
+        return False
+    return tuple(map(int, value.split("."))) < tuple(map(int, current.split(".")))
+
+
 # 参数经 shlex.quote 传入位置参数；服务器不解析用户输入为 shell 代码。
 COMMON = r'''
 set -eu
 root=$1
 case "$root" in '~/'*) root="$HOME/${root#\~/}" ;; /*) ;; *) echo 'absolute install path required' >&2; exit 2 ;; esac
-mkdir -p "$root"
-root=$(cd "$root" && pwd -P)
+root=$(readlink -m -- "$root")
 link="$HOME/.local/bin/grasp_gui"
 owned() {
     [ -d "$1" ] && [ ! -L "$1" ] && [ -f "$1/.grasp-gui-version" ] &&
@@ -77,17 +83,21 @@ major=${2%%.*}; minor=${2#*.}; minor=${minor%%.*}
 [ "$major" -gt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -ge 17 ]; } || {
     echo "glibc 2.17 required: $glibc" >&2; exit 2;
 }
-probe=$(mktemp -d "$root/.probe.XXXXXX")
+parent=$root
+while [ ! -e "$parent" ]; do parent=$(dirname "$parent"); done
+[ -d "$parent" ] && [ -w "$parent" ] || { echo 'installation parent is not writable' >&2; exit 2; }
+probe=$(mktemp -d "$parent/.probe.XXXXXX")
 trap 'rm -rf "$probe"' EXIT HUP INT TERM
 printf '#!/bin/sh\nexit 0\n' > "$probe/check"
 chmod 700 "$probe/check"
 "$probe/check" || { echo 'installation filesystem is noexec' >&2; exit 2; }
-space=$(df -Pk "$root" | awk 'END {print $4}')
+space=$(df -Pk "$parent" | awk 'END {print $4}')
 printf '%s\0' "$arch" "$glibc" "$space" "$root" "$link"
 for item in "$root"/*; do owned "$item" && printf '%s\0' "$item" || :; done
 '''
 INSTALL = COMMON + r'''
 version=$2; expected=$3
+mkdir -p "$root"
 stage=$(mktemp -d "$root/.install.XXXXXX")
 linkstage=''
 cleanup() { rm -rf "$stage"; [ -z "$linkstage" ] || rm -rf "$linkstage"; }
@@ -136,6 +146,7 @@ done
 printf '%s\n' "$link"
 '''
 REMOVE = COMMON + r'''
+[ -d "$root" ] || exit 0
 # 仅移除带本程序所有权标记的版本，运行中的版本保留，不能破坏已加载的服务。
 for item in "$root"/*; do
     if owned "$item" && active "$item"; then echo "still running: $item" >&2; exit 2; fi
@@ -151,6 +162,7 @@ for item in "$root"/*; do
         rm -rf "$item"
     fi
 done
+rm -f "$root/.grasp-gui-previous"
 '''
 
 
@@ -227,6 +239,10 @@ class Installer:
             if process.returncode:
                 raise RuntimeError(errors.decode("utf-8", "replace") or T("服务器安装失败"))
             return bytes(output)
+        except OSError as error:
+            if self.cancelled.is_set():
+                raise InterruptedError(T("安装已取消")) from error
+            raise
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -236,7 +252,10 @@ class Installer:
                 process.kill()
                 process.wait()
             for stream in (process.stdin, process.stdout, process.stderr):
-                stream.close()
+                try:
+                    stream.close()
+                except OSError:
+                    pass  # 子进程已结束；关闭管道不能覆盖取消或实际失败的诊断。
             self.process = None
 
     def probe(self, package=None, root=DEFAULT_ROOT):
