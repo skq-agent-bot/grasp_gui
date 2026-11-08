@@ -27,7 +27,7 @@ GREETING = "GRASP_GUI_REMOTE 1"
 MAX_FRAME = 32 << 20
 COMPRESS_AT = 16384
 READ_ONLY = {"hello", "list_dir", "levels", "transitions", "orbitals", "wavefunctions", "composition",
-             "run_status", "tail_log", "pipeline", "run_plan", "export_script", "view", "watch"}
+             "run_status", "tail_log", "pipeline", "run_plan", "export_script", "view", "watch", "summary"}
 
 
 def pack(data):
@@ -102,6 +102,24 @@ class Operations(service.Service):
     def pipeline(self, directory):
         root, data, revision = self.record(directory)
         return dict(jobs=data.get("pipeline", []), revision=revision, directory=str(root))
+
+    def summary(self, directory, per_block=5, sections=None):
+        import grasp_summary as summary
+        integer(per_block, 1, 200)
+        if sections is None:
+            sections = [k for k in summary.SECTIONS if k not in summary.OPTIONAL]
+        if (not isinstance(sections, list) or not sections or len(sections) > len(summary.SECTIONS)
+                or any(not isinstance(k, str) or k not in summary.SECTIONS for k in sections)):
+            raise ValueError(T("请至少选择一个摘要部分"))
+        root = self.path(directory, directory=True)
+        jobs = []
+        if (root / core.SESSION_FILE).exists():
+            jobs = self.record(directory)[1].get("pipeline", [])
+        cfg = config.export(jobs, dict(title=root.name), validate=False) if jobs else None
+        selected = [k for k in sections if cfg is not None or k != "configuration"]
+        # 只使用服务器状态文件；桌面会话中的参数指纹与运行记录不属于该服务器。
+        result = summary.collect(str(root), cfg, jobs, history=(), per_block=per_block, cancel=self.cancel)
+        return dict(text=summary.render(result, selected), has_configuration=cfg is not None)
 
     def run_status(self, directory):
         return self.status(directory)

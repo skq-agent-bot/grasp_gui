@@ -65,6 +65,12 @@ OpenSSH 的 `confirm` 提示仍用默认“否”的确认框；`none` (如 FIDO
 能级图先显示能量，再补 jj/LSJ 主要组成和已算跃迁；需要更多组成时点“读取更多组成” (最多 500 项)。
 拖动能级只选择已算跃迁，不在这里另建跃迁计算。图上标记仅保留在当前窗口。
 可导出分析数据 CSV 和能级图；原始 GRASP 跃迁文件不传输，远程页会提示改用这两种导出。
+能级图的“结果摘要…”在服务器调用 `grasp_summary.collect/render`，沿用同一个预览/勾选/复制/保存对话框。
+每块能级数和包含部分改变后重新请求；摘要最多 200 KiB，按现有协议压缩传回，不下载原始结果文件。
+运行证据只来自服务器保存的流程及状态，不能使用桌面本次会话的参数指纹。没有流程时禁用“附带完整配置”。
+对话框标题标明服务器来源，保存文件在本机选择 (初始为本机家目录)，不把服务器目录当成本机路径。
+关闭/替换请求后丢弃旧回答，不改剪贴板。
+
 波函数先显示粗线，再补细线 (默认每轨道最多 1000 点，服务器按原网格索引作线性插值)；
 表中的积分、节点数和原始点数仍由服务器在原始网格上计算。勾选缺少曲线的轨道时才请求曲线。
 
@@ -111,6 +117,7 @@ Two server workers permit pipelined reads; run/stop are serialized. Server code 
 | `transitions` | Directory, optional files/limit; existing λ, A, gf, S, computed-only branching ratios |
 | `orbitals` | Directory, optional files/limit; properties computed on the original grid |
 | `wavefunctions` | Directory, optional files/names; points 2–10000, at most 100 sampled curves |
+| `summary` | Directory, optional per_block (1–200, default 5), selected sections; server-rendered text and configuration availability |
 | `composition` | Directory, mixing file, block, index; up to 500 leading components |
 | `view` | `kind: levels` or `wfn`; a whole view in one request, optional file/name selection and known signature |
 | `pipeline` | Read-only saved jobs and revision |
@@ -153,6 +160,11 @@ The source is shown as **Server host:/path**. The pipeline is read-only, with pa
 pushed logs. Existing level and radial viewers render structured remote results; select **Load more components**
 for additional data. CSV/figure export uses analysed data; original GRASP transition files stay on the server.
 Curves are resampled on the server; numerical properties use the original grid.
+**Results summary…** runs collect/render on the server using its saved pipeline and state. The same dialog supports
+preview, section choices, levels per block, copy and local-file save; changing choices requests a new summary.
+Text is bounded to 200 KiB and uses protocol compression. The dialog identifies the server, never reads remote
+paths on the desktop, and starts saving in the desktop home directory. Desktop session history is not used;
+configuration is disabled when no saved pipeline exists. Closed/replaced requests cannot update the preview.
 Selection, hover, zoom and pan use local cached data. Reopening a view validates the bounded cache in one request.
 The status bar reports request latency, including processing time. **Window → Reconnect** retries after automatic
 reconnects have stopped. Running calculations normally continue through disconnection, including during startup;

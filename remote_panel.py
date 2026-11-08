@@ -2,7 +2,7 @@
 
 import json
 import os
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import queue
 
 from PySide6.QtCore import Qt, QTimer, Signal, QObject
@@ -41,6 +41,11 @@ class Source(QObject):
         self.waiting[future.request_id] = (future, callback, progress)
         return future.request_id
 
+    def cancel(self, ident):
+        pending = self.waiting.pop(ident, None)
+        if pending is not None:
+            pending[0].cancel()
+
     def poll(self):
         try:
             while True:
@@ -64,7 +69,8 @@ class Source(QObject):
         for ident, (future, callback, _) in list(self.waiting.items()):
             if not future.done():
                 continue
-            del self.waiting[ident]
+            if self.waiting.pop(ident, None) is None:
+                continue
             try:
                 value = future.result()
             except Exception as e:
@@ -219,6 +225,21 @@ class RemoteLevels(LevelPanel):
         self.tr_stop.hide()
         self.more = button("读取更多组成", self.more_composition)
         self.layout().addWidget(self.more)
+
+    def open_summary(self):
+        from summary_panel import SummaryDialog
+
+        def load(per_block, sections, callback):
+            ident = self.remote_source.submit("summary", dict(directory=self.remote_directory,
+                                              per_block=per_block, sections=sections), callback)
+            return lambda: self.remote_source.cancel(ident)
+        dialog = SummaryDialog(self, self.remote_directory, None, [], loader=load)
+        dialog.save_dir = str(Path.home())
+        dialog.setWindowTitle(T("结果摘要（给 agent）") + " · " +
+                              T("服务器 {h}:{p}", h=self.remote_source.client.host, p=self.remote_directory))
+        if dialog.exec() == QDialog.Accepted:
+            self.status(T("已保存结果摘要：{p}", p=dialog.saved_path) if getattr(dialog, "saved_path", None)
+                        else T("已复制结果摘要"))
 
     def scan(self, files=None):
         if self.remote_closed:

@@ -356,7 +356,8 @@ class Client:
                     except queue.Empty:
                         now = time.monotonic()
                         for item in self.pending.values():
-                            base = 180 if item["method"] in ("view", "levels", "composition", "wavefunctions") else 30
+                            base = 180 if item["method"] in (
+                                "view", "levels", "composition", "wavefunctions", "summary") else 30
                             if now - item["sent"] > base + 20 * self.rtt:
                                 raise TimeoutError(T("远程请求超时，正在重新连接"))
                         continue

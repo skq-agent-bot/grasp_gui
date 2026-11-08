@@ -586,3 +586,137 @@ def test_ssh_version_probe_uses_clean_environment(monkeypatch):
     monkeypatch.setattr(ssh.subprocess, "run", run)
     assert ssh.modern_ssh()
     assert calls[0]["env"] == {"PATH": "/system/bin"}
+
+
+def test_remote_summary_uses_server_pipeline_state_and_shared_renderer(tmp_path):
+    import grasp_bg as bg
+    import grasp_summary as summary
+    import socket
+
+    make_files(tmp_path, 100, 3)
+    step = config.STEPS["rci"]
+    jobs = [step.job(dict(step.defaults(), state="state"))]
+    core.save_session(tmp_path, dict(pipeline=jobs))
+    core.save_config(lang="zh")
+    bg.write_state(tmp_path, dict(host=socket.gethostname(), pid=1, start="2026-01-01", status="ok",
+                                  step=0, titles=[jobs[0]["title"]]))
+    peer = Peer()
+    try:
+        selected = ["levels", "run_status", "configuration"]
+        result = peer.call("summary", directory=str(tmp_path), per_block=1, sections=selected)["result"]
+        assert result["has_configuration"]
+        cfg = config.export(jobs, dict(title=tmp_path.name), validate=False)
+        expected = summary.render(summary.collect(str(tmp_path), cfg, jobs, history=(), per_block=1), selected)
+        def parts(text):
+            rows = [json.loads(p.split("\n```", 1)[0]) for p in text.split("```json\n")[1:]]
+            rows[0].pop("generated_at")
+            return rows
+        assert parts(result["text"]) == parts(expected)
+        assert len(result["text"].encode("utf-8")) <= summary.MAX_BYTES
+        assert peer.call("summary", directory=str(tmp_path), per_block=201).get("error")
+        assert peer.call("summary", directory=str(tmp_path), sections=["exec"]).get("error")
+        assert peer.call("summary", directory=str(tmp_path), sections=[]).get("error")
+    finally:
+        peer.close()
+
+
+def test_remote_summary_without_saved_pipeline(tmp_path):
+    make_files(tmp_path, 10, 2)
+    result = remote.Operations().summary(str(tmp_path), per_block=1, sections=["levels"])
+    assert result["has_configuration"] is False
+    assert "state.cm" in result["text"]
+
+
+@pytest.mark.gui
+@pytest.mark.parametrize("finish", ["copy", "save", "cancel"])
+def test_remote_summary_button_never_reads_desktop_results(tmp_path, qapp, monkeypatch, finish):
+    import grasp_summary as summary
+    import grasp_session as sessions
+    from PySide6.QtCore import QObject
+    from PySide6.QtWidgets import QPushButton, QDialog, QFileDialog
+    from types import SimpleNamespace
+    from remote_panel import RemoteLevels
+    from summary_panel import SummaryDialog
+
+    class FakeSource(QObject):
+        def __init__(self):
+            super().__init__()
+            self.client = SimpleNamespace(host="remote.example")
+            self.calls = []
+
+        def submit(self, method, args, callback, **kwargs):
+            self.calls.append((method, args))
+            if method == "view":
+                callback(dict(data=dict(levels=[], files=[])), None)
+            else:
+                assert method == "summary" and args["directory"] == "/server-only/calc"
+                callback(dict(text="remote report\n" + json.dumps(args), has_configuration=True), None)
+
+        def cancel(self, ident):
+            pass
+    source = FakeSource()
+    panel = RemoteLevels(source, "/server-only/calc")
+    def forbidden(*args, **kwargs):
+        pytest.fail("remote summary must not inspect local result files")
+    monkeypatch.setattr(summary, "collect", forbidden)
+    monkeypatch.setattr(summary, "render", forbidden)
+    monkeypatch.setattr(sessions, "read", forbidden)
+    target = tmp_path / "saved.md"
+    def save_file(parent, title, initial, filters):
+        assert Path(initial).parent == Path.home()
+        return str(target), ""
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", save_file)
+    qapp.clipboard().setText("preserve clipboard")
+    def preview(dialog):
+        assert dialog.worker is None and not dialog.history
+        assert "remote.example:/server-only/calc" in dialog.windowTitle()
+        assert dialog.copy_button.isEnabled() and "remote report" in dialog.content
+        dialog.sections["configuration"].setChecked(True)
+        dialog.limit.setValue(9)
+        calls = [args for method, args in source.calls if method == "summary"]
+        assert len(calls) == 3 and calls[-1]["per_block"] == 9
+        assert "configuration" in calls[-1]["sections"]
+        content = dialog.content
+        if finish == "copy":
+            dialog.copy()
+            assert qapp.clipboard().text() == content
+        elif finish == "save":
+            dialog.save()
+            assert target.read_text() == content
+            assert qapp.clipboard().text() == "preserve clipboard"
+        else:
+            dialog.reject()
+            assert qapp.clipboard().text() == "preserve clipboard"
+        return dialog.result()
+    monkeypatch.setattr(SummaryDialog, "exec", preview)
+    try:
+        button = next(b for b in panel.findChildren(QPushButton) if b.text() == core.T("结果摘要…"))
+        button.click()
+        assert len([m for m, _ in source.calls if m == "summary"]) == 3
+    finally:
+        panel.shutdown()
+        panel.close()
+
+
+@pytest.mark.gui
+def test_remote_summary_ignores_stale_and_closed_responses(qapp):
+    from summary_panel import SummaryDialog
+
+    calls, cancelled = [], []
+    def load(n, sections, callback):
+        calls.append(callback)
+        ident = len(calls)
+        return lambda: cancelled.append(ident)
+    dialog = SummaryDialog(None, "/server-only/calc", None, [], loader=load)
+    dialog.limit.setValue(7)
+    calls[0](dict(text="stale", has_configuration=True), None)
+    assert not dialog.copy_button.isEnabled() and dialog.content == ""
+    calls[1](dict(text="current", has_configuration=False), None)
+    assert dialog.content == "current" and not dialog.sections["configuration"].isEnabled()
+    dialog.limit.setValue(8)
+    calls[2](None, ValueError("server read failed"))
+    assert not dialog.copy_button.isEnabled() and "server read failed" in dialog.preview.toPlainText()
+    dialog.reject()
+    calls[2](dict(text="after close", has_configuration=True), None)
+    assert dialog.content != "after close"
+    assert cancelled == [1, 2, 3]
