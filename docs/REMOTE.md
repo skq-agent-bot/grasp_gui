@@ -4,7 +4,61 @@
 
 桌面版选“文件 → 连接服务器…”。服务器只运行 `grasp_gui remote`，不需要显示设备、Qt 导入或另装 Python
 (使用独立可执行文件时)。结果文件留在服务器，分析结果和重新取样后的曲线通过同一次 SSH 登录的标准输入输出传回。
-不使用 X11、TCP/agent 转发、反向隧道、监听端口或服务器向外连接；不自动检查更新或上传程序。
+不使用 X11、TCP/agent 转发、反向隧道或监听端口；不自动检查更新或上传程序。
+Slurm 类型通过服务器已有的 Slurm 命令访问集群调度/记账服务，不访问互联网。
+
+### Server type / 服务器类型
+
+Choose **Workstation (工作站)** or **Slurm cluster (Slurm 集群)** in the connection dialog. The choice is saved
+per SSH host, alongside the existing executable/directory preferences. New and previously unclassified profiles
+ask for a type once before using the directory.
+The choice is explicit: the presence of Slurm client binaries alone does not classify a computer.
+
+| Type / 类型 | Submit / 提交 | State / 状态 | Stop / 停止 |
+|---|---|---|---|
+| Workstation / 工作站 | Existing background runner / 原后台进程 | Server process and saved state / 服务器进程及记录 | Background stop / 后台停止 |
+| Slurm cluster / Slurm 集群 | Confirmed `sbatch --parsable` | `squeue`, then `sacct` after leaving the queue | `scancel` for the recorded job |
+
+选择 Slurm 后，“提交 Slurm 作业”打开资源设置：分区、节点、每节点进程数、时限、内存、GRASP 路径、模块命令等。
+这些值按主机保存在本机；脚本使用服务器已有的流程和输入文件，最终确认默认否。不会在提交失败时退回登录节点直跑。
+工作站沿用原来的后台运行和退出登录处理。旧客户端设置无需迁移；使用 Slurm 前需更新到支持此功能的服务器端。
+
+For Slurm, review the resource dialog and confirm submission (default No). Parameters are stored per host on
+the desktop; paths and module commands refer to the server/compute nodes. The server uses its saved pipeline,
+checks the revision and required inputs, and saves the generated script and submission intent before calling
+sbatch. `sbatch`, `squeue` and `scancel` must be available in the server session. Completed-job state also needs
+`sacct` and working cluster accounting. There is no fallback to running on the login node.
+
+The server directory stores `.grasp_gui_slurm.json` (job ID, returned cluster, submission time and identity),
+plus `.grasp_gui_slurm_<token>.sh` and a separate `.log`. Use the same account, Slurm cluster and shared
+directory from another computer or login node to recover the job state and log; no original desktop process
+or login-node PID is needed. SSH profiles, classification and resource preferences are local to each desktop.
+Only the recorded job is tracked; this is not a list of all jobs in the user's queue.
+
+排队、运行、收尾和暂停期间不能重复提交同一目录，也不能更新或清理该目录。状态栏显示 Slurm 作业 ID 和原始状态，
+包括 PENDING、RUNNING、COMPLETING、CANCELLED、FAILED、TIMEOUT、OUT_OF_MEMORY 等。
+日志按独立文件恢复并持续显示。Slurm 状态在服务器端缓存：活动作业至少间隔 15 秒查询；错误和结束状态至少间隔 60 秒，
+不随每 0.2 秒的本地日志检查反复调用调度器。取消会先核对队列中的作业标识，再发送 scancel，随后等待调度器确认结果。
+
+Disappearance from squeue is **not** success. Accounting delay, missing sacct, unavailable accounting, query
+failure or mismatched job identity shows Unknown and blocks a new submission. Explicit sbatch rejection can
+be corrected and retried; timeout or an unreadable submission reply is uncertain and is never retried
+automatically. Check the queue before manually reconciling such a record. The saved token corresponds to the
+`grasp-gui:<token>` job comment. Job arrays are not supported by this submission dialog.
+
+Slurm 的 COMPLETED/退出码 0 仅表示作业正常退出，不证明物理结果正确；逐步运行摘要不会把调度状态当作每步成功的证据。
+本机日志和现有后台记录的格式不变；Slurm 使用独立记录。关闭远程窗口只断开查看，不会 scancel 作业。
+
+Screenshots / 截图：[English](images/en_server_type.png) / [中文](images/zh_server_type.png)。
+Resources / 资源设置：[English](images/en_slurm_submit.png) / [中文](images/zh_slurm_submit.png)。
+Pending / 排队状态：[English](images/en_slurm_pending.png) / [中文](images/zh_slurm_pending.png)。
+
+复制或重命名目录不会迁移调度器中的作业。记录与目录不匹配时，不会据此查询或取消其他目录的作业；
+需先核对原任务，再人工处理副本中的记录。不要删除活动目录的记录以绕过重复提交检查。
+
+Command references: [sbatch](https://slurm.schedmd.com/sbatch.html),
+[squeue](https://slurm.schedmd.com/squeue.html), [sacct](https://slurm.schedmd.com/sacct.html),
+[scancel](https://slurm.schedmd.com/scancel.html).
 
 ### 安装服务器端
 
@@ -23,8 +77,8 @@ mv -Tf "$HOME/.local/bin/grasp_gui.next" "$HOME/.local/bin/grasp_gui"
 默认依次尝试 `~/.local/bin/grasp_gui`、PATH。非交互 SSH 的 PATH/module 环境可能与终端不同，可在连接对话框
 指定完整路径；成功选择目录时按主机保存实际路径和目录 (`remote_hosts` 用户偏好)。找不到、不能启动或协议不兼容时，
 对话框显示原始错误输出，可明确选择安装捆绑版、使用已有路径或取消。手动更新后也可设置完整路径重试。
-示例中的版本目录需替换为所下载的版本，不覆盖仍运行的版本；管理员可统一安装到 `/opt` 或通过 module 提供路径。服务器上的 GRASP bin、MPI 等运行设置仍由服务器端
-原有配置决定；第一版不能在桌面修改。
+示例中的版本目录需替换为所下载的版本，不覆盖仍运行的版本；管理员可统一安装到 `/opt` 或通过 module 提供路径。
+工作站上的 GRASP bin、MPI 等运行设置由服务器端原有配置决定；Slurm 作业的路径、资源和模块命令在提交对话框中核对。
 
 ### 登录
 
@@ -90,7 +144,7 @@ OpenSSH 的 `confirm` 提示仍用默认“否”的确认框；`none` (如 FIDO
 接上后台状态；若连接在此之前退出，后台等待十秒后也会执行全部流程。重连重新读取状态和日志末尾，之后推送新增日志。
 只读请求可以重发；启动/停止若失去回答，界面提示结果未确认，重连先查询状态，**不自动再启动或停止**。
 
-服务器启动前调用 `logout_kills()` 检查 systemd-logind 的 KillUserProcesses。如果会随退出登录清理，默认取消；可选：
+工作站类型在启动前调用 `logout_kills()` 检查 systemd-logind 的 KillUserProcesses。如果会随退出登录清理，默认取消；可选：
 
 - 已开启 lingering 时，使用 `systemd-run --user --scope --quiet -- <后台程序> <目录>`，把计算放入用户管理器的 scope。
 - 导出 Slurm 脚本到剪贴板，核对服务器运行设置后自行提交。
@@ -105,6 +159,7 @@ lingering 由 `loginctl show-user <用户名> -p Linger --value` 检测 (三秒�
 The client starts `<executable> --version`, then `<executable> remote` on the same SSH command. It ignores stdout
 before the fixed greeting `GRASP_GUI_REMOTE 1`, then sends `hello` with `protocol: 1` and its application version.
 Compatibility is determined by the protocol number; update the server manually if incompatible.
+The hello reply also lists supported `server_types`; Slurm classification requires the `slurm` capability.
 Requests and replies are newline-delimited UTF-8 JSON; request IDs match replies and replies may arrive out of order.
 Two server workers permit pipelined reads; run/stop are serialized. Server code uses only the Python standard library.
 
@@ -127,10 +182,10 @@ Two server workers permit pipelined reads; run/stop are serialized. Server code 
 | `composition` | Directory, mixing file, block, index; up to 500 leading components |
 | `view` | `kind: levels` or `wfn`; a whole view in one request, optional file/name selection and known signature |
 | `pipeline` | Read-only saved jobs and revision |
-| `run_plan` | Revision, custom commands, logout-kill policy and lingering availability |
-| `run` | Revision, one-based start, explicit custom/logout/scope confirmations |
-| `stop` | Stop through the existing background socket |
-| `run_status` / `tail_log` | Existing state and bounded log tail |
+| `run_plan` | Revision and custom commands; optional `server_type: slurm` returns server-side Slurm defaults |
+| `run` | Revision, one-based start, explicit custom/logout/scope confirmations; Slurm also accepts reviewed `slurm` settings |
+| `stop` | Existing background stop, or verified scancel for the recorded Slurm job |
+| `run_status` / `tail_log` | Background/Slurm state and the matching bounded log tail |
 | `watch` | Initial state/log tail; subscribes this session to local server state/log changes |
 | `export_script` | Pipeline shell/Slurm script; does not submit it |
 
@@ -159,8 +214,9 @@ input does not accept the host key. Passwords, key passphrases and verification 
 `confirm` requests use a default-No confirmation; `none` requests display only a notification, without input or
 stdout, until ssh terminates the helper after the hardware-key operation. Source references are in the login
 section above.
-Older clients use keys only. Passwords are never saved or logged. No forwarding, server listening socket or outbound
-server connection is required; all traffic uses the desktop-initiated stdio session.
+Older clients use keys only. Passwords are never saved or logged. Analysis traffic uses the desktop-initiated
+stdio session, without forwarding or a server listening socket. Slurm clients additionally contact their
+configured cluster scheduler/accounting services.
 
 The source is shown as **Server host:/path**. The pipeline is read-only, with parameter/input previews, run/stop and
 pushed logs. Existing level and radial viewers render structured remote results; select **Load more components**
@@ -203,7 +259,7 @@ References: [OpenSSH ssh](https://man.openbsd.org/ssh.1),
 and `_run` use the same implementations as the desktop build. `--version` reports the application version and
 remote protocol version; `--lang en` selects English. Opening a window exits with code 2 and directs the user
 to the desktop or legacy build. MCP remains disabled until the user enables it; plotting tools require Qt and
-return a clear error in this build. There are no automatic downloads or server-initiated network connections.
+return a clear error in this build. There are no automatic downloads; Slurm mode uses the installed cluster clients.
 
 服务器版使用独立的标准库入口 `grasp_server.py`，不导入界面。上述命令与普通版共用实现；
 `--version` 同时显示程序和远程协议版本，`--lang en` 可切换英文。窗口命令返回 2，提示改用桌面版或旧系统版；
