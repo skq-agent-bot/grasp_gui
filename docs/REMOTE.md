@@ -175,7 +175,8 @@ Unlink local copy asks default-No and changes only local preferences, leaving th
 Screenshots: [target EN](images/en_remote_edit_target.png) / [目标中文](images/zh_remote_edit_target.png),
 [upload EN](images/en_remote_edit_upload.png) / [上传中文](images/zh_remote_edit_upload.png),
 [confirmation EN](images/en_remote_edit_confirm.png) / [确认中文](images/zh_remote_edit_confirm.png),
-[linked copy EN](images/en_remote_edit_copy.png) / [副本中文](images/zh_remote_edit_copy.png).
+[linked copy EN](images/en_remote_edit_copy.png) / [副本中文](images/zh_remote_edit_copy.png),
+[confirmed retry EN](images/en_remote_edit_retry.png) / [重新确认中文](images/zh_remote_edit_retry.png).
 
 ### Optional remote-edit SSH acceptance / 可选 SSH 写入验收
 
