@@ -1,5 +1,6 @@
 """上传确认、文件默认选择、丢失回答核对，以及原计算页的副本行为。"""
 
+import copy
 from pathlib import Path
 import time
 from types import SimpleNamespace
@@ -55,9 +56,9 @@ def setup(qapp, tmp_path, monkeypatch):
         def submit(self, method, args, callback):
             self.calls.append((method, args))
             try:
-                if method == "create_workdir" and self.lost:
+                if method in ("create_workdir", "update_workdir") and self.lost:
                     if self.performed:
-                        remote.Operations().create_workdir(**args)
+                        getattr(remote.Operations(), method)(**args)
                     callback(None, ssh.UnknownOutcome("lost reply"))
                     return
                 value = getattr(remote.Operations(), method)(**args)
@@ -114,7 +115,7 @@ def test_record_written_before_rsync_and_link_survives_failure(setup, monkeypatc
 
 
 @pytest.mark.parametrize("performed", [False, True])
-def test_lost_create_reply_reads_configuration_and_never_repeats(setup, monkeypatch, performed):
+def test_lost_create_reply_needs_another_confirmation_before_retry(setup, monkeypatch, performed):
     from PySide6.QtWidgets import QMessageBox
     dialog, source, panel, cfg = setup
     monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
@@ -131,9 +132,99 @@ def test_lost_create_reply_reads_configuration_and_never_repeats(setup, monkeypa
         dialog.start_transfer()
         assert transfers
     else:
-        assert dialog.pending and link["pending"]
+        assert not dialog.pending and link is None
+        assert "写入未执行" in dialog.status.text()
+        monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.No)
         dialog.start_transfer()
-    assert sum(method == "create_workdir" for method, _ in source.calls) == 1
+        assert sum(method == "create_workdir" for method, _ in source.calls) == 1
+        monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+        dialog.start_transfer()
+    assert sum(method == "create_workdir" for method, _ in source.calls) == (1 if performed else 2)
+
+
+@pytest.mark.parametrize("performed", [False, True])
+def test_lost_update_with_unchanged_revision_can_be_confirmed_again(setup, monkeypatch, performed):
+    from PySide6.QtWidgets import QMessageBox
+    dialog, source, panel, cfg = setup
+    created = remote.Operations().create_workdir(dialog.directory, cfg)
+    dialog.revision = created["revision"]
+    edit.bind(panel.cur_workdir, dict(host=source.client.host, directory=dialog.directory, revision=dialog.revision))
+    desired = copy.deepcopy(cfg)
+    desired["jobs"][0]["vals"]["z"] = "26"
+    dialog.configuration = desired
+    source.lost, source.performed = True, performed
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+    transfers = []
+    monkeypatch.setattr(dialog, "begin_transfer", lambda rows: transfers.append(rows))
+    dialog.start_transfer()
+    assert sum(method == "update_workdir" for method, _ in source.calls) == 1
+    assert not dialog.pending and not edit.association(panel.cur_workdir).get("pending")
+    assert not transfers
+    if not performed:
+        assert not dialog.written and "写入未执行" in dialog.status.text()
+        assert dialog.configuration == desired
+        assert dialog.revision == created["revision"]
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.No)
+    dialog.start_transfer()
+    assert sum(method == "update_workdir" for method, _ in source.calls) == 1
+    source.lost = False
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+    dialog.start_transfer()
+    assert sum(method == "update_workdir" for method, _ in source.calls) == (1 if performed else 2)
+    actual = remote.Operations().get_pipeline(dialog.directory)["config"]
+    assert edit.fingerprint(actual) == edit.fingerprint(desired) and transfers
+
+
+def test_change_after_unexecuted_update_check_still_conflicts(setup, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    dialog, source, panel, cfg = setup
+    created = remote.Operations().create_workdir(dialog.directory, cfg)
+    dialog.revision = created["revision"]
+    edit.bind(panel.cur_workdir, dict(host=source.client.host, directory=dialog.directory, revision=dialog.revision))
+    desired = copy.deepcopy(cfg)
+    desired["jobs"][0]["vals"]["z"] = "26"
+    dialog.configuration = desired
+    source.lost, source.performed = True, False
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+    dialog.start_transfer()
+    assert not dialog.pending
+    other = copy.deepcopy(cfg)
+    other["jobs"][0]["vals"]["z"] = "8"
+    remote.Operations().update_workdir(dialog.directory, created["revision"], other)
+    source.lost = False
+    dialog.start_transfer()
+    assert sum(method == "update_workdir" for method, _ in source.calls) == 1
+    assert edit.fingerprint(remote.Operations().get_pipeline(dialog.directory)["config"]) == edit.fingerprint(other)
+
+
+def test_missing_record_in_nonempty_directory_does_not_enable_retry(setup):
+    dialog, source, panel, cfg = setup
+    target = Path(dialog.directory)
+    target.mkdir()
+    (target / "keep.txt").write_text("unrelated")
+    edit.bind(panel.cur_workdir, dict(host=source.client.host, directory=dialog.directory, revision=None,
+              pending=True, fingerprint=edit.fingerprint(cfg)))
+    dialog.reconcile()
+    assert dialog.pending and edit.association(panel.cur_workdir)["pending"]
+    assert not dialog.start_button.isEnabled()
+
+
+def test_verified_previous_write_does_not_skip_new_local_changes(setup, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    dialog, source, panel, cfg = setup
+    remote.Operations().create_workdir(dialog.directory, cfg)
+    edit.bind(panel.cur_workdir, dict(host=source.client.host, directory=dialog.directory, revision=None,
+              pending=True, fingerprint=edit.fingerprint(cfg)))
+    desired = copy.deepcopy(cfg)
+    desired["jobs"][0]["vals"]["z"] = "26"
+    dialog.configuration = desired
+    dialog.reconcile()
+    assert not dialog.written and not dialog.pending
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+    monkeypatch.setattr(dialog, "begin_transfer", lambda rows: None)
+    dialog.start_transfer()
+    assert sum(method == "update_workdir" for method, _ in source.calls) == 1
+    assert edit.fingerprint(remote.Operations().get_pipeline(dialog.directory)["config"]) == edit.fingerprint(desired)
 
 
 def test_old_server_is_rejected_before_any_write(qapp, monkeypatch):

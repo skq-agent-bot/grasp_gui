@@ -147,17 +147,22 @@ intact and explains how to retry the inputs. It never removes the server record 
 
 **Unconfirmed writes:** create/update are mutations and are never replayed after disconnect. A pending intent
 is saved in local preferences. On reconnect, `get_pipeline` compares the actual server pipeline and attached
-configuration inputs with the pending configuration. Only an equal configuration establishes the new revision;
-it still asks for confirmation before retrying input transfer. Different content or no record is a conflict for
-manual review; no create request is resent. Closing and reopening the uploader retains this pending check.
+configuration inputs with the pending configuration. An equal configuration establishes the new revision;
+it still asks for confirmation before retrying input transfer or applying later local edits. If the server revision
+is unchanged from the saved baseline, the update was not applied: pending is cleared and the local edits remain
+available for a new user confirmation. When a new calculation has no record, a separate locked read-only preview
+must prove that its target is absent/empty before enabling a manually confirmed create retry. Neither case sends
+a write automatically. Changed revisions/content, nonempty targets and failed checks remain conflicts.
+Closing and reopening the uploader retains pending verification; all retried writes repeat server-side checks.
 Unlink local copy asks default-No and changes only local preferences, leaving the server untouched.
 
 中文操作：本机计算页的“上传到服务器…”新建计算；远程计算页的“在本机编辑…”取出已有流程，继续使用原程序页修改。
 关联信息只保存在用户设置 `remote_copies`（主机、服务器路径、修订号，以及待核对写入的指纹），不改变 `.grasp_gui.json`。
 主窗口标题与计算页常驻显示服务器副本来源。本机缺少的结果/输入标为“由服务器检查”，本机直接运行副本另有默认否确认。
 上传先预览差异并确认，再在锁内核对修订号和运行状态，先建/更新记录再传输入。记录或任务状态冲突时拒绝覆盖，提供重新取出。
-同名服务器文件保留；传输失败只需补传，不删除记录。写入丢失回答先读服务器配置比对，一致才关联，不一致或没有记录均提示冲突，
-绝不自动重发新建。选择“上传并运行…”后仍走现有工作站/Slurm 的确认和最终输入检查。
+同名服务器文件保留；传输失败只需补传，不删除记录。丢失回答先核对：配置一致则关联；修订号仍等于保存值则提示“写入未执行，
+可以再次确认上传”，保留本机修改。新建没有记录时须先证明目标仍为空，才允许用户重新确认创建。均不自动重发；其他变化保持冲突。
+选择“上传并运行…”后仍走现有工作站/Slurm 的确认和最终输入检查。
 
 Screenshots: [target EN](images/en_remote_edit_target.png) / [目标中文](images/zh_remote_edit_target.png),
 [upload EN](images/en_remote_edit_upload.png) / [上传中文](images/zh_remote_edit_upload.png),
@@ -180,7 +185,11 @@ run example1, fetch/edit/upload an rci setting, and compare energies against a d
 parameters. They also reject stale revisions and writes during a running fixture job. Set
 `GRASP_SSH_TEST_OLD_PROGRAM` to an old server executable for the old-capability check.
 Both local rsync/GRASP and server GRASP are required. No fixture means these three tests skip.
-This environment has no dedicated sshd container: these real SSH/package acceptance checks remain unexecuted.
+The maintainer ran all three tests against this branch's server source in a restricted sshd fixture (MaxSessions 10,
+forwarding disabled), GRASP `9006157`, and the official 2.9.0 package as the old server: **3 passed**.
+See the [acceptance review](https://github.com/skq1998/grasp_gui/pull/47#pullrequestreview-5820086104).
+The current unexecuted-write recovery changes have local GUI coverage; the maintainer will repeat SSH acceptance
+before merging. This development environment still has no dedicated sshd container.
 
 ### 安装服务器端
 

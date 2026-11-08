@@ -307,17 +307,48 @@ class UploadDialog(TransferDialog):
             if self.closed:
                 return
             saved = edit.association(self.local_directory) or self.link or {}
-            if error or edit.fingerprint(value["config"]) != saved.get("fingerprint"):
+            if error and saved.get("revision") is None:
+                # 读取失败本身不能证明新建未执行；必须另行证明目标仍不存在或为空。
+                def empty_checked(preview, exc):
+                    if exc:
+                        self.status.setText(str(exc))
+                    else:
+                        self.allow_retry(saved, preview)
+                self.preview([row["name"] for row in self.rows], empty_checked)
+                return
+            if not error and edit.fingerprint(value["config"]) != saved.get("fingerprint"):
+                if saved.get("revision") is not None and value["revision"] == saved["revision"]:
+                    self.allow_retry(saved)
+                    return
                 self.status.setText(T("服务器流程与待确认写入不一致或没有记录；请人工核对或重新取出，不能重发。"))
                 return
-            self.revision, self.written, self.pending = value["revision"], True, False
+            if error:
+                self.status.setText(T("服务器流程与待确认写入不一致或没有记录；请人工核对或重新取出，不能重发。"))
+                return
+            self.revision, self.pending = value["revision"], False
+            # 重新打开窗口时本机可能又有修改；核对上次写入不等于当前快照也已写入。
+            self.written = edit.fingerprint(self.configuration) == saved.get("fingerprint")
             edit.bind(self.local_directory, dict(host=self.source.client.host, directory=self.directory,
                                                revision=self.revision))
             self.panel.refresh_remote_copy()
-            self.status.setText(T("已核对写入结果；请再次确认补传输入文件。"))
+            self.status.setText(T("已核对上次写入；请再次确认当前上传内容。"))
             if self.files_loaded:
                 self.preview([row["name"] for row in self.rows], self.show_preview)
         self.source.submit("get_pipeline", dict(directory=self.directory), received)
+
+    def allow_retry(self, saved, preview=None):
+        """只解除待核对状态；不重发写入，仍经过下一次用户确认及服务器检查。"""
+        self.revision = saved.get("revision")
+        self.pending, self.written, self.ready = False, False, False
+        link = dict(host=self.source.client.host, directory=self.directory, revision=self.revision)
+        edit.bind(self.local_directory, link if self.revision is not None else None)
+        self.panel.refresh_remote_copy()
+        self.status.setText(T("写入未执行，可以再次确认上传。"))
+        self.changed()
+        if preview is not None:
+            self.show_preview(preview, None)
+        elif self.files_loaded:
+            self.preview([row["name"] for row in self.rows], self.show_preview)
 
     def fetch_again(self):
         if self.busy:

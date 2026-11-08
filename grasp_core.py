@@ -1095,6 +1095,8 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "上传并运行…": "Upload and run…",
     "服务器同名文件将保留：{names}": "Existing server files will be kept: {names}",
     "已核对写入结果；请再次确认补传输入文件。": "The write was verified. Confirm again to upload remaining inputs.",
+    "写入未执行，可以再次确认上传。": "The write was not applied. You can confirm the upload again.",
+    "已核对上次写入；请再次确认当前上传内容。": "The previous write was verified. Confirm the current upload again.",
     "解除本机关联…": "Unlink local copy…",
     "只解除本机副本关联，不改变服务器目录。结果未确认的请求须先人工核对。是否继续？": (
         "Unlink only this local copy and leave the server directory intact? "
