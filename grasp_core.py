@@ -1069,6 +1069,55 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "Server {v}, desktop {d}: the protocol is compatible, so you can continue. Install the bundled version now?"),
     "服务器端不可用": "Server executable unavailable",
     "使用已有的路径": "Use an existing path",
+    # 服务器分类与 Slurm 作业
+    "请先选择服务器类型；集群登录节点不宜直接运行计算。": (
+        "Choose a server type first; cluster login nodes should not run calculations directly."),
+    "Slurm 结束标记无效": "Invalid Slurm completion marker",
+    "清除记录的结果无法确认；重连后请先核对状态，不要直接重复操作": (
+        "The record-clearing outcome is unknown. Reconnect and check the state before repeating the operation."),
+    "请先确认已人工核对 Slurm 作业": "Confirm that you have checked the Slurm job manually first",
+    "Slurm 作业记录已改变，请刷新": "The Slurm job record has changed. Refresh first",
+    "队列中仍有相关作业，不能清除记录": "Related jobs remain in the queue; the record cannot be cleared",
+    "我已核对，清除此作业记录…": "I have checked; clear this job record…",
+    "清除 Slurm 作业记录": "Clear Slurm job record",
+    "确认已人工核对任务？服务器将重新查询队列，仅在没有相关作业时归档记录；这不会取消任务，也不代表计算成功。": (
+        "Have you checked the job manually? The server will query the queue again and archive the record only "
+        "if no related job remains. This does not cancel a job or establish calculation success."),
+    "工作站": "Workstation",
+    "Slurm 集群": "Slurm cluster",
+    "服务器类型": "Server type",
+    "请选择服务器类型": "Choose the server type",
+    "主机设置已更改，请重新连接": "The host has changed. Connect again",
+    "服务器类型：{kind}": "Server type: {kind}",
+    "服务器端尚不支持 Slurm，请先更新服务器端程序。": "The server does not support Slurm yet. Update the server program first.",
+    "提交 Slurm 作业": "Submit Slurm job",
+    "正在提交 Slurm 作业…": "Submitting Slurm job…",
+    "提交": "Submit",
+    "脚本在服务器现有工作目录中通过 sbatch 提交；请核对分区、资源和模块命令。": (
+        "The script is submitted with sbatch in the existing server directory. Check partition, resources and module commands."),
+    "将在服务器目录 {p} 提交 Slurm 作业，是否确认？": "Submit a Slurm job in server directory {p}?",
+    "Slurm 作业记录无效": "Invalid Slurm job record",
+    "Slurm 命令失败：{e}": "Slurm command failed: {e}",
+    "服务器缺少 Slurm 命令：{names}": "Slurm commands missing on the server: {names}",
+    "Slurm 提交结果不明确，请核对队列，勿重复提交": (
+        "Slurm submission outcome is unknown. Check the queue before submitting again."),
+    "Slurm 队列中的任务与保存记录不匹配": "The queued Slurm job does not match the saved record",
+    "Slurm 暂无作业记录，不能判定任务已结束": "No Slurm job record is available; completion cannot be confirmed",
+    "无法确认 Slurm 作业，请先刷新并核对队列": "Cannot identify the Slurm job. Refresh and check the queue first",
+    "已有 Slurm 作业或提交结果未确认，请先核对状态。": (
+        "A Slurm job exists or a submission is unconfirmed. Check its status first."),
+    "Slurm 作业只记录调度状态，不能据此判定每步计算成功": (
+        "Slurm records the job state; this does not establish the success of each calculation step"),
+    "此处不支持 Slurm 作业数组": "Slurm job arrays are not supported here",
+    "Slurm 节点数和每节点进程数必须为正整数": "Slurm node and task counts must be positive integers",
+    "Slurm 总进程数不能超过 100000": "The total Slurm task count cannot exceed 100000",
+    "Slurm 排队中": "Slurm queued",
+    "Slurm 作业进行中": "Slurm job active",
+    "Slurm 作业已完成": "Slurm job completed",
+    "Slurm 作业失败": "Slurm job failed",
+    "Slurm 作业已取消": "Slurm job cancelled",
+    "Slurm 状态未知": "Slurm state unknown",
+    "退出码 {code}": "Exit code {code}",
     # SSH 远程连接
     "SSH 登录": "SSH login",
     "SSH 主机确认": "SSH host confirmation",
@@ -1671,7 +1720,7 @@ class RcsfZeroFirst(Step):
 def angular_files(run=None):
     run = run or {}
     count = int(run.get("np", 1))
-    if count <= 1:
+    if count <= 1 and not run.get("mpi", False):
         return ["mcp.30"]
     return [os.path.join(run.get("mpitmp", "tmp_mpi"), f"{i:03d}", f"mcp{i:03d}.30") for i in range(count)]
 

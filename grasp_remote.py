@@ -1,4 +1,4 @@
-"""SSH stdio 服务：仅传结构化分析结果，无 Qt、监听端口或出站网络。"""
+"""SSH stdio 服务：结构化分析和任务控制；无 Qt 或监听端口，Slurm 调度调用系统客户端。"""
 
 import argparse
 import base64
@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import pwd
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -78,7 +79,7 @@ class Operations(service.Service):
         executable = os.environ.get("GRASP_GUI_REMOTE_EXECUTABLE") or (
             sys.executable if getattr(sys, "frozen", False) else sys.argv[0])
         return dict(protocol=PROTOCOL, version=core.VERSION, executable=os.path.abspath(executable),
-                    home=str(Path.home()))
+                    home=str(Path.home()), server_types=["workstation", "slurm"])
 
     def list_dir(self, directory):
         root = self.path(directory, directory=True)
@@ -136,9 +137,16 @@ class Operations(service.Service):
     def run_status(self, directory):
         return self.status(directory)
 
-    def run_plan(self, directory):
+    def run_plan(self, directory, server_type="workstation"):
         _, data, revision = self.record(directory)
         cfg = config.export(data.get("pipeline", []), {})
+        if server_type == "slurm":
+            settings = dict(core.SLURM_DEFAULTS, **core.load_config().get("slurm", {}))
+            settings["bindir"] = core.default_bindir()
+            return dict(revision=revision, custom_commands=config.custom_commands(cfg), server_type="slurm",
+                        slurm=settings, logout_kills=False, lingering=False)
+        if server_type != "workstation":
+            raise ValueError("invalid server type")
         linger = False
         try:
             result = subprocess.run(["loginctl", "show-user", pwd.getpwuid(os.getuid()).pw_name,
@@ -150,7 +158,8 @@ class Operations(service.Service):
         return dict(revision=revision, custom_commands=config.custom_commands(cfg),
                     logout_kills=bg.logout_kills(), lingering=linger)
 
-    def run(self, directory, revision, start=1, allow_custom=False, user_scope=False, accept_logout=False):
+    def run(self, directory, revision, start=1, allow_custom=False, user_scope=False, accept_logout=False,
+            server_type="workstation", slurm=None):
         for flag in (allow_custom, user_scope, accept_logout):
             if type(flag) is not bool:
                 raise ValueError("confirmation must be boolean")
@@ -159,6 +168,43 @@ class Operations(service.Service):
         with sessions.locked(root):
             if self.record(directory)[2] != revision:
                 raise sessions.Conflict(T("工作目录记录已被其他程序修改，请重新载入"))
+            if server_type == "slurm":
+                import grasp_slurm
+                import grasp_workdir
+                import grasp_summary
+                _, data, _ = self.record(directory)
+                jobs = data.get("pipeline", [])
+                if not 1 <= start <= len(jobs) or not isinstance(slurm, dict):
+                    raise ValueError("invalid Slurm submission")
+                cfg = config.export(jobs, {}, validate=False)
+                service.Service("/", allow_custom=allow_custom).custom(cfg)
+                settings = {k: str(slurm.get(k, v)).strip() for k, v in core.SLURM_DEFAULTS.items()}
+                # 该入口只提交单个普通作业；数组会改变取消和状态归属，不能悄悄当成单作业。
+                if re.search(r"(?:^|\s)(?:-*array(?:=|\s)|-a(?:\d|\s|=))", settings["extra"]):
+                    raise ValueError(T("此处不支持 Slurm 作业数组"))
+                if not all(re.fullmatch(r"[1-9][0-9]*", settings[k]) for k in ("nodes", "ntasks")):
+                    raise ValueError(T("Slurm 节点数和每节点进程数必须为正整数"))
+                count = int(settings["nodes"]) * int(settings["ntasks"])
+                if count > 100000:
+                    raise ValueError(T("Slurm 总进程数不能超过 100000"))
+                temporary = settings["mpitmp"] or "$SLURM_SUBMIT_DIR/tmp_mpi"
+                variables = dict(SLURM_SUBMIT_DIR=str(root), HOME=str(Path.home()))
+                temporary = re.sub(r"\$\{(SLURM_SUBMIT_DIR|HOME)\}|\$(SLURM_SUBMIT_DIR|HOME)(?![A-Za-z0-9_])",
+                                   lambda match: variables[match[1] or match[2]], temporary)
+                if temporary.startswith("~/"):
+                    temporary = str(Path.home() / temporary[2:])
+                run = dict(bindir=settings["bindir"], np=count if settings["mpirun"] else 1,
+                           mpi=bool(settings["mpirun"]), mpitmp=temporary, nice=False)
+                checked = grasp_summary.check_files(str(root), cfg["jobs"], start=start - 1,
+                                                     run=run, path_check=self.path)
+                if checked["invalid"] or checked["missing"]:
+                    raise service.PreflightError(checked)
+                grasp_workdir.idle(root)
+                selected = [config.make_job(j) for j in cfg["jobs"][start - 1:]]
+                script = grasp_slurm.batch_script(selected, settings)
+                return grasp_slurm.submit(root, script, bg.status(str(root)))
+            if server_type != "workstation" or slurm is not None:
+                raise ValueError("invalid server type")
             plan = self.run_plan(directory)
             if user_scope and not plan["lingering"]:
                 raise ValueError(T("服务器未开启 lingering，不能使用用户 scope"))
@@ -281,7 +327,8 @@ class Server:
 
     def watch(self, directory):
         root = self.operation.path(directory, directory=True)
-        path = root / bg.RUN_LOG
+        state = self.operation.status(directory)["state"]
+        path = self.operation.log_path(directory, state)
         offset, inode, text = 0, None, ""
         if path.is_file():
             with path.open("rb") as f:
@@ -291,9 +338,9 @@ class Server:
                 f.seek(max(0, offset - service.MAX_TEXT))
                 text = f.read(offset - f.tell()).decode("utf-8", "replace")
                 text = "".join(text.splitlines(keepends=True)[-100:])
-        state = self.operation.status(directory)["state"]
         self.watching = dict(directory=directory, offset=offset, state=state,
-                             run=((state or {}).get("start"), (state or {}).get("pid")), inode=inode,
+                             run=((state or {}).get("start"), (state or {}).get("pid"),
+                                  (state or {}).get("job_id")), inode=inode,
                              decoder=codecs.getincrementaldecoder("utf-8")("replace"))
         return dict(state=state, text=text, truncated=offset > service.MAX_TEXT)
 
@@ -304,14 +351,14 @@ class Server:
                 continue
             try:
                 state = self.operation.status(item["directory"])["state"]
-                identity = (state or {}).get("start"), (state or {}).get("pid")
+                identity = (state or {}).get("start"), (state or {}).get("pid"), (state or {}).get("job_id")
                 new_run = identity != item["run"]
                 if state != item["state"]:
                     if new_run:
                         item["offset"] = 0
                     item["run"], item["state"] = identity, state
                     self.send(dict(event="state", directory=item["directory"], state=state))
-                path = self.operation.path(str(Path(item["directory"]) / bg.RUN_LOG))
+                path = self.operation.log_path(item["directory"], state)
                 if not path.is_file():
                     continue
                 st = path.stat()
@@ -339,7 +386,7 @@ class Server:
             ident = request.get("id")
             try:
                 method, args = request["method"], request.get("args", {})
-                if method not in READ_ONLY | {"run", "stop"} or not isinstance(args, dict):
+                if method not in READ_ONLY | {"run", "stop", "clear_slurm_record"} or not isinstance(args, dict):
                     raise ValueError("unsupported remote method or arguments")
                 if type(ident) not in (int, str):
                     raise ValueError("invalid request id")
@@ -350,7 +397,7 @@ class Server:
                 if method == "view":
                     args = dict(args, emit=lambda value: self.send(dict(event="progress", id=ident, **value)))
                 inspect.signature(function).bind(**args)
-                if method in ("run", "stop"):
+                if method in ("run", "stop", "clear_slurm_record"):
                     with self.mutations:
                         result = function(**args)
                 else:

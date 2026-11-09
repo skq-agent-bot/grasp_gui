@@ -253,11 +253,12 @@ class SlurmDialog(QDialog):
               ("mail", "邮件通知地址", "空 = 不通知"), ("extra", "其他 #SBATCH 选项", "每行一条，如 --account=xxx")]
     MULTILINE = ("modules", "extra")
 
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, submit=False):
         super().__init__(parent)
-        self.setWindowTitle(T("Slurm 作业脚本"))
+        self.setWindowTitle(T("提交 Slurm 作业") if submit else T("Slurm 作业脚本"))
         lay = QVBoxLayout(self)
-        note = QLabel(T("把当前流程导出为可直接 sbatch 提交的作业脚本。把脚本和工作目录中的输入文件 "
+        note = QLabel(T("脚本在服务器现有工作目录中通过 sbatch 提交；请核对分区、资源和模块命令。") if submit else
+                      T("把当前流程导出为可直接 sbatch 提交的作业脚本。把脚本和工作目录中的输入文件 "
                         "(isodata, *.c, *.w …) 一起上传到服务器的同一目录，然后运行 sbatch 脚本名。"))
         note.setWordWrap(True)
         lay.addWidget(note)
@@ -277,7 +278,7 @@ class SlurmDialog(QDialog):
         lay.addLayout(g)
         bar = QHBoxLayout()
         bar.addStretch()
-        ok = button("导出…", self.accept)
+        ok = button("提交" if submit else "导出…", self.accept)
         ok.setDefault(True)
         bar.addWidget(ok)
         bar.addWidget(button("取消", self.reject))
