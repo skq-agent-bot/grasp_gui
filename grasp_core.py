@@ -97,6 +97,17 @@ SLURM_DEFAULTS = dict(job="grasp", partition="", nodes="1", ntasks="32", time="2
 LANG = "zh"
 
 EN = {
+    # 能量零点 (#50)
+    "能量零点": "Energy zero",
+    "按计算组": "By calculation group",
+    "统一取最低能级": "Use one common lowest level",
+    "计算组：{group}": "Calculation group: {group}",
+    "无法确定哈密顿量，零点可能不可比": "Hamiltonian unknown; energy zeros may not be comparable",
+    "相对能量 ({u})，各计算组分别以最低能级为零":
+        "Relative energy ({u}), each calculation group uses its own lowest level as zero",
+    "相对能量 ({u})，所有计算组共用最低能级为零":
+        "Relative energy ({u}), all calculation groups share one lowest level as zero",
+    # NSIC
     "修改 NSIC": "Modify NSIC",
     "  NSIC": "  NSIC",
     "非负整数；仅勾选修改 NSIC 时使用": "Non-negative integer; used only when Modify NSIC is checked",
