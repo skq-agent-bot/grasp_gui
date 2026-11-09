@@ -378,11 +378,14 @@ class RemoteLevels(LevelPanel):
     def apply_remote(self, data):
         checked = set(self.checked_paths())
         groups, compositions, csfs, labels, origins = {}, {}, {}, {}, {}
+        hamiltonians = {}
         for name in data.get("files", []):
             path = str(PurePosixPath(self.remote_directory) / name)
             groups[path], csfs[path], labels[path], origins[path] = {}, {}, {}, (None, None)
         for row in data.get("levels", []):
             path = str(PurePosixPath(self.remote_directory) / row["file"])
+            if "zero_group" in row:
+                hamiltonians[path] = dict(zero_group=row["zero_group"], zero_warning=row.get("zero_warning", ""))
             if path not in groups:
                 groups[path], csfs[path], labels[path] = {}, {}, {}
             origins[path] = row.get("csf_file"), row.get("lsj_file")
@@ -407,8 +410,13 @@ class RemoteLevels(LevelPanel):
             labels[path][(b.nb, lv.pos)] = row.get("lsj")
             compositions[(path, b.nb, lv.pos)] = [(p["csf"], p["coefficient"], p.get("configuration") or "",
                                                    p.get("coupling") or "") for p in parts]
-        self.read_data = {p: (list(bs.values()), csfs[p], origins[p][0], labels[p], origins[p][1])
-                          for p, bs in groups.items()}
+        self.read_data = {}
+        for path, bs in groups.items():
+            blocks = mix.Blocks(bs.values())
+            fallback = dict(zero_group="DC", zero_warning="") if path.endswith(".m") else mix.unknown_hamiltonian()
+            blocks.hamiltonian = hamiltonians.get(path, fallback)
+            self.read_data[path] = (blocks, csfs[path] if origins[path][0] else None,
+                                    origins[path][0], labels[path], origins[path][1])
         self.compositions = compositions
         self.remote_rows = data.get("transitions", [])
         if not checked:

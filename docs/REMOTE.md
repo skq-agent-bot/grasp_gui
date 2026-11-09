@@ -341,6 +341,14 @@ before the fixed greeting `GRASP_GUI_REMOTE 1`, then sends `hello` with `protoco
 Compatibility is determined by the protocol number; update the server manually if incompatible.
 The hello reply also lists supported `server_types`; Slurm classification requires the `slurm` capability.
 Requests and replies are newline-delimited UTF-8 JSON; request IDs match replies and replies may arrive out of order.
+`levels` and `view(kind=levels)`, including the brief preview, return per-level `zero_group` and `zero_warning`.
+The server reads the matching `.csum` through the common Hamiltonian parser; no new request or protocol number
+is needed. The existing directory signature includes `.csum` size/mtime, so changing only the summary refreshes
+remote grouping. Older servers without these fields are shown as unknown for `.cm`, without local file reads.
+
+`levels` 和 `view(kind=levels)`（含预览）逐行返回哈密顿量组及警告；由服务器读取 `.csum`，不增加请求或改变协议号。
+目录签名已有 `.csum` 大小/修改时间，单独更新总结文件也使远程缓存失效；旧端缺字段时按未知组提示，不查本机文件。
+
 Two server workers permit pipelined reads; run/stop are serialized. Server code uses only the Python standard library.
 
 ```json
@@ -353,7 +361,7 @@ Two server workers permit pipelined reads; run/stop are serialized. Server code 
 |---|---|
 | `hello` | Protocol/version; returns server protocol/version, executable and home |
 | `list_dir` | Directory; names, sizes, mtimes, directories and content-detected types; up to 5000 entries |
-| `levels` | Directory, optional files/limit/components; jj/LSJ level metadata and components |
+| `levels` | Directory, optional files/limit/components; jj/LSJ metadata/components and additive `zero_group`/`zero_warning` |
 | `transitions` | Directory, optional files/limit; existing λ, A, gf, S, computed-only branching ratios |
 | `orbitals` | Directory, optional files/limit; properties computed on the original grid |
 | `wavefunctions` | Directory, optional files/names; points 2–10000, at most 100 sampled curves |

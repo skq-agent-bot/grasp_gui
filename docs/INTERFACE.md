@@ -504,7 +504,7 @@ copies of the full calculation files and can be deleted to reclaim space.
 源文件变化时缓存失效，损坏时重建，源文件删除后在下次扫描清理；缓存不含完整结果文件的副本，可直接删除。
 
 ```
-Refresh  Energy unit [eV▾]  Export▾  ☐ Show all computed transitions of the selected level        Tips
+Refresh  Energy unit [eV▾]  Energy zero [By calculation group▾]  Export▾  ☐ Show all computed transitions of the selected level        Tips
 ┌ Mixing coefficient files ? ┐┌ level diagram          ┐┌ odd4.cm J^π = 1⁻ #2 43.79 eV (… a.u.)      ┐
 │ ☑ even4.cm                 ││ columns per J^π, file  ││ Show weights ≥ [0.100 %]                   │
 │ ☐ even4.m                  ││ headers, arrows        ││ ┌ jj-coupled CSFs ┬ LSJ composition ┬ Transitions ┐
@@ -515,7 +515,7 @@ Refresh  Energy unit [eV▾]  Export▾  ☐ Show all computed transitions of th
 * **Files**: *Mixing coefficient files (混合系数文件)* checklist (`.m`, `.cm`, by content), *?* explains how the
   matching `.c` (configurations) and `.lsj.lbl` (LSJ composition) files are found by content: number of orbitals,
   CSFs and J^π of each block, level energies — they need not share the mixing file's name.
-* **Toolbar**: *Refresh*, *Energy unit (能量单位)* eV / cm⁻¹ / a.u. (relative to the lowest level; remembered),
+* **Toolbar**: *Refresh*, *Energy unit (能量单位)* eV / cm⁻¹ / a.u. (remembered), *Energy zero (能量零点)*: *By calculation group (按计算组)* by default / *Use one common lowest level (统一取最低能级)* (remembered globally),
   *Export ▾ (导出)*: *Level diagram (PNG / SVG / PDF)… (能级图)*, *Level data (CSV)… (能级数据)*, *Configuration
   abbreviations… (组态缩写…)*; *Show all computed transitions of the selected level (显示选中能级的全部已算跃迁)*
   (draws them as thin links); *Tips*.
@@ -537,6 +537,35 @@ Refresh  Energy unit [eV▾]  Export▾  ☐ Show all computed transitions of th
     *Coupling (intermediate J, total J^π)*; footer *Showing n / m CSFs, total weight …, configurations from X.c*.
   * *LSJ composition (LSJ 组成)*: coefficient, weight, LSJ label (from `jj2lsj`'s `.lsj.lbl`).
   * *Transitions (跃迁)*: see below.
+
+### Energy zero / 能量零点
+
+**By calculation group** uses the lowest selected level in each Hamiltonian group. Even/odd parity files
+with the same Hamiltonian share their zero; grouping never uses filename/producer-step identity.
+`.m`/`rmix.out` is DC. `.cm` reads its matching `.csum` header: speed of light, Breit and its photon-frequency
+factor, VP, NMS, SMS and SE. All-off rci at the standard light speed joins DC. Groups with different factors or
+light speeds have distinct names. Missing/unreadable/malformed headers, or `.csum` more than 300 seconds older
+than `.cm`, form one **unknown** group with a status warning that their zeros may not be comparable.
+
+**Use one common lowest level** preserves the previous behavior, for intentional total-energy comparison
+across Hamiltonians. Both modes apply to the table, diagram, selected title, CSV and PNG/SVG/PDF export.
+With multiple selected groups, the axis explicitly states separate/common zeros; every level tooltip names its group.
+CSV keeps all existing columns in order and appends `zero_group` and `E_zero_au`. Total energies and transition
+energies/wavelengths are unchanged. Results summaries and server-rendered diagrams always use separate group zeros.
+Remote levels use the server's `zero_group`/`zero_warning` metadata; `.csum` is never read on the desktop for a
+remote path. Older servers without these fields use `unknown` for `.cm`, with the same comparability warning.
+
+“按计算组”默认按哈密顿量分组，每组以所勾选能级的最低值为零；相同设置的偶、奇宇称共用零点，不按文件或流程步骤拆组。
+`.m`/`rmix.out` 为 DC；`.cm` 从同名 `.csum` 读取光速、Breit 频率因子及 VP/NMS/SMS/SE 开关。
+全部关闭且光速为标准值的 rci 与 `.m` 同组。频率因子或光速不同则分组。
+总结文件缺失、不可读、损坏或早于混合文件超过 300 秒时归入 unknown，共用一个不保证可比的零点，状态栏提示。
+
+“统一取最低能级”保留原行为，供有意比较不同哈密顿量总能量时选择。两种模式均作用于能级表、图、选中标题、CSV 和导出图。
+多个组同时勾选时，坐标轴写明分别/共用零点；提示框标明计算组。CSV 原列不变，末尾追加 `zero_group`、`E_zero_au`。
+总能量、跃迁能量及波长不变。零点选项保存为全局 `level_zero`；摘要和服务器绘图始终按组取零点。
+远程能级使用服务器返回的 `zero_group`/`zero_warning`，不在本机查找远程 `.csum`；旧服务器缺少字段时 `.cm` 按 unknown 处理并提示。
+
+Screenshots / 截图：[English](images/en_energy_zero.png) / [中文](images/zh_energy_zero.png)。
 
 ### Transitions on demand / 计算跃迁
 
@@ -623,7 +652,7 @@ Screenshots / 截图：[configuration English](images/en_remote_import_config.pn
 
 | Where | What |
 |---|---|
-| `~/.config/grasp_gui.json` | language, font size, last working directory, recent directories, GRASP bin, MPI settings, settings collapsed, window geometry, calculation splitter, last tab, Slurm settings, energy unit, level-export options, configuration abbreviations, transition process count, show-links option, configuration author |
+| `~/.config/grasp_gui.json` | language, font size, last working directory, recent directories, GRASP bin, MPI settings, settings collapsed, window geometry, calculation splitter, last tab, Slurm settings, energy unit, energy-zero mode (`level_zero`), level-export options, configuration abbreviations, transition process count, show-links option, configuration author |
 | `<workdir>/.grasp_gui.json` | session: parameters per group, current group, pipeline |
 | `<workdir>/.grasp_gui.json.bak-<timestamp>` | original session records before updating/restoring; latest five retained / 更新及恢复前的记录备份，保留五份 |
 | `<workdir>/.grasp_gui_inputs.json` | validated attached-input basenames for cleanup after restarting / 附带输入基名清单，重启后清理仍会保留这些输入 |
