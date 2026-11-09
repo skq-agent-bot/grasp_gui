@@ -1069,6 +1069,52 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "Server {v}, desktop {d}: the protocol is compatible, so you can continue. Install the bundled version now?"),
     "服务器端不可用": "Server executable unavailable",
     "使用已有的路径": "Use an existing path",
+    # 本机编辑服务器流程与上传
+    "新建服务器流程：{n} 步": "Create a server pipeline: {n} steps",
+    "目标目录不是空的；已有流程请先在本机取出编辑。": (
+        "The target directory is not empty. Fetch an existing pipeline for local editing first."),
+    "服务器流程已改变，请重新取出；可先导出本机修改。": (
+        "The server pipeline changed. Fetch it again; export your local changes first if needed."),
+    "附带输入文件超过总大小限制": "Attached inputs exceed the total size limit",
+    "本机目录已有其他内容，请换一个目录。": (
+        "The local directory contains other data. Choose another directory."),
+    "上传到服务器…": "Upload to server…",
+    "服务器端版本较旧，请用“安装 / 更新服务器版…”更新。": (
+        "This server build lacks remote editing. Use Install / update server… to update it."),
+    "在本机编辑…": "Edit locally…",
+    "本机工作目录": "Local working directory",
+    "选择流程上传目标": "Choose pipeline upload target",
+    "上传目标目录（可新建）": "Upload target directory (may be new)",
+    "上传流程时保留服务器同名文件。": "Pipeline uploads preserve existing server files with the same name.",
+    "流程已写入；已处理 {n} 个输入文件。": "Pipeline saved; {n} input files processed.",
+    "流程记录已写入，输入传输未完成；可重试补传，请勿删除服务器记录。": (
+        "The pipeline is saved but input transfer is incomplete. Retry the inputs; keep the server record."),
+    "重新取出服务器流程": "Fetch server pipeline again",
+    "将放弃本机流程修改并重新取出；可先导出本机配置。是否继续？": (
+        "Discard local pipeline edits and fetch again? You can export your local configuration first."),
+    "上传并运行…": "Upload and run…",
+    "服务器同名文件将保留：{names}": "Existing server files will be kept: {names}",
+    "已核对写入结果；请再次确认补传输入文件。": "The write was verified. Confirm again to upload remaining inputs.",
+    "写入未执行，可以再次确认上传。": "The write was not applied. You can confirm the upload again.",
+    "已核对上次写入；请再次确认当前上传内容。": "The previous write was verified. Confirm the current upload again.",
+    "解除本机关联…": "Unlink local copy…",
+    "只解除本机副本关联，不改变服务器目录。结果未确认的请求须先人工核对。是否继续？": (
+        "Unlink only this local copy and leave the server directory intact? "
+        "Check unconfirmed requests manually first."),
+    "输入文件由服务器检查；实际运行前将再次检查。": "Inputs are checked on the server and checked again before running.",
+    "输入预检通过。": "Input preflight passed.",
+    "待上传：{names}": "Pending upload: {names}",
+    "写入结果未确认；先读取服务器流程核对，不能重发。": (
+        "Write outcome unknown. Read the server pipeline to verify it; do not resend the write."),
+    "服务器流程与待确认写入不一致或没有记录；请人工核对或重新取出，不能重发。": (
+        "The server pipeline differs from the unconfirmed write, or has no record. Check manually or fetch again; "
+        "do not resend the write."),
+    "服务器副本 {h}:{p}": "Server copy {h}:{p}",
+    "由服务器检查：{names}": "To be checked on the server: {names}",
+    "运行服务器副本": "Run a server copy locally",
+    "这是 {h}:{p} 的本机副本，确定在本机运行吗？": "This is a local copy of {h}:{p}. Run it on this computer?",
+    "远程流程只读；可取出到本机编辑，再确认上传。": (
+        "The remote pipeline is read-only. Fetch it to edit locally, then confirm the upload."),
     # 服务器分类与 Slurm 作业
     "请先选择服务器类型；集群登录节点不宜直接运行计算。": (
         "Choose a server type first; cluster login nodes should not run calculations directly."),

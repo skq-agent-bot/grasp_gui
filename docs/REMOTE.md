@@ -118,6 +118,88 @@ no-accounting Cancelled display has unit coverage and should be rechecked with t
 负责人已在 Slurm 24.11.5 下完成真实验收：无记账和带 slurmdbd 各 3 passed，MPI 单进程文件位置已核对。
 本次纳入其已验证的夹具修正，并补齐无记账时用户取消的状态显示；后者仍请用更新后的断言复验。
 
+### Local editing and upload / 在本机编辑并上传
+
+Remote pipelines remain read-only in the remote viewer. Use the existing desktop Calculation tab for editing;
+no additional workspace tabs or remote editor are introduced. This requires a server advertising
+`capabilities: ["workdir_write_v1"]`. Missing capability disables the edit button and gives an explicit
+Install / update server message before any upload request. Protocol/GREETING remain 1; `server_types` is unchanged.
+
+1. **New calculation:** in a local Calculation tab, choose **Upload to server…** or **Upload and run…** beside
+   the pipeline run buttons. The existing connection dialog selects the host and browses an existing parent;
+   the target field can name a new directory. Targets must be absent or empty. An existing pipeline must first
+   be fetched through Edit locally; unrelated files are never overwritten to create a pipeline.
+2. **Fetch an existing calculation:** choose **Edit locally…** in the remote Calculation tab. The editable local
+   path defaults to `~/grasp_calcs/remote/<host>/<server-directory>/`. The server returns shared configuration,
+   small attached inputs and a revision. A local path containing unrelated data is refused; fetching the same
+   linked copy again asks default-No before discarding pipeline edits. Existing local input conflicts are retained.
+3. **Edit:** use the normal program forms, pipeline actions, validation and preview. A persistent
+   **Server copy host:/path** label and main-window title identify the copy. Local missing inputs are labelled
+   **To be checked on the server**, while invalid parameters remain errors. Running the copy on this computer
+   requires a separate default-No confirmation.
+4. **Upload:** review the server-side changes, selected inputs, pending uploads, missing inputs and custom
+   commands. Small local files are selected by default; generated outputs, large files and existing server files
+   are not. Internal `.grasp*` files are excluded. Custom commands require their own confirmation, and the final
+   upload confirmation defaults to No. Shared attached text files travel with the record; selected other inputs
+   use the existing rsync transport after the record has been saved.
+5. **Run:** Upload and run opens the usual remote window and `run_plan` confirmation flow, using the selected
+   host's workstation or Slurm mode. Required inputs are checked again with the actual run settings. Uploading
+   a record with unresolved missing inputs does not bypass the final run preflight.
+
+**Conflict handling:** preview is read-only. The write locks the directory and checks its revision and idle
+state again. A changed revision, active background calculation, queued/running Slurm job or unknown Slurm
+submission refuses the write. Use **Fetch server pipeline again**, exporting local edits first if needed.
+Server files with the same name are retained in this workflow, including shared-input conflicts; use the separate
+file-transfer dialog when an intentional replacement is needed. A failed rsync leaves the saved record and link
+intact and explains how to retry the inputs. It never removes the server record to make a retry possible.
+
+**Unconfirmed writes:** create/update are mutations and are never replayed after disconnect. A pending intent
+is saved in local preferences. On reconnect, `get_pipeline` compares the actual server pipeline and attached
+configuration inputs with the pending configuration. An equal configuration establishes the new revision;
+it still asks for confirmation before retrying input transfer or applying later local edits. If the server revision
+is unchanged from the saved baseline, the update was not applied: pending is cleared and the local edits remain
+available for a new user confirmation. When a new calculation has no record, a separate locked read-only preview
+must prove that its target is absent/empty before enabling a manually confirmed create retry. Neither case sends
+a write automatically. Changed revisions/content, nonempty targets and failed checks remain conflicts.
+Closing and reopening the uploader retains pending verification; all retried writes repeat server-side checks.
+Unlink local copy asks default-No and changes only local preferences, leaving the server untouched.
+
+中文操作：本机计算页的“上传到服务器…”新建计算；远程计算页的“在本机编辑…”取出已有流程，继续使用原程序页修改。
+关联信息只保存在用户设置 `remote_copies`（主机、服务器路径、修订号，以及待核对写入的指纹），不改变 `.grasp_gui.json`。
+主窗口标题与计算页常驻显示服务器副本来源。本机缺少的结果/输入标为“由服务器检查”，本机直接运行副本另有默认否确认。
+上传先预览差异并确认，再在锁内核对修订号和运行状态，先建/更新记录再传输入。记录或任务状态冲突时拒绝覆盖，提供重新取出。
+同名服务器文件保留；传输失败只需补传，不删除记录。丢失回答先核对：配置一致则关联；修订号仍等于保存值则提示“写入未执行，
+可以再次确认上传”，保留本机修改。新建没有记录时须先证明目标仍为空，才允许用户重新确认创建。均不自动重发；其他变化保持冲突。
+选择“上传并运行…”后仍走现有工作站/Slurm 的确认和最终输入检查。
+
+Screenshots: [target EN](images/en_remote_edit_target.png) / [目标中文](images/zh_remote_edit_target.png),
+[upload EN](images/en_remote_edit_upload.png) / [上传中文](images/zh_remote_edit_upload.png),
+[confirmation EN](images/en_remote_edit_confirm.png) / [确认中文](images/zh_remote_edit_confirm.png),
+[linked copy EN](images/en_remote_edit_copy.png) / [副本中文](images/zh_remote_edit_copy.png),
+[confirmed retry EN](images/en_remote_edit_retry.png) / [重新确认中文](images/zh_remote_edit_retry.png).
+
+### Optional remote-edit SSH acceptance / 可选 SSH 写入验收
+
+Reuse the dedicated restricted sshd/rsync fixture below, install this branch's server build, then opt in:
+
+```sh
+export GRASP_REMOTE_EDIT_TEST=1
+# Also set GRASP_SSH_TEST_HOST, GRASP_SSH_TEST_DIRECTORY and optional CONFIG/PROGRAM as below.
+GRASP_BINDIR=/path/to/local/grasp/bin python3 -m pytest tests/test_remote_edit_ssh.py -v -ra
+```
+
+The directory must be the dedicated fixture root, never a production calculation root. Tests create unique
+`edit-*` subdirectories and retain them for inspection. They prepare isodata locally, upload it with rsync,
+run example1, fetch/edit/upload an rci setting, and compare energies against a direct SSH script with the same
+parameters. They also reject stale revisions and writes during a running fixture job. Set
+`GRASP_SSH_TEST_OLD_PROGRAM` to an old server executable for the old-capability check.
+Both local rsync/GRASP and server GRASP are required. No fixture means these three tests skip.
+The maintainer ran all three tests against this branch's server source in a restricted sshd fixture (MaxSessions 10,
+forwarding disabled), GRASP `9006157`, and the official 2.9.0 package as the old server: **3 passed**.
+See the [acceptance review](https://github.com/skq1998/grasp_gui/pull/47#pullrequestreview-5820086104).
+The current unexecuted-write recovery changes have local GUI coverage; the maintainer will repeat SSH acceptance
+before merging. This development environment still has no dedicated sshd container.
+
 ### 安装服务器端
 
 优先使用无 Qt 的服务器目录版 (glibc ≥ 2.17)，可在下方的安装对话框中明确确认后安装。
@@ -240,6 +322,10 @@ Two server workers permit pipelined reads; run/stop are serialized. Server code 
 | `composition` | Directory, mixing file, block, index; up to 500 leading components |
 | `view` | `kind: levels` or `wfn`; a whole view in one request, optional file/name selection and known signature |
 | `pipeline` | Read-only saved jobs and revision |
+| `get_pipeline` | Read-only shared configuration, bounded attached text inputs, warnings and revision |
+| `preview_upload` | Read-only new/update validation, changes, input checks, pending/existing files; no directory creation |
+| `create_workdir` | Mutation: checked configuration and explicit custom-command authorization; absent/empty target under lock |
+| `update_workdir` | Mutation: revision, configuration and explicit custom authorization; locked conflict and idle checks |
 | `run_plan` | Revision and custom commands; optional `server_type: slurm` returns server-side Slurm defaults |
 | `clear_slurm_record` | Mutation: explicit `confirmed: true`, matching record revision, fresh queue check, then archival |
 | `run` | Revision, one-based start, explicit custom/logout/scope confirmations; Slurm also accepts reviewed `slurm` settings |

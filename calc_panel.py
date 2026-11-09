@@ -877,6 +877,7 @@ class CalcPanel(QWidget):
     filesChanged = Signal()                # 更新目录内容后刷新查看器
     runFinished = Signal(bool)             # 一次运行结束 (查看器据此刷新)
     workdirRequested = Signal(str)         # 需要切换工作目录 (导入示例、载入参数)
+    copyChanged = Signal(str)
 
     def __init__(self, run, workdir):
         super().__init__()
@@ -945,6 +946,10 @@ class CalcPanel(QWidget):
         body = QWidget()
         lay = QVBoxLayout(body)
         lay.setContentsMargins(0, 0, 0, 0)
+        self.copy_label = QLabel()
+        self.copy_label.setWordWrap(True)
+        lay.addWidget(self.copy_label)
+        self.refresh_remote_copy()
         self.split = QSplitter(Qt.Vertical)
         self.split.addWidget(self.build_steps())
         self.split.addWidget(self.build_bottom())
@@ -1031,7 +1036,9 @@ class CalcPanel(QWidget):
         menu.addAction(T("导出 Slurm 作业脚本…")).triggered.connect(self.export_slurm)
         menu.addAction(T("复制配置到剪贴板…")).triggered.connect(lambda: self.export_config(True))
         export.setMenu(menu)
-        pl.addWidget(ButtonColumn([[button("▶ 运行全部", self.run_pipeline), button("▶ 从选中开始", self.run_from_selected)],
+        pl.addWidget(ButtonColumn([[button("▶ 运行全部", self.run_pipeline), button("▶ 从选中开始", self.run_from_selected),
+                                    button("上传到服务器…", lambda: self.upload_remote()),
+                                    button("上传并运行…", lambda: self.upload_remote(True))],
                                    [button("编辑", self.edit_job), button("更新所选", self.update_job),
                                     button("查看", self.show_job)],
                                    [button("上移", lambda: self.move(-1)), button("下移", lambda: self.move(1))],
@@ -1124,6 +1131,8 @@ class CalcPanel(QWidget):
             return False
         if self.busy and stop:
             self.stop_run()
+        if getattr(self, "upload_dialog", None) is not None:
+            self.upload_dialog.shutdown()
         self.detach()
         return True
 
@@ -1189,6 +1198,7 @@ class CalcPanel(QWidget):
         return True
 
     def open_workdir(self, d):
+        self.refresh_remote_copy()
         if not os.path.isdir(d):
             return
         try:
@@ -1335,7 +1345,13 @@ class CalcPanel(QWidget):
         except (OSError, ValueError) as e:
             QMessageBox.warning(self, T("检查输入文件"), str(e))
             return
+        from grasp_remote_edit import association
+        deferred = result["missing"] if association(self.cur_workdir) else []
+        if deferred:
+            result = dict(result, missing=[], issues=result["invalid"])
         text = summary.check_text(result) if result["issues"] else T("没有发现缺失的输入文件或名称问题。")
+        if deferred:
+            text += "\n" + T("由服务器检查：{names}", names=", ".join(row["file"] for row in deferred))
         if not result["issues"] and result["skipped"]:
             text += "\n" + "\n".join(T("第 {n} 步 {p}：{why}", n=r["step"], p=r["program"], why=r["reason"])
                                        for r in result["skipped"])
@@ -1352,6 +1368,12 @@ class CalcPanel(QWidget):
             QMessageBox.information(self, T("运行中"), T("已有任务在运行，请等待或先停止。"))
             return
         if not jobs or not self.check_dirs():
+            return
+        from grasp_remote_edit import association
+        link = association(self.cur_workdir)
+        if link and QMessageBox.question(self, T("运行服务器副本"),
+                T("这是 {h}:{p} 的本机副本，确定在本机运行吗？", h=link["host"], p=link["directory"]),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         st = grasp_bg.status(self.cur_workdir)
         if st and st["status"] == "running" and st["remote"] and QMessageBox.question(
@@ -1638,6 +1660,18 @@ class CalcPanel(QWidget):
 
     def run_pipeline(self):
         self.start(list(self.pipeline))
+
+    def upload_remote(self, run=False):
+        from remote_edit_panel import upload
+        upload(self, run)
+
+    def refresh_remote_copy(self):
+        from grasp_remote_edit import association
+        link = association(self.cur_workdir)
+        text = T("服务器副本 {h}:{p}", h=link["host"], p=link["directory"]) if link else ""
+        self.copy_label.setText(text)
+        self.copy_label.setVisible(bool(text))
+        self.copyChanged.emit(text)
 
     def run_from_selected(self):
         self.start(self.pipeline[self.selected() or 0:])

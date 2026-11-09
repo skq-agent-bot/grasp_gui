@@ -39,7 +39,7 @@ def check_files(workdir, jobs, start=0, run=None, offset=0, path_check=None):
     root = Path(workdir) if workdir is not None else None
     available, removed, origins = set(), set(), {}
     missing, skipped, invalid = [], [], []
-    names = {p.name for p in root.iterdir() if p.is_file()} if root is not None else set()
+    names = {p.name for p in root.iterdir() if p.is_file()} if root is not None and root.is_dir() else set()
     reported = set()
 
     def require(name, number, title, errors):
