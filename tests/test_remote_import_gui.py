@@ -422,3 +422,68 @@ def test_new_directory_replaces_empty_window_without_reconnecting(qapp, monkeypa
     finally:
         parent.deleteLater()
         qapp.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
+@pytest.mark.parametrize("inputs", ["ok", "missing", "pending"])
+def test_final_confirmation_has_one_preflight_and_one_pending_section(factory, tmp_path, qapp, monkeypatch, inputs):
+    from PySide6.QtWidgets import QMessageBox
+    cfg = None if inputs == "ok" else dict(format=config.FORMAT, version=config.VERSION,
+        jobs=[dict(step="rangular", vals=dict(config.STEPS["rangular"].defaults(), csf="manual.c"))])
+    dialog, source, _ = factory(cfg)
+    if inputs == "pending":
+        local = tmp_path / "inputs"
+        local.mkdir()
+        (local / "manual.c").write_text("fixture input")
+        dialog.local = str(local)
+        dialog.load()
+        spin(qapp, lambda: dialog.ready)
+    questions = []
+    def no(*args):
+        assert args[-1] == QMessageBox.No
+        questions.append(args[2])
+        return QMessageBox.No
+    monkeypatch.setattr(QMessageBox, "question", no)
+    dialog.start_transfer()
+    assert len(questions) == 1
+    text = questions[0]
+    assert text.count("输入预检通过。") == (0 if inputs == "missing" else 1)
+    assert text.count("流程预检发现以下问题：") == (1 if inputs == "missing" else 0)
+    assert text.count("待上传：") == 1
+    if inputs == "pending":
+        assert "待上传：manual.c" in text
+    assert not any(method == "create_workdir" for method, _ in source.calls)
+
+
+def test_remote_create_entry_is_hidden_until_an_empty_pipeline_loads(qapp):
+    from PySide6.QtCore import QEvent, QObject, Signal
+    from remote_panel import RemoteCalculation
+    class Source(QObject):
+        push = Signal(object)
+        def __init__(self):
+            super().__init__()
+            self.callbacks = []
+        def submit(self, method, args, callback):
+            if method == "pipeline":
+                self.callbacks.append(callback)
+    source = Source()
+    panel = RemoteCalculation(source, "/server")
+    source.setParent(panel)
+    try:
+        assert panel.create_button.isHidden()
+        source.callbacks.pop()(None, ValueError("fixture error"))
+        assert panel.create_button.isHidden()
+        panel.load()
+        job = config.make_job(dict(step="rnucleus", vals=config.STEPS["rnucleus"].defaults()))
+        source.callbacks.pop()(dict(jobs=[job], revision="nonempty"), None)
+        assert panel.create_button.isHidden()
+        panel.load()
+        source.callbacks.pop()(dict(jobs=[], revision="empty"), None)
+        assert not panel.create_button.isHidden()
+        panel.load()
+        assert panel.create_button.isHidden()
+        source.callbacks.pop()(None, ValueError("fixture refresh error"))
+        assert panel.create_button.isHidden()
+    finally:
+        source.callbacks.clear()
+        panel.deleteLater()
+        qapp.sendPostedEvents(None, QEvent.DeferredDelete)

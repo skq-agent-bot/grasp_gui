@@ -644,6 +644,7 @@ class RemoteCalculation(QWidget):
         bar.addWidget(self.state, 1)
         layout.addLayout(bar)
         self.create_button = button("在此新建计算…", self.create_calculation)
+        self.create_button.hide()
         layout.addWidget(self.create_button)
         split = QSplitter()
         self.steps = QListWidget()
@@ -669,6 +670,7 @@ class RemoteCalculation(QWidget):
         self.load()
 
     def load(self):
+        self.create_button.hide()
         def loaded(value, error):
             if error:
                 return

@@ -269,9 +269,10 @@ class UploadDialog(TransferDialog):
                 return
             report = value["checked"]
             text = self.preview_text(value) + "\n" + self.counts.text() + "\n" + "\n".join(r["name"] for r in rows)
-            text += "\n" + (summary.check_text(report) if report["issues"] else T("输入预检通过。"))
-            if report["pending"]:
-                text += "\n" + T("待上传：{names}", names=", ".join(r["file"] for r in report["pending"]))
+            if not self.remote_only:
+                text += "\n" + (summary.check_text(report) if report["issues"] else T("输入预检通过。"))
+                if report["pending"]:
+                    text += "\n" + T("待上传：{names}", names=", ".join(r["file"] for r in report["pending"]))
             kept = sorted(set(value["kept_files"]) | set(value["existing"]))
             text += "\n" + T("服务器同名文件将保留：{names}", names=", ".join(kept))
             if report["invalid"]:

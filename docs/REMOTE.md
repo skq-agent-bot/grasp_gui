@@ -158,6 +158,13 @@ Optional real SSH acceptance / 可选真实 SSH 验收：沿用下文的专用 S
 `GRASP_REMOTE_EDIT_TEST=1 python3 -m pytest tests/test_remote_import_ssh.py -v`。两项测试覆盖剪贴板 example1 直接新建运行，
 以及选择已有本机 isodata 输入、rsync 上传后运行，均比较参考能量；只在显式指定的验收目录中新建。
 
+The maintainer ran the two direct-import cases plus the three remote-edit cases against a restricted sshd
+fixture using the branch merged with main, server source and the official 2.9.0 old-server package:
+**5 passed**, GRASP `9006157` ([review evidence](https://github.com/skq1998/grasp_gui/pull/49#pullrequestreview-5829004138)).
+This evidence precedes the confirmation/entry-visibility review fixes; repeat against the updated head before merging.
+维护者在受限 sshd 中，以合入 main 的源码和官方 2.9.0 旧端验收：新建两项、编辑三项共 **5 passed**，GRASP `9006157`。
+该记录早于本轮确认提示及入口显示修订，更新后的提交仍需维护者复测。
+
 ### Local editing and upload / 在本机编辑并上传
 
 Remote pipelines remain read-only in the remote viewer. Use the existing desktop Calculation tab for editing;
