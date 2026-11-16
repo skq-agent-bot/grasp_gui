@@ -69,3 +69,48 @@ def test_remote_composition_error_does_not_break_later_requests(tmp_path):
         assert result["result"]["components"]
     finally:
         peer.close()
+
+
+@pytest.mark.parametrize("validate", [True, False])
+@pytest.mark.parametrize("changes", [
+    dict(pre=[1]), dict(args=5), dict(stdin=5), dict(pre=[["run"]]),
+    dict(title=5), dict(log=None), dict(mpi=1), dict(args="argument"), dict(args=[1]),
+    dict(pre=None), dict(post=5), dict(pre=[["cp", "a"]]), dict(post=[["cp", "a", 3]]),
+    dict(pre=[["run", "echo"]]), dict(pre=[["run", []]]), dict(pre=[["run", ["echo", 1]]]),
+    dict(post=[["run", ["echo"], 5]]), dict(post=[["run", ["echo"], "input", "extra"]]),
+    dict(pre=[["unknown", "a", "b"]]),
+])
+def test_malformed_commands_raise_config_error(changes, validate):
+    cfg = dict(format=config.FORMAT, version=config.VERSION, jobs=[dict(command=dict(prog="x", **changes))])
+    with pytest.raises(config.ConfigError):
+        config.check(cfg, validate=validate)
+
+
+@pytest.mark.parametrize("value", [5, None, "abc", {}])
+def test_malformed_attached_files_raise_config_error(value):
+    cfg = dict(format=config.FORMAT, version=config.VERSION,
+               jobs=[dict(command=dict(prog="x"))], files=value)
+    with pytest.raises(config.ConfigError):
+        config.check(cfg)
+
+
+@pytest.mark.parametrize("value", ["abc", [1, 2], None, {}])
+@pytest.mark.parametrize("validate", [True, False])
+def test_malformed_csf_lists_raise_config_error(value, validate):
+    cfg = dict(format=config.FORMAT, version=config.VERSION,
+               jobs=[dict(step="rcsfgenerate", vals=dict(config.STEPS["rcsfgenerate"].defaults(), lists=value))])
+    with pytest.raises(config.ConfigError):
+        config.check(cfg, validate=validate)
+
+
+def test_legacy_command_actions_still_roundtrip_through_export():
+    command = dict(prog="printf", args=["%s", "message"], title="legacy", stdin="", log="", mpi=False,
+                   pre=[["cp", "source", "target"], ["run", ["printf", "before"], "input\n"]],
+                   post=[["run", ["printf", "after"]]])
+    cfg, _ = config.check(dict(format=config.FORMAT, version=config.VERSION, jobs=[dict(command=command)]))
+    pipeline = config.session(cfg)["pipeline"]
+    exported = config.export(pipeline, {})
+    restored, _ = config.check(exported)
+    assert config.session(restored)["pipeline"] == pipeline
+    assert config.custom_commands(restored)[0][0] == 1
+    assert "cp source target" in core.shell_script(pipeline, "/opt/grasp/bin", ".")

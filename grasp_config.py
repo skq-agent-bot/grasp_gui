@@ -76,6 +76,40 @@ def upgrade(doc):
     return doc
 
 
+def valid_command(command):
+    """先核对旧命令记录的结构，避免导入后才在生成脚本时抛出类型错误。"""
+    if not isinstance(command, dict) or not isinstance(command.get("prog"), str) or not command["prog"].strip():
+        return False
+    if any(not isinstance(command.get(key, ""), str) for key in ("title", "stdin", "log")):
+        return False
+    args = command.get("args", [])
+    if not isinstance(args, list) or any(not isinstance(arg, str) for arg in args):
+        return False
+    if type(command.get("mpi", False)) is not bool:
+        return False
+    for key in ("pre", "post"):
+        actions = command.get(key, [])
+        if not isinstance(actions, list):
+            return False
+        for action in actions:
+            # 直接导出会保留 Python 元组；经 JSON 保存后同样的动作是列表。
+            if not isinstance(action, (list, tuple)) or not action:
+                return False
+            if action[0] == "cp":
+                if len(action) != 3 or any(not isinstance(value, str) for value in action[1:]):
+                    return False
+            elif action[0] == "run":
+                if len(action) not in (2, 3) or not isinstance(action[1], (list, tuple)) or not action[1]:
+                    return False
+                if any(not isinstance(arg, str) for arg in action[1]) or not action[1][0].strip():
+                    return False
+                if len(action) == 3 and not isinstance(action[2], str):
+                    return False
+            else:
+                return False
+    return True
+
+
 def check(doc, *, validate=True):
     """升级并检查配置：返回 (配置, 警告列表)；无法导入时抛出 ConfigError。
     缺少的参数用默认值补上，不认识的参数忽略 (都列入警告)。
@@ -92,8 +126,7 @@ def check(doc, *, validate=True):
         if not isinstance(job, dict):
             raise ConfigError(T("第 {i} 步的格式有误", i=i))
         if "command" in job:
-            c = job["command"]
-            if not isinstance(c, dict) or not isinstance(c.get("prog"), str) or not c["prog"].strip():
+            if not valid_command(job["command"]):
                 raise ConfigError(T("第 {i} 步的格式有误", i=i))
             continue
         step = STEPS.get(job.get("step"))
@@ -104,6 +137,11 @@ def check(doc, *, validate=True):
         vals = job.get("vals")
         if not isinstance(vals, dict):
             raise ConfigError(T("第 {i} 步的格式有误", i=i))
+        for field in step.fields:
+            if isinstance(field, core.CsfLists):
+                value = vals.get(field.key, field.default)
+                if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+                    raise ConfigError(T("第 {i} 步的格式有误", i=i))
         keys = {f.key for f in step.fields if isinstance(f, core.Field)}
         unknown = sorted(set(vals) - keys)
         missing = sorted(keys - set(vals) - {f.key for f in step.fields if getattr(f, "added", False)})
@@ -117,7 +155,10 @@ def check(doc, *, validate=True):
         except ValueError as e:
             raise ConfigError(T("第 {i} 步 ({step})：{e}", i=i, step=step.key, e=e)) from e
     total = 0
-    for f in cfg.get("files", []):
+    files = cfg.get("files", [])
+    if not isinstance(files, list):
+        raise ConfigError(T("附带文件 {f} 的名称或内容有误", f="files"))
+    for f in files:
         name = f.get("name") if isinstance(f, dict) else None
         if not valid_file_name(name) or not isinstance(f.get("text"), str):
             raise ConfigError(T("附带文件 {f} 的名称或内容有误", f=name))
