@@ -8,6 +8,7 @@ import pytest
 import grasp_core as core
 import grasp_config as config
 import grasp_remote as remote
+from test_large_files import make_files
 from test_run_range import launches  # noqa: F401
 
 
@@ -45,3 +46,26 @@ def test_remote_workstation_run_resolves_paths_consistently(tmp_path, monkeypatc
     result = operation.run(directory, revision)
     assert result["started"] and result["directory"] == str(root)
     assert launches[0][1]["cwd"] == str(root)
+
+
+@pytest.mark.parametrize("language", ["zh", "en"])
+@pytest.mark.parametrize("block,index", [(2, 1), (1, 2)])
+def test_missing_composition_has_a_clear_error(tmp_path, language, block, index):
+    core.set_lang(language)
+    make_files(tmp_path, ncf=2, nev=1)
+    message = "块或能级不存在" if language == "zh" else "Block or level does not exist"
+    with pytest.raises(ValueError, match=message):
+        remote.Operations().composition(str(tmp_path), "state.cm", block, index)
+
+
+def test_remote_composition_error_does_not_break_later_requests(tmp_path):
+    from test_remote import Peer
+    make_files(tmp_path, ncf=2, nev=1)
+    peer = Peer()
+    try:
+        result = peer.call("composition", directory=str(tmp_path), file="state.cm", block=2, index=1)
+        assert result.get("error") and "块或能级不存在" in result["error"]
+        result = peer.call("composition", directory=str(tmp_path), file="state.cm", block=1, index=1)
+        assert result["result"]["components"]
+    finally:
+        peer.close()

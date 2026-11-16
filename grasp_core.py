@@ -1344,6 +1344,8 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。": "The zero-order CSF list {z} and {f} have different symmetry blocks ({a} / {b}): their J and parity blocks must match one to one.",
     "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
     "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
+    # 代码审核修复 (#59)
+    "块或能级不存在": "Block or level does not exist",
 }
 
 
