@@ -921,6 +921,8 @@ class CalcPanel(QWidget):
         self.run_span = None           # 仅本次会话的范围；不扩展后台记录格式
         self.remote = None             # 本目录的计算在另一台机器上运行时：读取其 RUN_LOG 的线程的标记
         self.pipeline = []
+        self.preview_source = None     # 流程行号或程序页 key；只保留在界面中
+        self.preview_run = None
         self.session_cleared = False
         self.session_revision = None
         self.checking_session = False
@@ -994,15 +996,28 @@ class CalcPanel(QWidget):
             self.body.deleteLater()
         self.body = body
         self.layout().addWidget(body)
+        if self.preview_run is not self.run:
+            if self.preview_run is not None:
+                self.preview_run.np_spin.valueChanged.disconnect(self.refresh_preview)
+                self.preview_run.mpirun_edit.textChanged.disconnect(self.refresh_preview)
+            self.run.np_spin.valueChanged.connect(self.refresh_preview)
+            self.run.mpirun_edit.textChanged.connect(self.refresh_preview)
+            self.preview_run = self.run
 
     def rebuild(self):
         """重新创建全部控件，保留参数、流程和输出。"""
         data = self.collect()
         output = self.out.toPlainText()
+        source, text, row = self.preview_source, self.prev.toPlainText(), self.selected()
         sizes = self.split.sizes()
         self.build()
         self.split.setSizes(sizes)
         self.apply(data)
+        if row is not None:
+            self.plist.setCurrentRow(row)
+        self.preview_source = source
+        self.prev.setPlainText(text)
+        self.refresh_preview()
         self.append(output, "")
 
     def build_steps(self):
@@ -1061,6 +1076,7 @@ class CalcPanel(QWidget):
         self.plist = QListWidget()
         self.plist.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.plist.itemSelectionChanged.connect(self.update_run_buttons)
+        self.plist.currentRowChanged.connect(self.preview_row_changed)
         self.plist.itemDoubleClicked.connect(self.show_job)
         pl.addWidget(self.plist, 1)
         # 按钮按用途分组；高度够时排成一列，不够时自动排成两列
@@ -1368,8 +1384,33 @@ class CalcPanel(QWidget):
     def preview(self):
         job = self.current_job()
         if job:
+            self.preview_source = self.nav.currentWidget().step.key
             self.prev.setPlainText(core.describe(job, self.run.mpi_prefix()) + "\n")
             self.show_preview()
+
+    def preview_row_changed(self, *_):
+        """自动预览只换文字；不能把窄窗口中的流程标签切走。"""
+        self.preview_source = self.selected()
+        self.refresh_preview()
+
+    def refresh_preview(self, *_):
+        source = self.preview_source
+        if source is None:
+            self.prev.clear()
+            return
+        if isinstance(source, int):
+            if not 0 <= source < len(self.pipeline):
+                self.preview_source = None
+                self.prev.clear()
+                return
+            job = self.pipeline[source]
+        else:
+            form = next(f for f in self.forms if f.step.key == source)
+            try:
+                job = form.job()
+            except (ValueError, KeyError):
+                return                    # 设置变化时表单可能尚未填完，保留旧文字且不弹框
+        self.prev.setPlainText(core.describe(job, self.run.mpi_prefix()) + "\n")
 
     def check_inputs(self):
         form = self.nav.currentWidget()
@@ -1619,6 +1660,7 @@ class CalcPanel(QWidget):
     def run_current(self):
         job = self.current_job()
         if job:
+            self.preview_source = self.nav.currentWidget().step.key
             self.prev.setPlainText(core.describe(job, self.run.mpi_prefix()) + "\n")
             self.start([job])
 
@@ -1637,6 +1679,7 @@ class CalcPanel(QWidget):
         self.plist.clear()
         self.plist.addItems([f"{i:2d}. {j['title']}" for i, j in enumerate(self.pipeline, 1)])
         self.update_run_buttons()
+        self.preview_row_changed()
 
     def update_run_buttons(self):
         for mode, button in (("all", self.run_all), ("from", self.run_from),
@@ -1673,7 +1716,7 @@ class CalcPanel(QWidget):
     def show_job(self, *_):
         i = self.selected()
         if i is not None:
-            self.prev.setPlainText(core.describe(self.pipeline[i], self.run.mpi_prefix()) + "\n")
+            self.preview_row_changed()
             self.show_preview()
 
     def move(self, d):
@@ -1719,6 +1762,7 @@ class CalcPanel(QWidget):
             self.pipeline[i] = job
             self.refresh_list()
             self.plist.setCurrentRow(i)
+            self.show_job()
             self.save_session()
             self.status(T("已更新第 {i} 步", i=i + 1))
 
