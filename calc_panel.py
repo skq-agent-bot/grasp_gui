@@ -1945,7 +1945,7 @@ class CalcPanel(QWidget):
             workdir_ops.clear(dlg.plan, dlg.selected_names(), dlg.confirmation.text())
         except (OSError, ValueError) as e:
             QMessageBox.warning(self, T("清空工作目录"),
-                                T("清理未完成，部分项目可能已删除：{e}", e=str(e)))
+                                T("清理未完成，部分项目可能已删除：{e}", e=str(e)) if started else str(e))
             if not started:
                 return
         else:

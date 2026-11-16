@@ -448,6 +448,8 @@ results-only cleanup is refused. Shared configuration and session formats are un
 permanent, including selected subdirectories; symbolic links are only unlinked. Root, home and system directories
 are refused; a directory without a session requires a separate confirmation. Clearing everything also clears the
 visible pipeline, and closing the window does not recreate the removed record.
+Refusal before deletion begins (for example, an active run) reports only its reason. Errors after deletion
+begins warn that some selected items may already have been deleted.
 
 “清空工作目录…”先列出删除与保留项、总数量和大小（B / KB / MB / GB，保留一位小数），可取消勾选或用“全选 / 全不选”
 批量选择可删除项；默认只删结果，保留工作目录记录、备份、输入清单及清单中的附带输入，运行状态、日志和缓存可以清理。
@@ -456,6 +458,7 @@ visible pipeline, and closing the window does not recreate the removed record.
 “全部删除”包括输入、清单和记录，必须输入目录名确认；删除不能恢复，选中的子目录会递归删除，
 符号链接只删除链接本身。根目录、家目录、系统目录禁止清空；没有工作目录记录的目录另行确认。
 全部删除后界面流程也清空，关闭窗口不会重新生成记录。
+开始删除前被拒绝（例如仍有任务运行）时只显示原因；开始删除后才发生的错误才提示可能已有部分项目被删除。
 
 ### Export configuration (导出配置)
 
