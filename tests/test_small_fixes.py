@@ -6,6 +6,9 @@ import subprocess
 import pytest
 
 import grasp_core as core
+import grasp_config as config
+import grasp_remote as remote
+from test_run_range import launches  # noqa: F401
 
 
 @pytest.mark.parametrize("name", ["mpi", "MPI space's $HOME"])
@@ -28,3 +31,17 @@ def test_relative_mpi_script_remains_byte_identical(temporary):
                 "# hwloc's GL plugin makes mpirun hang under WSLg\n"
                 'export HWLOC_COMPONENTS="${HWLOC_COMPONENTS:--gl}"\n')
     assert core.shell_script([], "/opt/grasp/bin", ".", "mpirun -np 2", temporary) == expected
+
+
+@pytest.mark.parametrize("directory", ["calc", "work/../calc", "~/calc"])
+def test_remote_workstation_run_resolves_paths_consistently(tmp_path, monkeypatch, launches, directory):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "work").mkdir()
+    root = tmp_path / "calc"
+    config.install(dict(format=config.FORMAT, version=config.VERSION,
+                        jobs=[dict(step="rnucleus", vals=config.STEPS["rnucleus"].defaults())]), str(root))
+    operation = remote.Operations()
+    revision = operation.record(directory)[2]
+    result = operation.run(directory, revision)
+    assert result["started"] and result["directory"] == str(root)
+    assert launches[0][1]["cwd"] == str(root)

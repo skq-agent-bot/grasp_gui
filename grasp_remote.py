@@ -285,7 +285,7 @@ class Operations(service.Service):
             if plan["logout_kills"] and not user_scope and not accept_logout:
                 raise ValueError(T("断线会结束计算，请由用户选择用户 scope、Slurm 或明确照常启动"))
             operation = service.Service("/", allow_custom=allow_custom)
-            return operation.run(directory, start, end=end, started_by="remote", user_scope=user_scope)
+            return operation.run(str(root), start, end=end, started_by="remote", user_scope=user_scope)
 
     def signature(self, directory):
         root = self.directory_files(directory)
