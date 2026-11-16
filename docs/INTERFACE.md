@@ -510,6 +510,11 @@ rmcdhf 部分另含 `name.sum` 中每个轨道最终的自洽程度和广义占�
 
 Large mixing and CSF files are indexed in the background. The status bar shows *Reading … (正在读取 …)*
 and progress; changing the directory or file selection cancels obsolete work. Tabs and controls remain usable.
+Mixing files with any non-finite energy (NaN or ±Inf) are unreadable: the file is marked red and its tooltip
+and the status bar explain that the calculation may have diverged. Other files remain visible. Local, remote,
+summary and MCP readers use the same check before cache writing or energy-zero calculations.
+混合系数文件中只要有 NaN 或正负无穷能量，整个文件就标为无法读取；文件名变红，提示框和状态栏说明计算可能已经发散，
+其他文件仍可显示。本机、远程、摘要与 MCP 共用检查，在写索引缓存或计算零点前拒绝该文件。
 The composition pane briefly shows *Reading composition… (正在读取组成…)* when the selected level's CSFs are read.
 Only the displayed components are parsed; changing the weight threshold reuses the same data. Small mixing files
 are analyzed serially to avoid process startup delays; larger files can use up to four local analysis processes.

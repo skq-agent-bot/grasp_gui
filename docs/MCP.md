@@ -171,6 +171,10 @@ rtransition outputs. Branching ratios cover only the channels read, not a comple
 is relative to the workdir and restricted to the root. Numerical tools work without Qt; drawing reports
 an explicit error without it and otherwise reuses the viewers offscreen.
 
+`levels` 可选返回 `errors: [{file, error}]`，逐文件报告读取失败。含 NaN 或正负无穷能量的文件整份拒绝，
+其他文件照常返回；没有错误时省略该字段。The optional `errors` list reports unreadable files, including
+non-finite energies; other level results are retained. Healthy replies omit it.
+
 ## 运行前检查 / Run preflight
 
 `run` 使用与 GUI 相同的名称和文件预检，只检查 `start` 到 `end` 实际运行的连续步骤。每页的 `validate` 是名称限制的

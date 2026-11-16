@@ -6,6 +6,7 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 import hashlib
 import heapq
 import json
+import math
 import multiprocessing
 import os
 from pathlib import Path
@@ -240,10 +241,18 @@ def clean_cache(directory):
                 continue
 
 
+def _check_mix_energies(blocks):
+    """在写缓存前拒绝发散结果，不能把它当成未写完的块或交给 JSON 处理。"""
+    if any(not math.isfinite(energy) for block in blocks for energy in block.get("energies", [])):
+        from grasp_core import T
+        raise ValueError(T("能量不是有限的数，计算可能已经发散"))
+
+
 def mix_index(path, cancel=None):
     checkpoint(cancel)
     hit = cached(path, "mix")
     if isinstance(hit, dict) and isinstance(hit.get("blocks"), list):
+        _check_mix_energies(hit["blocks"])
         return hit
     saved = stamp(path)
     with open(path, "rb") as f:
@@ -282,6 +291,7 @@ def mix_index(path, cancel=None):
             blocks.append(block)
             # 读记录正文会移动文件位置；恢复到当前块的结尾再跳下一块。
             f.seek(block["records"][-1]["end"])
+    _check_mix_energies(blocks)
     data = dict(header=counts, records=[tag, header], blocks=blocks, stamp=saved, top_k=0, partial=partial)
     save_cache(saved, "mix", data)
     return data

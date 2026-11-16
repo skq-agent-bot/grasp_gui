@@ -962,6 +962,7 @@ class LevelPanel(Panel):
     def render_levels(self):
         unit_label, factor, efmt = self.unit_info()
         data = []
+        read_errors = []
         for i in range(self.files.count()):
             it = self.files.item(i)
             if it.checkState() != Qt.Checked:
@@ -973,6 +974,7 @@ class LevelPanel(Panel):
             if isinstance(res, Exception):
                 it.setForeground(QColor("#c00"))
                 it.setToolTip(T("无法读取：{e}", e=res))
+                read_errors.append(f"{os.path.basename(path)}: {res}")
                 continue
             it.setForeground(QColor("black"))
             it.setToolTip(path)
@@ -1023,7 +1025,9 @@ class LevelPanel(Panel):
         self.load_transitions()
         self.load_marked()
         self.show_composition()
-        if self.zero_warnings:
+        if read_errors:
+            self.status(T("无法读取：{e}", e="; ".join(read_errors)))
+        elif self.zero_warnings:
             self.status(T("无法确定哈密顿量，零点可能不可比") + "：" + ", ".join(self.zero_warnings))
 
     @staticmethod

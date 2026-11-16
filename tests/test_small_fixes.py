@@ -2,12 +2,19 @@
 
 import shlex
 import subprocess
+import json
+import math
+import struct
 
 import pytest
 
 import grasp_core as core
 import grasp_config as config
 import grasp_remote as remote
+import grasp_mix as mix
+import grasp_index as index
+import grasp_service as service
+import grasp_summary as summary
 from test_large_files import make_files
 from test_run_range import launches  # noqa: F401
 
@@ -114,3 +121,56 @@ def test_legacy_command_actions_still_roundtrip_through_export():
     assert config.session(restored)["pipeline"] == pipeline
     assert config.custom_commands(restored)[0][0] == 1
     assert "cp source target" in core.shell_script(pipeline, "/opt/grasp/bin", ".")
+
+
+def nonfinite_files(root, value=float("nan"), second_level=False):
+    healthy = make_files(root, ncf=2, nev=2)
+    raw = healthy.read_bytes()
+    old = struct.pack("<d", 0.001 if second_level else -7.4)
+    bad = root / "bad.cm"
+    bad.write_bytes(raw.replace(old, struct.pack("<d", value), 1))
+    return healthy, bad
+
+
+@pytest.mark.parametrize("value,second_level", [(float("nan"), False), (float("inf"), False),
+                                               (-float("inf"), False), (float("nan"), True)])
+@pytest.mark.parametrize("prepared", [False, True])
+@pytest.mark.parametrize("cache_writable", [False, True])
+def test_nonfinite_energy_rejects_whole_mix_file(tmp_path, monkeypatch, value, second_level, prepared, cache_writable):
+    if not cache_writable:
+        monkeypatch.setattr(index, "cache_dirs", lambda *args: [])
+    healthy, bad = nonfinite_files(tmp_path, value, second_level)
+    with pytest.raises(ValueError, match="能量不是有限的数"):
+        mix.open_mix(bad, summary=prepared)
+    assert all(math.isfinite(lv.energy) for b in mix.open_mix(healthy) for lv in b.levels)
+
+
+@pytest.mark.parametrize("brief", [False, True])
+def test_nonfinite_file_isolated_in_service_views_and_summaries(tmp_path, brief):
+    healthy, bad = nonfinite_files(tmp_path)
+    result = service.Service("/").levels(str(tmp_path), brief=brief)
+    assert len(result["levels"]) == 2 and {row["file"] for row in result["levels"]} == {healthy.name}
+    assert result["errors"] == [dict(file=bad.name, error=core.T("能量不是有限的数，计算可能已经发散"))]
+    json.dumps(result, allow_nan=False)
+    local = mix.load_result_files([str(healthy), str(bad)], 5, str(tmp_path))
+    assert isinstance(local[str(bad)], ValueError) and not isinstance(local[str(healthy)], Exception)
+    data = summary.collect(tmp_path, None, [])
+    assert {row["file"] for row in data["levels"]} == {healthy.name}
+    assert any(row["file"] == bad.name and "能量不是有限的数" in row["error"] for row in data["warnings"])
+    emitted = []
+    view = remote.Operations().view(str(tmp_path), "levels", emit=emitted.append)
+    assert {row["file"] for row in view["data"]["levels"]} == {healthy.name}
+    for payload in [view, *emitted]:
+        remote.pack(payload)
+
+
+def test_mcp_levels_reports_nonfinite_file_without_losing_other_results(tmp_path, monkeypatch):
+    import grasp_mcp as mcp
+    healthy, bad = nonfinite_files(tmp_path)
+    monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "isolated-mcp.json"))
+    core.save_config(mcp_enabled=True)
+    result = mcp.Server(str(tmp_path)).result("levels", dict(directory=str(tmp_path)))
+    assert not result["isError"], result
+    data = json.loads(result["content"][0]["text"])
+    assert {row["file"] for row in data["levels"]} == {healthy.name}
+    assert data["errors"][0]["file"] == bad.name
