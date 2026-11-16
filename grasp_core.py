@@ -2689,7 +2689,9 @@ def shell_script(pipeline, bindir, workdir, mpi_prefix="", mpitmp="tmp_mpi"):
             f"export PATH={shlex.quote(bindir)}:$PATH", *program_fallbacks(pipeline),
             f"cd {shlex.quote(workdir)}", ""]
     if mpi_prefix:
-        body += [f"export MPI_TMP=\"$PWD\"/{shlex.quote(mpitmp or 'tmp_mpi')}", 'mkdir -p "$MPI_TMP"',
+        temporary = mpitmp or "tmp_mpi"
+        value = shlex.quote(temporary) if os.path.isabs(temporary) else f'"$PWD"/{shlex.quote(temporary)}'
+        body += [f"export MPI_TMP={value}", 'mkdir -p "$MPI_TMP"',
                  "# hwloc's GL plugin makes mpirun hang under WSLg",
                  'export HWLOC_COMPONENTS="${HWLOC_COMPONENTS:--gl}"', ""]
     for i, job in enumerate(pipeline, 1):
