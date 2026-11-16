@@ -181,6 +181,8 @@ def run_summary(st, titles, span=None):
     """上次运行的结果，如“上次运行在第 3/7 步 rmcdhf 出错 (结束于 …)”：停下来的是哪一步，不必翻日志。"""
     i, n = st.get("step", 0), len(titles)
     title = titles[i] if 0 <= i < n else "?"
+    if span:
+        i, n = i + span[0] - 1, span[2]
     end = st.get("end") or time.strftime("%Y-%m-%d %H:%M:%S")
     text = {"ok": T("上次运行完成：共 {n} 步", n=n),
             "stopped": T("上次运行在第 {i}/{n} 步 {t} 停止", i=i + 1, n=n, t=title),
@@ -1639,12 +1641,20 @@ class CalcPanel(QWidget):
     def update_run_buttons(self):
         for mode, button in (("all", self.run_all), ("from", self.run_from),
                              ("to", self.run_to), ("selected", self.run_selected)):
-            try:
-                summary.selected_run_range(len(self.pipeline), [i.row() for i in self.plist.selectedIndexes()], mode)
+            if mode == "all" or mode == "from" and not self.pipeline:
                 hint = ""
-            except ValueError as e:
-                hint = str(e)
-            button.setEnabled(not hint and not (self.busy and not self.remote))
+            elif not self.pipeline:
+                hint = T("流程为空：先在各标签页点击“加入流程”。")
+            else:
+                try:
+                    summary.selected_run_range(
+                        len(self.pipeline), [i.row() for i in self.plist.selectedIndexes()], mode)
+                    hint = ""
+                except ValueError as e:
+                    hint = str(e)
+            if mode in ("to", "selected") and self.busy and not self.remote:
+                hint = T("已有任务在运行，请等待或先停止。")
+            button.setEnabled(not hint)
             button.setToolTip(hint)
 
     def run_selection(self, mode):
@@ -1740,6 +1750,9 @@ class CalcPanel(QWidget):
         self.copyChanged.emit(text)
 
     def run_from_selected(self):
+        if not self.pipeline:
+            self.start([])
+            return
         self.run_selection("from")
 
     def list_files(self):

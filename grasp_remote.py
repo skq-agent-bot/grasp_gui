@@ -214,10 +214,11 @@ class Operations(service.Service):
         jobs = data.get("pipeline", [])
         first, last = summary.run_bounds(len(jobs), start, end)
         cfg = config.export(jobs[first:last], {})
+        commands = [(i + first, text) for i, text in config.custom_commands(cfg)]
         if server_type == "slurm":
             settings = dict(core.SLURM_DEFAULTS, **core.load_config().get("slurm", {}))
             settings["bindir"] = core.default_bindir()
-            return dict(revision=revision, custom_commands=config.custom_commands(cfg), server_type="slurm",
+            return dict(revision=revision, custom_commands=commands, server_type="slurm",
                         slurm=settings, logout_kills=False, lingering=False)
         if server_type != "workstation":
             raise ValueError("invalid server type")
@@ -229,7 +230,7 @@ class Operations(service.Service):
             linger = result.returncode == 0 and result.stdout.strip() == "yes"
         except (OSError, subprocess.SubprocessError):
             pass  # 无 systemd 的服务器不提供 scope 选项，仍可按普通方式运行。
-        return dict(revision=revision, custom_commands=config.custom_commands(cfg),
+        return dict(revision=revision, custom_commands=commands,
                     logout_kills=bg.logout_kills(), lingering=linger, run_settings=core.saved_run_settings())
 
     def run(self, directory, revision, start=1, allow_custom=False, user_scope=False, accept_logout=False,

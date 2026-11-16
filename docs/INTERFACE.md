@@ -286,6 +286,13 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   编辑、更新、查看、移动、删除及手动检查仍作用于当前行；导出脚本仍包含整个流程。
   分段运行只预检该段，前置输出必须已经存在；结束后输出区和常驻提示写明“已运行第 a–b 步 (流程共 n 步)”。
   重新打开目录时按唯一连续标题序列恢复范围；标题无法唯一对应时保留原提示，不猜测范围。
+  本机原有“运行全部 / 从选中开始”保留原行为：空流程且空闲时点击不操作，已有任务时点击显示运行中提示；
+  “从选中开始”仅因不连续选区而禁用。两个新按钮在空流程或本机运行中禁用，并提供明确提示。
+  分段失败、停止或意外结束时，本机和远程提示均使用流程中的步号，例如第 4–8 步中第二步出错显示第 5/27 步。
+  The original local Run all/from selected buttons retain their click behavior: an empty idle pipeline is a no-op,
+  and an active local run shows the existing warning. Noncontiguous selection disables Run from selected.
+  The two new buttons explain why they are disabled for empty/busy pipelines. Partial failure, stop and unexpected
+  termination captions use pipeline step numbers locally and remotely (e.g. step 5/27 within steps 4–8).
   Screenshots / 截图：[中文](images/zh_run_range.png) / [English](images/en_run_range.png).
 * **Check input files (检查输入文件)**, next to *Preview input*: checks the pipeline from the selected step
   (or the current form if there is no pipeline). Starting a run also checks its selected steps, including

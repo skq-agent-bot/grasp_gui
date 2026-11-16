@@ -74,6 +74,33 @@ def test_local_preflight_only_checks_the_requested_slice(qapp, tmp_path, monkeyp
         assert w.close()
 
 
+def test_local_original_run_buttons_keep_empty_and_busy_behavior(qapp, tmp_path, no_dialogs):
+    w = window(tmp_path)
+    calc = w.calc
+    try:
+        for button in (calc.run_all, calc.run_from):
+            assert button.isEnabled() and not button.toolTip()
+            button.click()
+        assert not no_dialogs
+        for button in (calc.run_to, calc.run_selected):
+            assert not button.isEnabled() and "流程为空" in button.toolTip()
+        calc.pipeline = [job("rnucleus")]
+        calc.refresh_list()
+        select(calc.plist, [0])
+        calc.busy = True
+        calc.update_run_buttons()
+        for button in (calc.run_all, calc.run_from):
+            assert button.isEnabled()
+            button.click()
+            assert no_dialogs[-1][1][1] == core.T("已有任务在运行，请等待或先停止。")
+        assert len(no_dialogs) == 2
+        for button in (calc.run_to, calc.run_selected):
+            assert not button.isEnabled() and "已有任务在运行" in button.toolTip()
+    finally:
+        calc.busy = False
+        assert w.close()
+
+
 @pytest.mark.parametrize("language", ["zh", "en"])
 def test_partial_completion_and_reopened_caption(qapp, tmp_path, monkeypatch, no_dialogs, language):
     core.set_lang(language)
@@ -120,6 +147,41 @@ class Source(QObject):
         elif method == "run_plan":
             callback(dict(revision="rev", custom_commands=[], logout_kills=False, lingering=False,
                           slurm=dict(core.SLURM_DEFAULTS)), None)
+
+
+@pytest.mark.parametrize("language", ["zh", "en"])
+@pytest.mark.parametrize("status", ["failed", "stopped", "lost"])
+def test_partial_failure_and_stop_use_pipeline_numbers(qapp, tmp_path, monkeypatch, no_dialogs, language, status):
+    core.set_lang(language)
+    w = window(tmp_path)
+    source = Source()
+    remote = RemoteCalculation(source, "/server/calc")
+    source.setParent(remote)
+    try:
+        # 对应流程第 4–8 步，段内第二步就是流程第 5/27 步。
+        jobs = [dict(job("rnucleus"), title=f"step-{i}") for i in range(27)]
+        titles = [j["title"] for j in jobs[3:8]]
+        state = dict(status=status, step=1, titles=titles, end="2026-01-01", seen=True)
+        monkeypatch.setattr(bg, "status", lambda *a: dict(state))
+        monkeypatch.setattr(bg, "mark_seen", lambda *a: None)
+        calc = w.calc
+        calc.pipeline, calc.titles, calc.run_span, calc.busy = jobs, titles, (4, 8, 27), True
+        calc.finished(status)
+        calc.poll()
+        caption = calc.last_run
+        assert "5/27" in caption and "2/5" not in caption and "4–8" in caption
+        assert caption in calc.out.toPlainText()
+        calc.last_run = ""
+        calc.show_background(calc.cur_workdir)
+        assert calc.last_run == caption
+        remote.jobs = jobs
+        remote.show_state(state)
+        assert remote.state.text() == caption
+    finally:
+        assert w.close()
+        remote.close()
+        remote.deleteLater()
+        qapp.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 @pytest.mark.parametrize("modern", [True, False])

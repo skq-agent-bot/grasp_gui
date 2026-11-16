@@ -111,18 +111,45 @@ def test_authorization_and_preflight_only_cover_range(tmp_path, monkeypatch, lau
     assert "end" in mcp.TOOLS["run"][1] and "default" not in mcp.TOOLS["run"][1]["end"]
 
 
-def test_segment_needs_earlier_outputs_and_keeps_global_step_numbers(tmp_path, launches):
+@pytest.mark.parametrize("backend", ["local", "workstation", "slurm"])
+def test_segment_needs_earlier_outputs_and_keeps_global_step_numbers(tmp_path, launches, monkeypatch, backend):
     root = tmp_path / "calc"
-    install(root, [job("rcsfgenerate", saveas="earlier.c"), job("rangular", csf="earlier.c"), job("rci")])
+    revision = install(root, [job("rcsfgenerate", saveas="earlier.c"), job("rangular", csf="earlier.c"), job("rci")])
+    scripts = []
+    monkeypatch.setattr(slurm, "submit", lambda root, script, state: scripts.append(script))
+    def run():
+        if backend == "local":
+            return service.Service("/").run(str(root), start=2, end=2)
+        options = dict(server_type=backend)
+        if backend == "slurm":
+            options["slurm"] = dict(core.SLURM_DEFAULTS, mpirun="")
+        return remote.Operations().run(str(root), revision, start=2, end=2, **options)
     with pytest.raises(service.PreflightError) as error:
-        service.Service("/").run(str(root), start=2, end=2)
+        run()
     assert any(row["file"] == "earlier.c" for row in error.value.data["missing"])
     assert all(row["step"] == 2 for row in error.value.data["missing"])
-    assert not launches
+    assert all(row["step"] == 2 for row in error.value.data["issues"])
+    assert not launches and not scripts
     for name in ("earlier.c", "isodata"):
         (root / name).write_text("already produced")
-    service.Service("/").run(str(root), start=2, end=2)
-    assert [j["step"] for j in launches[0][0]] == ["rangular"]
+    run()
+    if backend == "slurm":
+        assert len(scripts) == 1 and "rangular" in scripts[0] and "rci" not in scripts[0]
+    else:
+        assert [j["step"] for j in launches[0][0]] == ["rangular"]
+
+
+@pytest.mark.parametrize("backend", ["workstation", "slurm"])
+def test_custom_command_confirmation_uses_pipeline_step_numbers(tmp_path, backend):
+    root = tmp_path / "calc"
+    install(root, [job("custom", prog="printf", args="before"), job("rnucleus"),
+                   job("custom", prog="printf", args="selected")])
+    op = remote.Operations()
+    whole = op.run_plan(str(root), server_type=backend)["custom_commands"]
+    selected = op.run_plan(str(root), server_type=backend, start=3, end=3)["custom_commands"]
+    assert [i for i, _ in whole] == [1, 3]
+    assert selected == [whole[1]] and selected[0][0] == 3
+    assert not op.run_plan(str(root), server_type=backend, start=2, end=2)["custom_commands"]
 
 
 def test_segment_success_does_not_mark_following_steps_successful(tmp_path):
@@ -176,8 +203,10 @@ def test_out_of_range_invalid_names_do_not_block_run(tmp_path, launches):
     assert not op.run_plan(str(root), end=1)["custom_commands"]
     op.run(str(root), op.record(str(root))[2], end=1)
     assert [j["step"] for j in launches[0][0]] == ["rnucleus"]
-    with pytest.raises(service.PreflightError):
+    with pytest.raises(service.PreflightError) as error:
         service.Service("/").run(str(root), start=2)
+    assert error.value.data["invalid"] and all(row["step"] == 2 for row in error.value.data["invalid"])
+    assert all(row["step"] == 2 for row in error.value.data["issues"])
 
 
 @pytest.mark.grasp
@@ -189,7 +218,7 @@ def test_real_example1_split_at_first_rmcdhf(tmp_path, grasp_bindir):
     end = next(i + 1 for i, j in enumerate(jobs) if j["step"] == "rmcdhf")
     for start, last in ((1, end), (end + 1, len(jobs))):
         first, stop = summary.run_bounds(len(jobs), start, last)
-        checked = summary.check_files(root, jobs, start=first, end=stop)
+        checked = summary.check_files(root, jobs[first:stop], offset=first)
         assert not checked["missing"] and not checked["invalid"], checked
         script = core.shell_script(jobs[first:stop], grasp_bindir, ".")
         result = subprocess.run(["sh", "-c", script], cwd=root, env=core.child_env(),

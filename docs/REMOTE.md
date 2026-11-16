@@ -40,6 +40,8 @@ requiring `1 ≤ start ≤ end ≤ pipeline length`. Preflight, name validation 
 cover only that span; inputs produced before it must already exist. Slurm resource settings and final
 confirmation display the span, and the submitted batch script includes only those steps. Exported scripts
 still include the whole pipeline. Slurm records and background request/state formats are unchanged.
+Custom-command confirmations and preflight reports retain the pipeline's step numbers, even for a range
+starting after step 1. Workstation failure/stop captions also use pipeline numbers and identify the range.
 
 The server advertises `run_range_v1` in hello capabilities. Without it, the two new buttons show an update
 tooltip and remain disabled; Run all/from selected keep their old requests (no `end`, no `run_plan.start`).
@@ -48,6 +50,7 @@ tooltip and remain disabled; Run all/from selected keep their old requests (no `
 “运行选中的步骤”只执行选区。不连续时禁用按选区运行的按钮。`start`、`end` 都从 1 开始，包含终点，
 不传时分别取 1 和流程末步；越界报错。预检、名称及自定义命令确认仅覆盖该段，前置输出须已存在。
 Slurm 资源对话框及最终确认显示范围，实际提交脚本仅含该段；导出仍是完整流程，记录格式不变。
+自定义命令确认和预检报告使用流程中的步号；工作站分段失败或停止时，提示也使用流程序号并标明范围。
 旧服务器缺少 `run_range_v1` 时提示更新并禁用两个新按钮，保留原有运行全部/从选中开始的请求格式。
 Screenshots / 截图：[中文](images/zh_remote_run_range.png) / [English](images/en_remote_run_range.png).
 Slurm resource dialog / 资源对话框：[中文](images/zh_slurm_run_range.png) / [English](images/en_slurm_run_range.png).

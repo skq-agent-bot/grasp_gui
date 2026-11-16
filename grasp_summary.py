@@ -70,7 +70,7 @@ def range_text(start, end, total):
     return T("第 {a}–{b} 步 (流程共 {n} 步)", a=start, b=end, n=total)
 
 
-def check_files(workdir, jobs, start=0, run=None, offset=0, path_check=None, end=None):
+def check_files(workdir, jobs, start=0, run=None, offset=0, path_check=None):
     """检查选中步骤；workdir=None 只检查参数和派生名称，不据文件存在与否判断配置。"""
     root = Path(workdir) if workdir is not None else None
     available, removed, origins = set(), set(), {}
@@ -122,9 +122,7 @@ def check_files(workdir, jobs, start=0, run=None, offset=0, path_check=None, end
         removed.discard(name)
         origins[name] = origin
 
-    if end is not None:
-        run_bounds(len(jobs), start + 1, end)
-    for number, job in enumerate(jobs[start:end], start + offset + 1):
+    for number, job in enumerate(jobs[start:], start + offset + 1):
         step, values = page(job)
         title = (step.prog if step else "") or job.get("prog") or job.get("title", "")
         errors = []

@@ -755,7 +755,7 @@ class RemoteCalculation(QWidget):
             return
         titles = state.get("titles", [])
         span = summary.title_range(self.jobs, titles)
-        if span and state.get("status") == "ok":
+        if span and state.get("status") in ("ok", "failed", "stopped", "lost"):
             from calc_panel import run_summary
             self.state.setText(run_summary(state, titles, span))
             return
