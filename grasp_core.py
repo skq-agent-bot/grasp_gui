@@ -1344,6 +1344,18 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。": "The zero-order CSF list {z} and {f} have different symmetry blocks ({a} / {b}): their J and parity blocks must match one to one.",
     "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
     "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
+    # 服务器工作站运行设置 (#55)
+    "服务器运行设置": "Server run settings",
+    "服务器运行设置…": "Server run settings…",
+    "服务器运行设置的格式有误": "Invalid server run settings",
+    "GRASP bin 目录必须是服务器上存在的绝对路径，或留空。":
+        "The GRASP bin directory must be an existing absolute path on the server, or empty.",
+    "服务器运行设置仅用于工作站模式。": "Server run settings apply only to workstation mode.",
+    "服务器端版本较旧，设置只读；请用“安装 / 更新服务器版…”更新后再修改。":
+        "Settings are read-only on this older server; use Install / update server… before editing.",
+    "设置已改变，请检查；确认前会自动检查。": "Settings changed. Check them; confirmation also checks automatically.",
+    "正在检查服务器运行设置…": "Checking server run settings…",
+    "确认运行": "Confirm run",
 }
 
 
@@ -1375,13 +1387,16 @@ def write_csv(path, header, rows):
         w.writerows(rows)
 
 
-def saved_run_settings():
-    """GUI 与无窗口服务采用相同的运行设置和首次 MPI 默认值。"""
+def saved_run_settings(*, persist=True):
+    """GUI 与无窗口服务共用默认值；远程查看用 persist=False，不能创建服务器配置。"""
     cfg = load_config()
     bindir, mpirun = default_bindir(), cfg.get("mpirun", "mpirun")
+    if not persist and not os.path.isdir(bindir):
+        bindir = ""  # 远程表单留空表示 PATH，不把不存在的默认目录作为显式设置传回来。
     if "np" not in cfg:
         cfg["np"] = default_mpi_np(bindir, mpirun)
-        save_config(np=cfg["np"])
+        if persist:
+            save_config(np=cfg["np"])
     return dict(bindir=bindir, np=int(cfg["np"]), mpirun=mpirun,
                 mpitmp=cfg.get("mpitmp", "tmp_mpi"), nice=cfg.get("nice", True))
 
@@ -1397,10 +1412,10 @@ def save_config(**kw):
         pass
 
 
-def default_bindir():
+def default_bindir(*, use_saved=True):
     """GRASP 程序目录：$GRASP_BINDIR → 用户在界面中设置的目录 (存在即采用) → PATH 中 rmcdhf 所在目录
     → 本程序上一级目录的 bin (放在 GRASP 源码树中时)。"""
-    saved = load_config().get("bindir", "")
+    saved = load_config().get("bindir", "") if use_saved else ""
     if not os.environ.get("GRASP_BINDIR") and saved and os.path.isdir(saved):
         return saved
     candidates = [os.environ.get("GRASP_BINDIR", ""), saved]

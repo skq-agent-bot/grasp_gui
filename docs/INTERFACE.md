@@ -104,6 +104,16 @@ state. Changing sections/level count requests a new summary. The dialog title sh
 local file, starting in the desktop home directory. Cancel/older responses do not alter the clipboard or preview.
 Closing the remote window closes its viewers and connection; it does not stop a background calculation.
 
+Workstation runs always open **Server run settings**, including runs after creation/upload and selected ranges.
+The shared RunSettings fields show the server's GRASP bin path, process count, mpirun, MPI_TMP and nice.
+Saved desktop values for this host take precedence over server defaults. Checks run on opening, on **Check**,
+and automatically before confirmation if values changed. Missing programs (including MPI variants/launcher)
+and input preflight are shown; missing programs default to Cancel but allow explicit continuation.
+Confirming saves only this host's desktop preferences. **File → Server run settings…** also checks/saves without
+starting a calculation. Older servers show read-only settings and an update instruction; their run requests remain
+unchanged. Slurm continues to use its resource dialog. [中文截图](images/zh_server_run_settings.png) /
+[English screenshot](images/en_server_run_settings.png).
+
 For Slurm, **Submit Slurm job (提交 Slurm 作业)** reviews resource settings and asks for default-No confirmation.
 The state shows the job ID and scheduler state; pending/running/unknown jobs disable submission. Stop uses
 scancel only after verifying the saved job identity. The log belongs to that submission and reopens on a new
@@ -138,6 +148,12 @@ Old servers without `workdir_write_v1` show an update instruction and receive no
 远程“结果摘要…”由服务器读流程、状态并生成文本；勾选/能级数改变后重新请求，复制与本机保存沿用同一对话框。
 标题显示服务器来源，保存从本机家目录开始选择；不使用桌面会话历史，不在桌面读取服务器目录，取消或旧回答不改变剪贴板。
 关闭远程窗口同时关闭这些查看器和连接，后台计算继续。完整协议、缓存/重连限制见 [REMOTE.md](REMOTE.md)。
+
+工作站每次运行（含新建后运行、上传后运行和选定范围）先显示“服务器运行设置”，复用本机的路径、进程数、
+mpirun、MPI_TMP 和 nice 控件；该主机在桌面保存过的值优先，否则用服务器默认值。打开时、点“检查”时，
+以及修改后确认前均在服务器检查，显示缺少的程序（包括 MPI 程序和启动器）和输入预检。缺少程序时默认取消，
+仍可明确继续。确认只保存桌面端的该主机偏好；“文件 → 服务器运行设置…”可单独检查、保存而不启动。
+旧服务器只读显示并提示更新，运行请求不增加参数；Slurm 仍用资源设置对话框。
 
 The remote window's **File** menu offers **Download to this computer…**, **Upload from this computer…**
 and **Upload local directory…**. The transfer dialog lists all regular files and sizes in decimal MB, excludes symbolic

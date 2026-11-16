@@ -230,8 +230,13 @@ class UploadDialog(TransferDialog):
         def received(value, error):
             if not self.closed and generation == self.preview_generation:
                 callback(value, error)
-        self.source.submit("preview_upload", dict(directory=self.directory, configuration=self.configuration,
-                           revision=self.revision, uploads=names), received)
+        args = dict(directory=self.directory, configuration=self.configuration, revision=self.revision, uploads=names)
+        if (getattr(self.source, "server_type", "workstation") == "workstation" and
+                "run_settings_v1" in getattr(self.source, "server", {}).get("capabilities", [])):
+            saved = core.load_config().get("remote_hosts", {}).get(self.source.client.host, {}).get("run")
+            if saved is not None:
+                args["run_settings"] = saved
+        self.source.submit("preview_upload", args, received)
 
     def show_preview(self, value, error):
         if self.closed:
