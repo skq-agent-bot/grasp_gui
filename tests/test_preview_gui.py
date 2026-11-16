@@ -3,7 +3,7 @@
 import pytest
 
 pytestmark = pytest.mark.gui
-pytest.importorskip("PySide6.QtWidgets")
+QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
@@ -102,11 +102,55 @@ def test_move_remove_and_clear_follow_new_current_row(app_window):
     calc.plist.setCurrentRow(0)
     calc.clear_pipeline()
     assert not calc.prev.toPlainText()
-    # 流程本来就空、预览来自表单时，清空也不能留下无来源的旧文字。
+    # 没有当前流程行不影响独立的表单预览。
     calc.preview()
-    assert calc.prev.toPlainText()
+    text = calc.prev.toPlainText()
+    assert text
     calc.clear_pipeline()
-    assert not calc.prev.toPlainText()
+    assert calc.prev.toPlainText() == text
+
+
+@pytest.mark.parametrize("existing_row", [False, True])
+def test_add_to_pipeline_preserves_form_preview_and_mpi_source(qapp, app_window, existing_row):
+    calc = app_window.calc
+    if existing_row:
+        calc.pipeline = [job("rangular", csf="earlier.c")]
+        calc.refresh_list()
+        calc.plist.setCurrentRow(0)
+    app_window.resize(1100, 950)
+    app_window.show()
+    qapp.processEvents()
+    page = form(calc, "rnucleus")
+    calc.preview()
+    text = calc.prev.toPlainText()
+    assert "rnucleus" in text
+    add = next(b for b in calc.findChildren(QtWidgets.QPushButton) if b.text() == core.T("加入流程 ↓"))
+    QTest.mouseClick(add, Qt.LeftButton)
+    assert calc.pipeline[-1]["step"] == "rnucleus"
+    assert calc.prev.toPlainText() == text
+    # 加入列表后仍保留表单来源，切换运行设置不能把预览清掉。
+    calc.run.np_spin.setValue(2)
+    assert_preview(calc, page.job())
+    calc.plist.setCurrentRow(0)
+    assert_preview(calc, calc.pipeline[0])
+
+
+@pytest.mark.parametrize("action", ["remove", "clear"])
+def test_list_changes_preserve_form_preview_with_an_existing_current_row(app_window, action):
+    calc = app_window.calc
+    calc.pipeline = [job("rangular"), job("rmcdhf")]
+    calc.refresh_list()
+    calc.plist.setCurrentRow(1)
+    page = form(calc, "rmcdhf")
+    calc.preview()
+    text = calc.prev.toPlainText()
+    if action == "remove":
+        calc.remove_job()
+    else:
+        calc.clear_pipeline()
+    assert calc.prev.toPlainText() == text
+    calc.run.np_spin.setValue(2)
+    assert_preview(calc, page.job())
 
 
 @pytest.mark.parametrize("source", ["pipeline", "form"])

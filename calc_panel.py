@@ -1676,10 +1676,14 @@ class CalcPanel(QWidget):
             self.save_session()
 
     def refresh_list(self):
+        # 重建列表产生的临时空行不能改变独立的表单预览来源。
+        blocked = self.plist.blockSignals(True)
         self.plist.clear()
         self.plist.addItems([f"{i:2d}. {j['title']}" for i, j in enumerate(self.pipeline, 1)])
+        self.plist.blockSignals(blocked)
         self.update_run_buttons()
-        self.preview_row_changed()
+        if isinstance(self.preview_source, int):
+            self.preview_row_changed()
 
     def update_run_buttons(self):
         for mode, button in (("all", self.run_all), ("from", self.run_from),
