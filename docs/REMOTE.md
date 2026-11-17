@@ -48,6 +48,9 @@ pipeline's settings without running it.
 inspection does not persist a default process count. Explicit settings use defaults for omitted fields without
 reading saved server preferences, and travel through the existing background request. `run_plan` adds optional
 `missing_programs` and `checked` metadata. Preview uploads use saved desktop host settings when supported.
+Invalid saved settings fall back to server defaults for upload checks, with optional `run_settings_warning`
+shown in the preview and confirmation. Actual run checks remain strict. Empty bin fields stay empty in forms;
+immediately before starting, the server substitutes its nonempty default bin without reading saved preferences.
 No server preferences, shared configuration, workdir record or background request formats change.
 
 | Field | Server validation |
@@ -70,6 +73,8 @@ path, or arrange the required library paths in the server's noninteractive login
 自动检查新发现警告时须再确认。取消不保存，确认只写桌面 `remote_hosts[host]["run"]`，与 `slurm` 并列。
 远程窗口“文件 → 服务器运行设置…”可针对已载入的流程检查、保存而不运行。旧服务器只读显示、提示更新，
 不发送新参数；Slurm 和服务器 MCP 不变。远程预检不保存首次默认进程数，显式设置也不读写服务器偏好。
+上传预览遇到失效的主机设置时改用服务器默认值检查，返回可选 `run_settings_warning`，在预览和确认中显示；
+实际运行保持严格校验。表单留空表示 PATH，启动交接前补非空默认目录，避免 PATH 中出现代表当前目录的空项。
 不提供 `module load` / `source` 等环境准备命令；可填绝对 mpirun 路径，或在非交互登录环境中配置库路径。
 
 Screenshots / 截图：[中文](images/zh_server_run_settings.png) / [English](images/en_server_run_settings.png).

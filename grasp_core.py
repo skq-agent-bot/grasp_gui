@@ -1345,6 +1345,8 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
     "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
     # 服务器工作站运行设置 (#55)
+    "按主机保存的运行设置无效：{e}，运行时可在服务器运行设置中修改。":
+        "Saved run settings for this host are invalid: {e}. Edit them in Server run settings before running.",
     "服务器运行设置": "Server run settings",
     "服务器运行设置…": "Server run settings…",
     "服务器运行设置的格式有误": "Invalid server run settings",

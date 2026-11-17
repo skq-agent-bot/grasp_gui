@@ -162,6 +162,8 @@ class UploadDialog(TransferDialog):
 
     def preview_text(self, value):
         text = value["changes"] + "\n" + T("输入文件由服务器检查；实际运行前将再次检查。")
+        if value.get("run_settings_warning"):
+            text += "\n" + value["run_settings_warning"]
         if self.remote_only:
             text += "\n" + "\n".join(f"{i}. {config.make_job(job)['title']}"
                                       for i, job in enumerate(self.configuration["jobs"], 1))

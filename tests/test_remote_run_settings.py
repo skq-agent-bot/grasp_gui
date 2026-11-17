@@ -18,7 +18,7 @@ from test_summary import job
     {"mpitmp": "x" * 4097}, {"nice": 1},
 ])
 @pytest.mark.parametrize("method", ["run_plan", "run", "preview_upload"])
-def test_invalid_remote_run_settings_are_rejected(tmp_path, launches, settings, method):
+def test_invalid_run_settings_block_runs_but_only_warn_in_upload_preview(tmp_path, launches, settings, method):
     cfg = config.export([job("rnucleus")], {})
     directory = tmp_path / "calc"
     revision = install(directory, [job("rnucleus")])
@@ -27,9 +27,48 @@ def test_invalid_remote_run_settings_are_rejected(tmp_path, launches, settings, 
         args["revision"] = revision
     elif method == "preview_upload":
         args.update(directory=str(tmp_path / "new"), configuration=cfg)
-    with pytest.raises(ValueError):
-        getattr(remote.Operations(), method)(**args)
+    if method == "preview_upload":
+        result = remote.Operations().preview_upload(**args)
+        assert result["run_settings_warning"]
+        assert not Path(args["directory"]).exists()
+    else:
+        with pytest.raises(ValueError):
+            getattr(remote.Operations(), method)(**args)
     assert not launches
+
+
+@pytest.mark.parametrize("settings", [{"bindir": "", "np": 1}, {"np": 1}, None])
+def test_remote_start_never_passes_an_empty_bin_directory(tmp_path, monkeypatch, launches, settings):
+    monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "preferences.json"))
+    absent = str(tmp_path / "not-installed")
+    monkeypatch.setattr(core, "default_bindir", lambda **kwargs: absent)
+    core.save_config(np=1)
+    original = Path(core.CONFIG_FILE).read_bytes()
+    root = tmp_path / "calc"
+    revision = install(root, [job("rnucleus")])
+    op = remote.Operations()
+    plan = op.run_plan(str(root), run_settings=settings)
+    if settings is None or settings.get("bindir") == "":
+        assert plan["run_settings"]["bindir"] == ""
+    op.run(str(root), revision, run_settings=settings, accept_logout=True)
+    assert launches[0][1]["bindir"] == absent
+    assert Path(core.CONFIG_FILE).read_bytes() == original
+
+
+def test_invalid_upload_settings_use_server_defaults_without_saving_them(tmp_path, monkeypatch):
+    monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "preferences.json"))
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    program = bindir / "rnucleus"
+    program.write_text("#!/bin/sh\n")
+    program.chmod(0o755)
+    core.save_config(bindir=str(bindir), np=1)
+    original = Path(core.CONFIG_FILE).read_bytes()
+    cfg = config.export([job("rnucleus")], {})
+    root = tmp_path / "new"
+    value = remote.Operations().preview_upload(str(root), cfg, run_settings=dict(bindir="/removed/bin"))
+    assert value["run_settings_warning"] and value["missing_programs"] == []
+    assert not root.exists() and Path(core.CONFIG_FILE).read_bytes() == original
 
 
 def test_explicit_settings_never_read_or_write_server_preferences(tmp_path, monkeypatch, launches):

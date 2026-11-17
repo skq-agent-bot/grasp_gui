@@ -142,17 +142,28 @@ class Operations(service.Service):
                 changes = plan["text"]
                 kept = [f["name"] for f in plan["files"] if f["kind"] == "conflict"]
             transfer.safe_targets(root, names)
-            run = (core.saved_run_settings(persist=False) if run_settings is None else
-                   service.checked_run_settings(run_settings))
+            settings_warning = ""
+            if run_settings is None:
+                run = core.saved_run_settings(persist=False)
+            else:
+                try:
+                    run = service.checked_run_settings(run_settings)
+                except ValueError as error:
+                    # 上传只提示运行条件；过期的桌面偏好不能阻断流程写入。
+                    run = core.saved_run_settings(persist=False)
+                    settings_warning = T("按主机保存的运行设置无效：{e}，运行时可在服务器运行设置中修改。", e=str(error))
             checked = summary.check_files(str(root), cfg["jobs"], run=run, path_check=self.path)
             planned = names + [f["name"] for f in cfg.get("files", [])]
             pending = [row for row in checked["missing"] if any(fnmatch.fnmatchcase(n, row["file"]) for n in planned)]
             checked["missing"] = [row for row in checked["missing"] if row not in pending]
             checked.update(pending=pending, issues=checked["invalid"] + checked["missing"])
-            return dict(directory=str(root), revision=revision, changes=changes, kept_files=kept, checked=checked,
+            result = dict(directory=str(root), revision=revision, changes=changes, kept_files=kept, checked=checked,
                           missing_programs=service.missing_run_programs(cfg, run),
-                        custom_commands=config.custom_commands(cfg), warnings=warnings,
-                        existing=[n for n in names if (root / n).exists()])
+                          custom_commands=config.custom_commands(cfg), warnings=warnings,
+                          existing=[n for n in names if (root / n).exists()])
+            if settings_warning:
+                result["run_settings_warning"] = settings_warning
+            return result
 
     def list_dir(self, directory):
         root = self.path(directory, directory=True)
@@ -294,8 +305,12 @@ class Operations(service.Service):
             if plan["logout_kills"] and not user_scope and not accept_logout:
                 raise ValueError(T("断线会结束计算，请由用户选择用户 scope、Slurm 或明确照常启动"))
             operation = service.Service("/", allow_custom=allow_custom)
+            settings = dict(plan["run_settings"])
+            if not settings["bindir"]:
+                # 表单留空表示 PATH；不能让运行进程的 PATH 以空项（当前目录）开头。
+                settings["bindir"] = core.default_bindir(use_saved=False)
             return operation.run(str(root), start, end=end, started_by="remote", user_scope=user_scope,
-                                 run_settings=plan.get("run_settings"))
+                                 run_settings=settings)
 
     def signature(self, directory):
         root = self.directory_files(directory)

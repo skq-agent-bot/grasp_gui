@@ -114,6 +114,10 @@ starting a calculation. Older servers show read-only settings and an update inst
 unchanged. Slurm continues to use its resource dialog. [中文截图](images/zh_server_run_settings.png) /
 [English screenshot](images/en_server_run_settings.png).
 
+If saved host settings become invalid, upload previews warn and check against server defaults instead, so a moved
+bin directory does not block uploading. Run confirmation still validates settings strictly. An empty bin field
+continues to mean PATH; the server supplies a nonempty default before handing settings to the run process.
+
 For Slurm, **Submit Slurm job (提交 Slurm 作业)** reviews resource settings and asks for default-No confirmation.
 The state shows the job ID and scheduler state; pending/running/unknown jobs disable submission. Stop uses
 scancel only after verifying the saved job identity. The log belongs to that submission and reopens on a new
@@ -154,6 +158,9 @@ mpirun、MPI_TMP 和 nice 控件；该主机在桌面保存过的值优先，否
 以及修改后确认前均在服务器检查，显示缺少的程序（包括 MPI 程序和启动器）和输入预检。缺少程序时默认取消，
 仍可明确继续。确认只保存桌面端的该主机偏好；“文件 → 服务器运行设置…”可单独检查、保存而不启动。
 旧服务器只读显示并提示更新，运行请求不增加参数；Slurm 仍用资源设置对话框。
+按主机保存的运行设置失效时，上传预览提示原因并改用服务器默认值检查，不阻断上传；运行时仍严格校验。
+bin 留空仍表示 PATH，服务器只在交给运行进程前补上非空默认目录。
+上传警告截图：[中文](images/zh_upload_run_settings_warning.png) / [English](images/en_upload_run_settings_warning.png)。
 
 The remote window's **File** menu offers **Download to this computer…**, **Upload from this computer…**
 and **Upload local directory…**. The transfer dialog lists all regular files and sizes in decimal MB, excludes symbolic

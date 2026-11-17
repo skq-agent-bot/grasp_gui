@@ -92,6 +92,26 @@ def test_upload_defaults_and_no_confirmation_leave_server_intact(setup, monkeypa
     assert not any(method == "create_workdir" for method, _ in source.calls)
 
 
+@pytest.mark.parametrize("language", ["zh", "en"])
+def test_invalid_host_run_settings_warn_without_blocking_upload(setup, monkeypatch, qapp, language):
+    from PySide6.QtWidgets import QMessageBox
+    dialog, source, panel, cfg = setup
+    core.set_lang(language)
+    source.server = dict(capabilities=[edit.CAPABILITY, "run_settings_v1"])
+    core.save_config(remote_hosts=dict(fixture=dict(run=dict(bindir="/missing/grasp/bin", np=1))))
+    original = Path(core.CONFIG_FILE).read_bytes()
+    dialog.load()
+    spin(qapp, lambda: dialog.ready)
+    warning = "按主机保存的运行设置无效：" if language == "zh" else "Saved run settings for this host are invalid:"
+    assert warning in dialog.report.toPlainText()
+    confirmations = []
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: confirmations.append(args) or QMessageBox.No)
+    dialog.start_transfer()
+    assert warning in confirmations[0][2]
+    assert Path(core.CONFIG_FILE).read_bytes() == original
+    assert not Path(dialog.directory).exists()
+
+
 def test_record_written_before_rsync_and_link_survives_failure(setup, monkeypatch):
     from PySide6.QtWidgets import QMessageBox
     dialog, source, panel, cfg = setup
