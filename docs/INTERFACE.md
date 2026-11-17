@@ -70,6 +70,12 @@ reported; a read-only viewer can still close, while starting a run requires a sa
 默认载入新记录，新增步骤不自动运行；保留自己的修改须再次确认覆盖。取消不写入。保存失败会提示，
 只读查看仍可关闭；开始计算前必须保存成功。
 
+When a workdir record contains an unrecognized choice, the Calculation tab opens using the current default
+and lists the affected steps or form fields and the original values. Shared configuration imports reject
+unknown choices before installation.
+工作目录记录含未知选项时仍可打开，计算页使用当前默认值并列出受影响的步骤或表单字段及原值。
+导入共享配置时则在写入前拒绝未知选项。
+
 While MCP is enabled, opening a calculation with `started_by: "mcp"` shows **[This calculation was
 started by an MCP agent] ([此计算由 MCP agent 启动])** in the output, including after completion.
 With MCP disabled, the toggle is the only agent-related interface item.

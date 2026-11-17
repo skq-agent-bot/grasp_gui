@@ -7,12 +7,28 @@ from pathlib import Path
 
 import pytest
 
+
 import grasp_config as config
 import grasp_core as core
 import grasp_remote as remote
 import grasp_remote_edit as edit
 import grasp_session as sessions
 from test_remote import Peer
+
+
+def test_remote_create_and_update_reject_unknown_choice(tmp_path):
+    step = config.STEPS["rcsfgenerate"]
+    valid = dict(format=config.FORMAT, version=config.VERSION, jobs=[dict(step=step.key, vals=step.defaults())])
+    invalid = dict(valid, jobs=[dict(step=step.key, vals=dict(step.defaults(), order="u"))])
+    server = remote.Operations()
+    new = tmp_path / "new"
+    existing = tmp_path / "existing"
+    revision = server.create_workdir(str(existing), valid)["revision"]
+    with pytest.raises(config.ConfigError, match="rcsfgenerate.*'u'"):
+        server.create_workdir(str(new), invalid)
+    with pytest.raises(config.ConfigError, match="rcsfgenerate.*'u'"):
+        server.update_workdir(str(existing), revision, invalid)
+    assert not new.exists() and server.get_pipeline(str(existing))["revision"] == revision
 
 
 @pytest.fixture
