@@ -313,6 +313,22 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   pipeline and the program output (the three widths are remembered); when narrower it is a tab next to *Pipeline*.
   It shows the command, the here-document with the program's stdin and the file actions, e.g.
   `rmcdhf <<'EOF' … EOF` followed by `rsave odd4`.
+  The text follows the pipeline's current row (mouse, arrow keys or programmatic selection); with multiple
+  selected steps it shows the current row. Automatic refresh leaves the Pipeline tab visible in narrow windows.
+  For a pipeline-sourced preview, move/remove/clear refresh from the resulting current row, or clear it if
+  there is none. List rebuilding preserves a form preview, including after Add to pipeline; it does not
+  automatically select a newly added or neighboring step.
+  Update selected immediately shows the updated step and opens the preview, as Show and double-click do.
+  Preview input still opens a preview of the program form. Changing form fields alone does not refresh it.
+  Changing the MPI process count or mpirun command regenerates the displayed source: either that pipeline row
+  or the program form that supplied the preview. An invalid form keeps the previous text without a dialog.
+  The source is temporary UI state and is not saved in the working-directory record.
+  预览随流程当前行刷新（单击、方向键或程序设置当前行），多选时显示当前行；自动刷新只改文字，不切走“流程”标签。
+  流程来源的预览在上移、下移、删除、清空后按新的当前行刷新；没有当前行时清空。表单来源的预览不受列表重建影响，
+  “加入流程”后仍保留；不会自动选择新加入或相邻的步骤。“更新所选”后立即显示新输入并切到预览，
+  与“查看”和双击一样。“预览输入”仍显示程序页表单并切到预览，单独修改表单参数不自动刷新。
+  修改 MPI 进程数或 mpirun 命令时，按当前预览的来源（流程行或原程序页表单）重新生成；表单不合法时保留旧文字，
+  不弹错误框。预览来源仅为临时界面状态，不写入工作目录记录。
 * **Program output (程序输出)**: dark terminal-style pane, last 5000 lines (set a log file in the form for the full
   output); *Working directory (工作目录)* (update, restore record, clear directory; see below),
   *List files (查看文件)*, *Clear (清屏)*. Errors in red, step headers in blue.
