@@ -23,6 +23,8 @@ Edit a fetched server pipeline with the normal local forms, or upload a new loca
 protect remote updates. / 可取出服务器流程到本机编辑，或上传新计算；按修订号检查冲突，再确认上传与运行。
 Selected files can be uploaded/downloaded with system rsync; large files are excluded by default.
 
+Build rcsfgenerate references offline with the shell model assistant. / 用离线壳层模型助手构造 rcsfgenerate 的参考组态。
+
 ## Screenshots / 截图
 
 The screenshots show example 4 of the GRASP2018 manual (Fe XV), imported with *File → Import example…* and run

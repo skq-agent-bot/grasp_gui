@@ -383,6 +383,44 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
 * **Slurm job script (Slurm 作业脚本)** dialog: job name, partition, nodes, tasks, time, memory, modules, e-mail,
   extra `#SBATCH` lines (remembered). Upload the script with the inputs of the working directory and `sbatch` it.
 
+### Build configurations from a shell model / 从壳层模型构造组态
+
+In **rcsfgenerate → Build from shell model…**, enter an element symbol or atomic number and either an ion
+charge or an electron count, then load the ground state. The initial element comes from the rnucleus form.
+To move one electron, click an occupied shell and then a shell with a vacancy. The relativistic view divides
+the occupation into the smaller- and larger-`j` subshells for illustration. Duplicate a reference to explore a
+different occupation. References with unlike parity generate separate lists.
+
+Set an excitation marker on each occupied shell (`i`, `*`, or a minimum occupation). Choose the core, the
+highest active `n` for each `l`, the 2J limits, and the number of excitations. A suggested core must be fully
+occupied in every reference and leave at least one electron outside it. **Apply to program tab** fills the
+existing fields after showing the exact GRASP input. **Append** keeps the original core so earlier lists
+retain their meaning. Running a calculation still requires the regular run action.
+
+在 **rcsfgenerate → 从壳层模型构造…** 输入元素符号或原子序数，再输入离化度或电子数，点击载入基态。初始元素取自
+rnucleus 程序页。先点有电子的来源壳层，再点有空位的目标壳层，每次移动一个电子。相对论视图先填较小的 `j`，
+只用于展示占据。复制参考后可构造其他占据。混合宇称会拆成独立列表。
+
+为各壳层选择激发标记（`i`、`*` 或最少占据数），并选择闭壳芯、各 `l` 的最大活跃 `n`、2J 和激发数。建议的芯在所有
+参考中均为满占据，且至少留一个芯外电子。“填回程序页”使用现有字段，确认前显示准确的 GRASP 输入。“追加”沿用现有闭壳芯，
+以保留原列表含义。需要通过正常运行入口执行计算。
+
+The offline snapshot contains 6019 element/charge rows from NIST ASD version 5.12, downloaded on 2026-11-17.
+It stores ground-shell occupations, terms, and ionization energies where listed. Missing ground states use the
+Madelung order (ascending `n+l`, then `n`) and are labeled **estimated**. An estimate supplies no energy or
+term. **Settings → About GRASP GUI…** shows the data citation.
+
+离线快照于 2026-11-17 下载自 NIST ASD 5.12，含 6019 个元素和离化度条目，保存该表给出的基态占据、项和电离能。
+缺少基态数据时依次按 `n+l`、`n` 由低到高填充，界面标注“推算”，且不推算基态项和电离能。“设置 → 关于 GRASP GUI…”
+显示引用。生成脚本为 `tools/make_shell_snapshot.py`。程序运行期间只读离线快照。
+
+[Source / 来源: NIST ground states and ionization energies](https://physics.nist.gov/PhysRefData/ASD/ionEnergy.html)
+· [NIST ASD DOI](https://doi.org/10.18434/T4W30F)
+
+| 中文 | English |
+|---|---|
+| ![壳层模型](images/zh_shell_model.png) | ![Shell model](images/en_shell_model.png) |
+
 ### Background runs and logging out / 后台运行与退出登录 (KillUserProcesses)
 
 Background runs survive closing the window and an ssh disconnect on most systems. On a machine where systemd-logind
