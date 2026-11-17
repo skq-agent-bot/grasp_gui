@@ -77,6 +77,7 @@ class TargetDialog(ConnectDialog):
         self.local, self.link = local, link
         self.configuration = configuration
         self.pending_target, self.closed_target, self.accept_after_load = False, False, False
+        self.existing_directory = None
         self.target_generation, self.checkout_path = 0, None
         self.target_info = QLabel()
         self.target_info.setWordWrap(True)
@@ -117,6 +118,7 @@ class TargetDialog(ConnectDialog):
                                         self.source.client.closed.is_set()):
             self.source.close()
             self.source = None
+            self.existing_directory = None
         if self.source is None:
             try:
                 self.source = Source(ssh.Client(host, program), self)
@@ -159,6 +161,8 @@ class TargetDialog(ConnectDialog):
     def show_target(self, value, pending):
         super().loaded(value, None)
         self.pending_target = pending
+        if not pending:
+            self.existing_directory = self.directory
         self.new_button.setEnabled(not self.link)
         text = T("上传到：{p}", p=self.directory)
         if pending:
@@ -231,9 +235,23 @@ class TargetDialog(ConnectDialog):
                 if not current():
                     return
                 if exc:
-                    self.status.setText(str(error) + "\n" + str(exc))
+                    # 协议只返回错误文字；仅识别这两条已知中英文回答，其他原因原样显示。
+                    no_record = "此目录没有工作目录记录"
+                    nonempty = "目标目录不是空的；已有流程请先在本机取出编辑。"
+                    if str(error) in (no_record, core.EN[no_record]) and str(exc) in (nonempty, core.EN[nonempty]):
+                        self.status.setText(T("此目录不是空的，也没有计算记录，不能上传到这里。"
+                                              "请选择空目录，或点“新建子目录…”。"))
+                    else:
+                        self.status.setText(str(error) + "\n" + str(exc))
                 else:
-                    super(TargetDialog, self).accept()
+                    target = self.directory
+                    try:
+                        if self.pending_target:
+                            # 新建子目录保存已有上级；手输多级新路径时退回已浏览目录或服务器 HOME。
+                            self.directory = self.existing_directory or self.source.server.get("home", "~")
+                        super(TargetDialog, self).accept()
+                    finally:
+                        self.directory = target
             self.source.submit("preview_upload", dict(directory=directory, configuration=self.configuration,
                                uploads=[]), empty_checked)
         self.source.submit("get_pipeline", dict(directory=directory), checked)

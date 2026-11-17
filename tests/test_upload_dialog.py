@@ -338,15 +338,98 @@ def test_existing_unlinked_calculation_offers_safe_checkout_before_upload(enviro
     assert core.T("修改完成后，在计算页点“更新服务器流程…”。") in e.window.statusBar().currentMessage()
 
 
-def test_nonempty_directory_without_valid_calculation_remains_unchanged(environment):
+@pytest.mark.parametrize("language", ["zh", "en"])
+def test_nonempty_directory_without_valid_calculation_remains_unchanged(environment, language):
     e = environment
+    core.set_lang(language)
     e.server.mkdir()
     (e.server / "notes.txt").write_text("keep")
     dialog = e.target()
     dialog.accept()
-    assert dialog.result() != QDialog.Accepted and dialog.status.text()
+    assert dialog.result() != QDialog.Accepted
+    assert dialog.status.text() == core.T(
+        "此目录不是空的，也没有计算记录，不能上传到这里。请选择空目录，或点“新建子目录…”。")
     assert (e.server / "notes.txt").read_text() == "keep"
     assert not any(method in remote.MUTATIONS for method, _ in e.source.calls)
+
+
+@pytest.mark.parametrize("client_language,server_language", [("zh", "en"), ("en", "zh")])
+def test_nonempty_target_message_handles_different_server_language(environment, monkeypatch,
+                                                                 client_language, server_language):
+    e = environment
+    core.set_lang(client_language)
+    e.server.mkdir()
+    (e.server / "notes.txt").write_text("keep")
+    dialog = e.target()
+    def reply(method, args, callback, **kwargs):
+        key = "此目录没有工作目录记录" if method == "get_pipeline" else "目标目录不是空的；已有流程请先在本机取出编辑。"
+        callback(None, ValueError(core.EN[key] if server_language == "en" else key))
+    monkeypatch.setattr(e.source, "submit", reply)
+    dialog.accept()
+    assert dialog.status.text() == core.T(
+        "此目录不是空的，也没有计算记录，不能上传到这里。请选择空目录，或点“新建子目录…”。")
+    assert dialog.result() != QDialog.Accepted
+
+
+@pytest.mark.parametrize("method", ["get_pipeline", "preview_upload"])
+@pytest.mark.parametrize("error", [PermissionError("permission denied"), ConnectionError("connection lost"),
+                                 ValueError("damaged record or invalid configuration")])
+def test_other_target_failures_preserve_the_original_reason(environment, monkeypatch, method, error):
+    e = environment
+    e.server.mkdir()
+    (e.server / "notes.txt").write_text("keep")
+    dialog = e.target()
+    original = e.source.submit
+    def reply(operation, args, callback, **kwargs):
+        if operation == method:
+            callback(None, error)
+        else:
+            original(operation, args, callback, **kwargs)
+    monkeypatch.setattr(e.source, "submit", reply)
+    dialog.accept()
+    assert str(error) in dialog.status.text() and dialog.result() != QDialog.Accepted
+
+
+@pytest.mark.parametrize("browsed", [False, True])
+def test_pending_target_keeps_an_existing_default_directory(environment, monkeypatch, browsed):
+    e = environment
+    e.source.server["home"] = str(e.root)
+    if browsed:
+        e.server.mkdir()
+        dialog = e.target()
+        monkeypatch.setattr(QInputDialog, "getText", lambda *args, **kwargs: ("local", True))
+        dialog.new_button.click()
+        expected = str(e.server)
+    else:
+        dialog = e.target(e.server / "nested")
+        expected = str(e.root)
+    pending = dialog.directory
+    assert dialog.pending_target
+    dialog.accept()
+    assert dialog.result() == QDialog.Accepted and dialog.directory == pending
+    assert core.load_config()["remote_hosts"]["fixture"]["directory"] == expected
+    assert not Path(pending).exists()
+    assert not any(method in remote.MUTATIONS for method, _ in e.source.calls)
+
+
+@pytest.mark.parametrize("language", ["zh", "en"])
+@pytest.mark.parametrize("linked", [False, True])
+def test_upload_preview_keeps_run_settings_warning_and_upload_notices(environment, monkeypatch, language, linked):
+    e = environment
+    core.set_lang(language)
+    e.source.server["capabilities"].append("run_settings_v1")
+    core.save_config(remote_hosts=dict(fixture=dict(run=dict(bindir="/missing/grasp/bin", np=1))))
+    dialog = e.upload(linked)
+    dialog.none_button.click()
+    warning = dialog.last_preview["run_settings_warning"]
+    notices = [warning, core.T("只写入流程，不传输输入文件"), "rcsf.inp"]
+    notices.append(core.T("更新 {h}:{p} 的流程", h="fixture", p=str(e.server)) if linked else
+                   core.T("确认上传时创建"))
+    assert all(text in dialog.report.toPlainText() for text in notices)
+    confirmations = []
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: confirmations.append(args) or QMessageBox.No)
+    dialog.start_transfer()
+    assert all(text in confirmations[0][2] for text in notices)
 
 
 def test_linked_upload_displays_update_and_server_changes(environment, monkeypatch):

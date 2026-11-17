@@ -685,12 +685,16 @@ dialog the browsed **Server directory** is the upload target; **Upload to this d
 **New subdirectory…** defaults to the local workdir name. Empty names, `/`, `.` and `..` are rejected. An existing
 subdirectory is entered normally. A new subdirectory or a directly typed nonexistent path is shown as
 **Created when the upload is confirmed**, beside the path and in the final confirmation; choosing it does not
-create a server directory. Parent directory cancels that candidate. The ordinary connection dialog is unchanged.
+create a server directory. Parent directory cancels that candidate. A pending target saves the last browsed existing
+directory (the parent for New subdirectory…) as the host default, or server HOME if none was browsed, leaving a usable
+default. The ordinary connection dialog is unchanged.
 
 Before accepting an unlinked target, the dialog checks for an existing calculation. It offers **Fetch for local
 editing…** with a default new local path and explains that current local pipeline edits are not carried over;
 export them first if needed. It never directly overwrites that calculation. Nonempty directories without a valid
-calculation remain refused. After fetching, the hint points to **Update server pipeline…** on the Calculation tab.
+calculation remain refused, with an explicit instruction to choose an empty directory or **New subdirectory…**.
+Connection, permission and other errors retain their diagnostics. After fetching, the hint points to
+**Update server pipeline…** on the Calculation tab.
 Update dialogs and confirmations name `host:path` and display the server's proposed changes.
 
 The upload and download file tables provide **Select all**, **Deselect all** and **Restore defaults**, synchronized
@@ -714,9 +718,11 @@ and changes only desktop preferences. The source label and confirmation for runn
 目标对话框的“服务器目录”就是上传位置；“上传到此目录”确认当前路径。“新建子目录…”默认填本机目录名，
 拒绝空名、含 `/`、`.` 和 `..`；同名目录存在时直接进入。不存在的子目录或手输路径在路径旁和最终确认中标注
 “确认上传时创建”，选择时不创建服务器目录，返回上一级可取消候选目标；普通连接对话框行为不变。
+待创建目标把最近浏览的已有目录保存为默认目录（新建子目录时就是上级）；尚未浏览时用服务器 HOME，取消上传也不会留下不存在的默认路径。
 
 未关联且目标已有计算时，在确认目标时提示“取出到本机编辑…”，默认使用新的本机目录，明确本机当前修改不会带过去，
 需要时应先导出配置；不提供直接覆盖操作。无有效计算的非空目录仍拒绝。取出后提示改完在计算页点“更新服务器流程…”。
+非空且无记录时明确提示改用空目录或“新建子目录…”；连接、权限等其他错误保留诊断。
 更新标题和确认框显示主机、目录及服务器返回的改动。
 
 上传、下载均提供“全选”“全不选”“恢复默认”，与“包括大文件”状态同步；列表上方说明默认规则。上传默认勾选小文件，
@@ -733,6 +739,7 @@ Screenshots / 界面截图（本地协议替身，不连接真实 SSH）：
 | Interaction / 操作 | 中文 | English |
 |---|---|---|
 | Pending target / 待创建目标 | [目标](images/zh_upload_target.png) | [Target](images/en_upload_target.png) |
+| Nonempty without a record / 非空且无记录 | [拒绝说明](images/zh_upload_nonempty.png) | [Refusal](images/en_upload_nonempty.png) |
 | No input files / 不传输入 | [只写流程](images/zh_upload_pipeline_only.png) | [Pipeline only](images/en_upload_pipeline_only.png) |
 | Update preview / 更新预览 | [更新](images/zh_upload_update.png) | [Update](images/en_upload_update.png) |
 | Completion / 完成后 | [打开远程窗口](images/zh_upload_complete.png) | [Open remote window](images/en_upload_complete.png) |

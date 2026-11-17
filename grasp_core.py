@@ -1362,6 +1362,9 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "文件尚未写完，仅显示完整块中的能级。": "File is incomplete; only levels from complete blocks are shown.",
     "文件尚未写完：{files}": "Incomplete files: {files}",
     # 上传目标、文件选择和流程更新 (#66)
+    "此目录不是空的，也没有计算记录，不能上传到这里。请选择空目录，或点“新建子目录…”。":
+        "This directory is not empty and has no calculation record; uploading here is not allowed. "
+        "Choose an empty directory or click New subdirectory…",
     "新建子目录…": "New subdirectory…",
     "子目录名": "Subdirectory name",
     "子目录名不能为空。": "The subdirectory name cannot be empty.",

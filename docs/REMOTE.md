@@ -317,6 +317,11 @@ Unlink local copy asks default-No and changes only local preferences, leaving th
 The upload target is the directory being browsed. New or directly typed nonexistent targets are marked for
 creation at final upload confirmation; selecting them makes no server write request. An existing calculation
 in an unlinked target offers fetching into a new local copy, with an export reminder for current local edits.
+A nonempty target without a calculation record explicitly asks for an empty directory or New subdirectory…;
+other failures keep their diagnostics. Pending targets save the last browsed existing directory (or server HOME) as the
+connection default, so cancelling the upload does not leave a nonexistent default directory.
+非空且无计算记录时明确提示改用空目录或新建子目录；其他错误保留原因。待创建目标不保存为默认连接目录，
+改存最近浏览的已有目录（新建子目录时为上级），尚未浏览时用服务器 HOME，避免取消后默认路径不存在。
 Upload/download tables share Select all, Deselect all and Restore defaults. No selection means pipeline-only
 upload, with missing inputs listed; configuration-attached files keep their existing treatment. Completion
 offers Open remote window, reusing and refreshing the same host/directory if already open, without starting
