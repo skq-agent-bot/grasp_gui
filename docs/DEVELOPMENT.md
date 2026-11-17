@@ -461,6 +461,26 @@ GUI 与 MCP 共用记录写入层 `grasp_session.py`：SHA-256 修订号只在 R
 异步 loader，复用勾选/复制/保存，桌面按编号撤销旧请求的接收并忽略迟到回答。配置可用性由服务器返回，保存默认选本机家目录。
 协议和操作限制见 [REMOTE.md](REMOTE.md)。
 
+## Apple Silicon macOS source setup / Apple Silicon macOS 源码运行
+
+Use an arm64 Python 3.10–3.12 installation from Homebrew or python.org.
+
+用 Homebrew 或 python.org 提供的 arm64 Python 3.10–3.12，安装依赖后从源码启动。
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+python grasp_gui.py
+```
+
+The native Qt desktop uses system fonts and keeps settings in `~/.config/grasp_gui.json`. The macOS
+arm64 CI job runs the offscreen suite without building GRASP. The Linux tests continue to cover real
+GRASP references. macOS users can view their own files or connect to a Linux server.
+
+macOS 原生 Qt 使用系统字体，设置仍放在 `~/.config/grasp_gui.json`。arm64 CI 用 offscreen 运行不依赖 GRASP 的测试。
+Linux 继续校验真实 GRASP 的参考能量。macOS 可查看本机文件，也可连接 Linux 服务器执行计算。
+
 ## 分支与后续计划
 
 - **V1**：停在 v1.3.0，不再更新；GitHub 上保留分支 `v1`（指向 v1.3.0）。
@@ -497,3 +517,5 @@ GUI 与 MCP 共用记录写入层 `grasp_session.py`：SHA-256 修订号只在 R
     移位、真空极化、自能。需要这两个程序的程序页，并在能级图中显示各项修正。作者注明仍在开发中。GRASP2018 自带 `rci` 中的真空极化和
     自能估计已在 V2 中支持。
   - **grasp-continuum**：连续态计算。
+
+- **macOS**：面向 Apple Silicon (arm64)，先支持源码运行。未签名的应用打包与发布另开议题，服务器端安装沿用 #19。

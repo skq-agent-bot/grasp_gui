@@ -58,6 +58,9 @@ without starting it). Labels are given as *English (中文)*. Screenshots: `docs
 | *Settings (设置)* | *Allow AI agents via MCP (允许 AI agent 通过 MCP 使用本程序)*: checkable, off by default. Enabling shows a selectable explanation and Claude/Codex/Gemini client configurations; disabling rejects subsequent MCP tools, while background runs continue. 设置项默认关闭；勾选后弹出说明和可复制配置，取消后后台计算继续。See [MCP](MCP.md). |
 | *Language / 语言* | 中文, English (rebuilds the interface; remembered) |
 
+On macOS, Qt maps the documented Ctrl shortcuts to Command. Quit is in the system application menu.
+macOS 上由 Qt 将文档中的 Ctrl 快捷键映射为 Command，退出操作位于系统应用菜单。
+
 ### External session changes / 外部记录修改
 
 Before saving and on focus return, the calculation panel checks whether another program changed its

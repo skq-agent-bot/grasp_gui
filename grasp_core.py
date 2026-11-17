@@ -2822,7 +2822,7 @@ def check_mcp(cwd, np, mpitmp):
 def child_env(**extra):
     """子进程 (GRASP、mpirun、后台运行进程) 的环境变量。"""
     env = dict(os.environ, **extra)
-    if getattr(sys, "frozen", False):
+    if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
         # PyInstaller 打包的程序把 LD_LIBRARY_PATH 指向自带的库；子进程用回原来的值
         orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
         if orig is None:
