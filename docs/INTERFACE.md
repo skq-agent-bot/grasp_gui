@@ -656,24 +656,63 @@ cannot handle paths longer than 128 characters; the GUI then falls back to the s
 
 ### Upload local pipeline / 上传本机流程
 
-The pipeline run-button group also contains **Upload to server… (上传到服务器…)** and **Upload and run…
-(上传并运行…)**. Unlinked directories select a host and a new/empty target using the connection browser plus
-an editable target field. Linked copies reconnect to their saved host/directory. The upload dialog reuses the
-rsync file table, threshold and progress. Small inputs default on; generated outputs, large files, internal
-records and server-existing names default off/excluded. Existing server files are retained in this workflow.
+The pipeline run-button group has one **Upload to server… (上传到服务器…)** action. Linked copies instead
+show **Update server pipeline… (更新服务器流程…)** and reconnect to their fixed host/directory. In the target
+dialog the browsed **Server directory** is the upload target; **Upload to this directory** confirms that path.
+**New subdirectory…** defaults to the local workdir name. Empty names, `/`, `.` and `..` are rejected. An existing
+subdirectory is entered normally. A new subdirectory or a directly typed nonexistent path is shown as
+**Created when the upload is confirmed**, beside the path and in the final confirmation; choosing it does not
+create a server directory. Parent directory cancels that candidate. The ordinary connection dialog is unchanged.
 
-The dialog previews server changes/input checks before its default-No confirmation; custom commands have a
-separate default-No confirmation. It saves the record before transferring files. Failed transfer keeps the record
-and association and offers retry; the next attempt checks the current server revision again. Upload and run
-opens the remote window and invokes its ordinary run-confirmation flow after the pipeline loads, once only.
-Conflict offers **Fetch server pipeline again**; users can export local edits first. **Unlink local copy…**
-asks default-No, changes only desktop preferences, and never deletes server data.
+Before accepting an unlinked target, the dialog checks for an existing calculation. It offers **Fetch for local
+editing…** with a default new local path and explains that current local pipeline edits are not carried over;
+export them first if needed. It never directly overwrites that calculation. Nonempty directories without a valid
+calculation remain refused. After fetching, the hint points to **Update server pipeline…** on the Calculation tab.
+Update dialogs and confirmations name `host:path` and display the server's proposed changes.
 
-本机计算页流程运行按钮旁增加“上传到服务器…”和“上传并运行…”。新目录先选主机和新建/空目标；关联副本沿用主机与路径。
-确认前显示服务器预览、选中的输入、待上传/缺失与冲突文件；默认否，自定义命令单独确认。先写记录再传输入，同名服务器文件保留。
-失败后提示补传，不删记录。丢失回答先核对：配置一致则关联；旧修订号未变或新建目标经检查仍为空时，提示“写入未执行，
-可以再次确认上传”，保留本机修改，等待用户重新确认。其他变化仍提示冲突；绝不自动重发写入。
-副本常驻来源标识，本机缺少输入标明“由服务器检查”；本机直接运行另有默认否确认。
+The upload and download file tables provide **Select all**, **Deselect all** and **Restore defaults**, synchronized
+with the large-file checkbox. Defaults are explained above the table: upload selects small files except generated
+outputs and server-existing names; ordinary transfers select small files. Internal records remain excluded and
+existing server files are retained. Deselecting everything writes the pipeline without transferring input files,
+with that action and missing inputs stated in the confirmation/status. Attached files inside the configuration
+keep their existing installation behavior. No separate pipeline-only button is added.
+
+Confirmation defaults to No; custom commands have a separate default-No confirmation. The record is saved
+before file transfer. Completion offers **Open remote window**; it does not run a calculation. An already open
+window for the same host/directory is raised and refreshed. Otherwise a new remote window takes ownership of
+the SSH session. Use that window's existing range/run controls to start, with workstation/Slurm confirmation.
+**Upload and run…** is removed; direct server import's **Create and run** remains available.
+
+Failed transfer keeps the record/association and offers retry, with a fresh server revision check. Lost write replies
+are reconciled before retry; mutations are never automatically resent. **Unlink local copy…** asks default No
+and changes only desktop preferences. The source label and confirmation for running a server copy locally remain.
+
+计算页保留一个“上传到服务器…”入口，已关联副本时改为“更新服务器流程…”，固定使用关联主机和目录。
+目标对话框的“服务器目录”就是上传位置；“上传到此目录”确认当前路径。“新建子目录…”默认填本机目录名，
+拒绝空名、含 `/`、`.` 和 `..`；同名目录存在时直接进入。不存在的子目录或手输路径在路径旁和最终确认中标注
+“确认上传时创建”，选择时不创建服务器目录，返回上一级可取消候选目标；普通连接对话框行为不变。
+
+未关联且目标已有计算时，在确认目标时提示“取出到本机编辑…”，默认使用新的本机目录，明确本机当前修改不会带过去，
+需要时应先导出配置；不提供直接覆盖操作。无有效计算的非空目录仍拒绝。取出后提示改完在计算页点“更新服务器流程…”。
+更新标题和确认框显示主机、目录及服务器返回的改动。
+
+上传、下载均提供“全选”“全不选”“恢复默认”，与“包括大文件”状态同步；列表上方说明默认规则。上传默认勾选小文件，
+取消流程生成、服务器已有同名及大文件；内部记录不列出，同名文件仍保留。全不选时，确认框和状态明确说明
+“只写入流程，不传输输入文件”并列出缺少的输入；配置自带文件仍按原机制安装，不另加“只上传流程”按钮。
+
+最终确认默认否，自定义命令另确认，先写流程再传输入。完成后可“打开远程窗口”；已有同主机、同目录窗口时前置并刷新，
+新窗口接管 SSH 会话，均不自动运行。运行范围和工作站 / Slurm 确认使用远程窗口的原有按钮。
+删除“上传并运行…”；直接在服务器新建计算的“新建并运行”保留。
+传输失败、结果未确认、修订冲突的处理不变：先核对，绝不自动重发写入；解除关联仅改本机偏好。
+
+Screenshots / 界面截图（本地协议替身，不连接真实 SSH）：
+
+| Interaction / 操作 | 中文 | English |
+|---|---|---|
+| Pending target / 待创建目标 | [目标](images/zh_upload_target.png) | [Target](images/en_upload_target.png) |
+| No input files / 不传输入 | [只写流程](images/zh_upload_pipeline_only.png) | [Pipeline only](images/en_upload_pipeline_only.png) |
+| Update preview / 更新预览 | [更新](images/zh_upload_update.png) | [Update](images/en_upload_update.png) |
+| Completion / 完成后 | [打开远程窗口](images/zh_upload_complete.png) | [Open remote window](images/en_upload_complete.png) |
 
 ## Direct server configuration import / 直接导入到服务器
 
