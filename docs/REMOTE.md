@@ -397,6 +397,9 @@ Non-finite energies reject the whole affected file while retaining other results
 The desktop marks these files unreadable with the reported reason. Healthy replies omit `errors`; the protocol is unchanged.
 能级请求可选返回逐文件的 `errors`；非有限能量使该文件无法读取，不影响其他文件及预览，桌面显示原因。
 没有文件错误时不返回该字段，协议号不变。
+`errors` and `partial_files` may coexist in one levels reply. Unreadable files occur only in `errors`,
+while incomplete readable files retain their levels and warnings. 两种字段可以同时返回；无法读取的文件只列在
+`errors`，可读但未写完的文件保留能级和提示。
 
 ```json
 {"id":1,"method":"hello","args":{"protocol":1,"version":"client version"}}

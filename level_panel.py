@@ -1801,7 +1801,7 @@ class LevelPanel(Panel):
                     self.loading = False
                     self.read_data = result
                     self.render_levels()
-                    if not self.zero_warnings:
+                    if not self.level_warnings and self.checked_paths():
                         self.status(T("读入完成"))
                 elif token == self.composition_token:
                     self.compositions = {token[2]: result}

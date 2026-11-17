@@ -132,6 +132,28 @@ def nonfinite_files(root, value=float("nan"), second_level=False):
     return healthy, bad
 
 
+def mixed_warning_files(root):
+    """一个正常文件、一个 NaN 文件和真实缺块文件的未写完副本。"""
+    from test_skipped_blocks import DATA
+    healthy, bad = nonfinite_files(root)
+    source = DATA / "mid.cm"
+    with source.open("rb") as stream:
+        end = list(index.record_index(stream))[5]["end"]
+    partial = root / "partial.cm"
+    partial.write_bytes(source.read_bytes()[:end])
+    (root / "skip1.c").write_bytes((DATA / "skip1.c").read_bytes())
+    return healthy, bad, partial
+
+
+@pytest.mark.parametrize("brief", [False, True])
+def test_level_results_keep_errors_and_partial_files_separate(tmp_path, brief):
+    healthy, bad, partial = mixed_warning_files(tmp_path)
+    result = service.Service(str(tmp_path)).levels(".", brief=brief)
+    assert {row["file"] for row in result["levels"]} == {healthy.name, partial.name}
+    assert [row["file"] for row in result["errors"]] == [bad.name]
+    assert result["partial_files"] == [partial.name]
+
+
 @pytest.mark.parametrize("value,second_level", [(float("nan"), False), (float("inf"), False),
                                                (-float("inf"), False), (float("nan"), True)])
 @pytest.mark.parametrize("prepared", [False, True])
