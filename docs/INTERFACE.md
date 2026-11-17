@@ -313,6 +313,22 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   pipeline and the program output (the three widths are remembered); when narrower it is a tab next to *Pipeline*.
   It shows the command, the here-document with the program's stdin and the file actions, e.g.
   `rmcdhf <<'EOF' … EOF` followed by `rsave odd4`.
+  The text follows the pipeline's current row (mouse, arrow keys or programmatic selection); with multiple
+  selected steps it shows the current row. Automatic refresh leaves the Pipeline tab visible in narrow windows.
+  For a pipeline-sourced preview, move/remove/clear refresh from the resulting current row, or clear it if
+  there is none. List rebuilding preserves a form preview, including after Add to pipeline; it does not
+  automatically select a newly added or neighboring step.
+  Update selected immediately shows the updated step and opens the preview, as Show and double-click do.
+  Preview input still opens a preview of the program form. Changing form fields alone does not refresh it.
+  Changing the MPI process count or mpirun command regenerates the displayed source: either that pipeline row
+  or the program form that supplied the preview. An invalid form keeps the previous text without a dialog.
+  The source is temporary UI state and is not saved in the working-directory record.
+  预览随流程当前行刷新（单击、方向键或程序设置当前行），多选时显示当前行；自动刷新只改文字，不切走“流程”标签。
+  流程来源的预览在上移、下移、删除、清空后按新的当前行刷新；没有当前行时清空。表单来源的预览不受列表重建影响，
+  “加入流程”后仍保留；不会自动选择新加入或相邻的步骤。“更新所选”后立即显示新输入并切到预览，
+  与“查看”和双击一样。“预览输入”仍显示程序页表单并切到预览，单独修改表单参数不自动刷新。
+  修改 MPI 进程数或 mpirun 命令时，按当前预览的来源（流程行或原程序页表单）重新生成；表单不合法时保留旧文字，
+  不弹错误框。预览来源仅为临时界面状态，不写入工作目录记录。
 * **Program output (程序输出)**: dark terminal-style pane, last 5000 lines (set a log file in the form for the full
   output); *Working directory (工作目录)* (update, restore record, clear directory; see below),
   *List files (查看文件)*, *Clear (清屏)*. Errors in red, step headers in blue.
@@ -525,11 +541,24 @@ is writable, viewing still works without a disk cache. A changed source invalida
 are rebuilt, and entries for deleted sources are removed on the next directory scan. These caches contain no
 copies of the full calculation files and can be deleted to reclaim space.
 
+Skipped symmetry blocks are matched to the CSF list by their original block numbers. An rci empty-block
+header and an omitted rmcdhf block do not hide later levels. A file ending at a complete block is considered
+complete only when the number of levels agrees with its header; truncated records remain incomplete.
+Incomplete files show **File is incomplete; only levels from complete blocks are shown** in the file tooltip
+and **Incomplete files: …** in the status bar. These hints disappear when a refreshed file is complete.
+Remote views use the server's partial-file metadata; summary output retains its per-file `partial` flag.
+
 中文：大型混合系数和 CSF 文件在后台建立索引，状态栏显示读取进度；切换文件或目录会取消旧请求，界面保持响应。
 选中能级时只解析所需的 CSF，阈值改变时复用已读数据。小混合文件串行分析，避免启动进程池的延迟；大文件至多用四个本地分析进程。
 索引和主要成分摘要保存在工作目录的 `.grasp_gui/index/`；
 只读目录改用用户的 `~/.cache/grasp_gui/index/<目录哈希>/`，两处都不可写时仍可查看，但不保留磁盘缓存。
 源文件变化时缓存失效，损坏时重建，源文件删除后在下次扫描清理；缓存不含完整结果文件的副本，可直接删除。
+
+跳过的对称块按原始块号与 CSF 配对，rci 的空块头和 rmcdhf 省略的块不会丢掉后面的能级。文件在完整块后结束时，
+还须按文件头的能级总数核对是否完整；记录被截断仍视为未写完。未写完的文件在文件提示框中显示
+“文件尚未写完，仅显示完整块中的能级。”，状态栏列出“文件尚未写完：…”；刷新后完整时提示消失。
+远程页使用服务器返回的未写完文件信息，摘要保留逐文件 `partial` 标志。
+[中文截图](images/zh_incomplete_levels.png) / [English screenshot](images/en_incomplete_levels.png)。
 
 ```
 Refresh  Energy unit [eV▾]  Energy zero [By calculation group▾]  Export▾  ☐ Show all computed transitions of the selected level        Tips

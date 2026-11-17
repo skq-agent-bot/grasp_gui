@@ -1345,8 +1345,12 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
     "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
     # 代码审核修复 (#59)
+    "；": "; ",
     "块或能级不存在": "Block or level does not exist",
     "能量不是有限的数，计算可能已经发散": "Energy is not finite; the calculation may have diverged",
+    # 跳过的块与未写完的混合系数文件 (#57)
+    "文件尚未写完，仅显示完整块中的能级。": "File is incomplete; only levels from complete blocks are shown.",
+    "文件尚未写完：{files}": "Incomplete files: {files}",
 }
 
 

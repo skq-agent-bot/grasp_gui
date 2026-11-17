@@ -326,6 +326,8 @@ class Service:
             except (OSError, ValueError) as e:
                 result.setdefault("errors", []).append(dict(file=path.name, error=str(e)))
                 continue
+            if blocks.partial:
+                result.setdefault("partial_files", []).append(path.name)
             hamiltonian = mix.hamiltonian(path, self.path)
             csf_path = None if brief else mix.find_csf_for(str(path))
             csfs = mix.open_csfs(csf_path, cancel, progress) if csf_path and components and not brief else None
