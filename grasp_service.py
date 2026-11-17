@@ -1,6 +1,8 @@
 """供 MCP 与后续远程服务共用的本地计算操作；不导入 Qt。"""
 
 import os
+import shlex
+import shutil
 from pathlib import Path
 import re
 import threading
@@ -13,6 +15,56 @@ import grasp_summary as summary
 import grasp_slurm as slurm
 import grasp_workdir as work
 from grasp_core import T
+
+
+def checked_run_settings(values):
+    """显式设置只补服务器默认值，不访问服务器保存的偏好。"""
+    keys = {"bindir", "np", "mpirun", "mpitmp", "nice"}
+    if not isinstance(values, dict) or set(values) - keys:
+        raise ValueError(T("服务器运行设置的格式有误"))
+    for key in ("bindir", "mpirun", "mpitmp"):
+        text = values.get(key, "")
+        if not isinstance(text, str) or len(text) > 4096 or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in text):
+            raise ValueError(T("服务器运行设置的格式有误"))
+    bindir = values.get("bindir")
+    if bindir:
+        try:
+            path = Path(bindir).expanduser()
+        except RuntimeError as error:
+            raise ValueError(T("GRASP bin 目录必须是服务器上存在的绝对路径，或留空。")) from error
+        if not path.is_absolute() or not path.is_dir():
+            raise ValueError(T("GRASP bin 目录必须是服务器上存在的绝对路径，或留空。"))
+        bindir = str(path.resolve())
+    elif bindir is None:
+        bindir = core.default_bindir(use_saved=False)
+    mpirun = values.get("mpirun", "mpirun")
+    count = values.get("np")
+    if "np" not in values:
+        count = core.default_mpi_np(bindir, mpirun)
+    if type(count) is not int or not 1 <= count <= 100000 or type(values.get("nice", True)) is not bool:
+        raise ValueError(T("服务器运行设置的格式有误"))
+    return dict(bindir=bindir, np=count, mpirun=mpirun, mpitmp=values.get("mpitmp", "tmp_mpi"),
+                nice=values.get("nice", True))
+
+
+def missing_run_programs(configuration, settings):
+    """检查实际执行的串行 / MPI 程序及其启动器，也包括前后处理动作。"""
+    names, parallel = [], False
+    for job in config.session(configuration)["pipeline"]:
+        mpi = settings["np"] > 1 and job.get("mpi")
+        parallel = parallel or mpi
+        names.append(job["prog"] + ("_mpi" if mpi else ""))
+        names.extend(action[1][0] for action in job["pre"] + job["post"] if action[0] == "run")
+    missing = [p for p in dict.fromkeys(names) if not core.program_path(settings["bindir"], p)]
+    if parallel:
+        try:
+            launcher = shlex.split(settings["mpirun"])
+        except ValueError:
+            launcher = []
+        search_path = settings["bindir"] + os.pathsep + os.environ.get("PATH", "")
+        if not launcher or not shutil.which(launcher[0], path=search_path):
+            missing.append(launcher[0] if launcher else settings["mpirun"] or "mpirun")
+    return missing
 
 MAX_TEXT = 65536
 MAX_ROWS = 1000
@@ -135,7 +187,7 @@ class Service:
             text = core.shell_script(jobs, settings["bindir"], str(root), mpi, settings["mpitmp"])
         return dict(text=text[:MAX_TEXT], truncated=len(text) > MAX_TEXT)
 
-    def run(self, directory, start=1, force=False, *, end=None, started_by="mcp", user_scope=False):
+    def run(self, directory, start=1, force=False, *, end=None, started_by="mcp", user_scope=False, run_settings=None):
         root, data, _ = self.record(directory)
         jobs = data.get("pipeline", [])
         first, last = summary.run_bounds(len(jobs), start, end)
@@ -144,7 +196,9 @@ class Service:
             raise ValueError("force must be boolean")
         cfg = config.export(jobs[first:last], dict(title=root.name), validate=False)
         self.custom(cfg)
-        settings = dict(core.saved_run_settings(), cwd=str(root))
+        # 远程入口已校验显式设置；未传设置的本机 / MCP 路径继续采用原来的保存逻辑。
+        settings = core.saved_run_settings() if run_settings is None else run_settings
+        settings = dict(settings, cwd=str(root))
         checked = summary.check_files(str(root), cfg["jobs"], offset=first, run=settings, path_check=self.path)
         if checked["invalid"] or checked["missing"] and not force:
             raise PreflightError(checked)

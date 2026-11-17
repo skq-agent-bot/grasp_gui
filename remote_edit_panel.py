@@ -162,6 +162,8 @@ class UploadDialog(TransferDialog):
 
     def preview_text(self, value):
         text = value["changes"] + "\n" + T("输入文件由服务器检查；实际运行前将再次检查。")
+        if value.get("run_settings_warning"):
+            text += "\n" + value["run_settings_warning"]
         if self.remote_only:
             text += "\n" + "\n".join(f"{i}. {config.make_job(job)['title']}"
                                       for i, job in enumerate(self.configuration["jobs"], 1))
@@ -230,8 +232,13 @@ class UploadDialog(TransferDialog):
         def received(value, error):
             if not self.closed and generation == self.preview_generation:
                 callback(value, error)
-        self.source.submit("preview_upload", dict(directory=self.directory, configuration=self.configuration,
-                           revision=self.revision, uploads=names), received)
+        args = dict(directory=self.directory, configuration=self.configuration, revision=self.revision, uploads=names)
+        if (getattr(self.source, "server_type", "workstation") == "workstation" and
+                "run_settings_v1" in getattr(self.source, "server", {}).get("capabilities", [])):
+            saved = core.load_config().get("remote_hosts", {}).get(self.source.client.host, {}).get("run")
+            if saved is not None:
+                args["run_settings"] = saved
+        self.source.submit("preview_upload", args, received)
 
     def show_preview(self, value, error):
         if self.closed:
