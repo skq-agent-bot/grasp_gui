@@ -1356,6 +1356,9 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "设置已改变，请检查；确认前会自动检查。": "Settings changed. Check them; confirmation also checks automatically.",
     "正在检查服务器运行设置…": "Checking server run settings…",
     "确认运行": "Confirm run",
+    # 跳过的块与未写完的混合系数文件 (#57)
+    "文件尚未写完，仅显示完整块中的能级。": "File is incomplete; only levels from complete blocks are shown.",
+    "文件尚未写完：{files}": "Incomplete files: {files}",
 }
 
 
