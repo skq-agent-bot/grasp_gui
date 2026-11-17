@@ -22,13 +22,77 @@ The dialog explains why: cluster login nodes should not run calculations directl
 
 选择 Slurm 后，“提交 Slurm 作业”打开资源设置：分区、节点、每节点进程数、时限、内存、GRASP 路径、模块命令等。
 这些值按主机保存在本机；脚本使用服务器已有的流程和输入文件，最终确认默认否。不会在提交失败时退回登录节点直跑。
-工作站沿用原来的后台运行和退出登录处理。旧客户端设置无需迁移；使用 Slurm 前需更新到支持此功能的服务器端。
+工作站沿用原来的后台运行和退出登录处理，运行前核对下述服务器运行设置。
+旧客户端设置无需迁移；使用 Slurm 前需更新到支持此功能的服务器端。
 
 For Slurm, review the resource dialog and confirm submission (default No). Parameters are stored per host on
 the desktop; paths and module commands refer to the server/compute nodes. The server uses its saved pipeline,
 checks the revision and required inputs, and saves the generated script and submission intent before calling
 sbatch. `sbatch`, `squeue` and `scancel` must be available in the server session. Completed-job state also needs
 `sacct` and working cluster accounting. There is no fallback to running on the login node.
+
+### Workstation run settings / 工作站运行设置
+
+Every workstation run opens **Server run settings**, including creation/upload followed by a run and selected
+ranges. The fields reuse the local RunSettings widget: server GRASP bin directory, MPI process count, mpirun,
+MPI_TMP and nice. No desktop directory picker or desktop CPU limit is used. Host-specific desktop preferences
+win over the server's defaults. Opening the dialog, **Check**, and confirmation after edits request fresh server
+checks. The report lists missing serial/MPI programs and launcher, plus input preflight for the chosen range.
+Missing programs default to Cancel; explicit confirmation can continue. New warnings found during automatic
+checking require another confirmation. Cancel saves nothing; confirm stores `remote_hosts[host]["run"]` only
+on the desktop, alongside `slurm`. The remote window's **File → Server run settings…** checks/saves a loaded
+pipeline's settings without running it.
+
+`hello.capabilities` includes `run_settings_v1`; protocol remains 1. Workstation `run_plan` and `run`, and
+`preview_upload`, accept optional `run_settings`. Omission uses the server's saved settings/defaults; remote
+inspection does not persist a default process count. Explicit settings use defaults for omitted fields without
+reading saved server preferences, and travel through the existing background request. `run_plan` adds optional
+`missing_programs` and `checked` metadata. Preview uploads use saved desktop host settings when supported.
+Invalid saved settings fall back to server defaults for upload checks, with optional `run_settings_warning`
+shown in the preview and confirmation. Actual run checks remain strict. Empty bin fields stay empty in forms;
+immediately before starting, the server substitutes its nonempty default bin without reading saved preferences.
+No server preferences, shared configuration, workdir record or background request formats change.
+
+| Field | Server validation |
+|---|---|
+| `bindir` | Empty (use PATH), or an existing absolute server directory; `~` is expanded on the server |
+| `np` | Integer 1–100000; booleans are rejected |
+| `mpirun`, `mpitmp` | Strings of at most 4096 characters, without control characters or newlines |
+| `nice` | Boolean |
+
+Unknown keys are rejected; `bindir` also has the string length/control-character checks above. Older servers
+receive no `run_settings`: the dialog shows their settings read-only and suggests **Install / update server…**;
+running remains available. Slurm and server-side MCP retain their existing settings and behavior.
+
+This does not add environment setup commands such as `module load` or `source env.sh`. Use an absolute mpirun
+path, or arrange the required library paths in the server's noninteractive login environment.
+
+工作站每次运行先打开“服务器运行设置”，新建、上传后运行和分段运行共用同一入口。复用 RunSettings 字段，
+路径属于服务器，不使用本机目录选择器或 CPU 数限制。桌面按主机保存的值优先，否则用服务器默认值；
+打开、点“检查”和修改后确认前都由服务器核对程序、MPI 和所选范围的输入。缺少程序时默认取消，仍可明确继续；
+自动检查新发现警告时须再确认。取消不保存，确认只写桌面 `remote_hosts[host]["run"]`，与 `slurm` 并列。
+远程窗口“文件 → 服务器运行设置…”可针对已载入的流程检查、保存而不运行。旧服务器只读显示、提示更新，
+不发送新参数；Slurm 和服务器 MCP 不变。远程预检不保存首次默认进程数，显式设置也不读写服务器偏好。
+上传预览遇到失效的主机设置时改用服务器默认值检查，返回可选 `run_settings_warning`，在预览和确认中显示；
+实际运行保持严格校验。表单留空表示 PATH，启动交接前补非空默认目录，避免 PATH 中出现代表当前目录的空项。
+不提供 `module load` / `source` 等环境准备命令；可填绝对 mpirun 路径，或在非交互登录环境中配置库路径。
+
+Screenshots / 截图：[中文](images/zh_server_run_settings.png) / [English](images/en_server_run_settings.png).
+
+#### Optional SSH acceptance / 可选 SSH 验收
+
+Use the dedicated disposable sshd fixture below, install this branch's server, and keep the server account free
+of `~/.config/grasp_gui.json` and GRASP entries in its noninteractive PATH. Do not remove a user's preferences.
+In addition to `GRASP_SSH_TEST_HOST`, `GRASP_SSH_TEST_DIRECTORY` and optional CONFIG/PROGRAM, set:
+
+```sh
+GRASP_REMOTE_RUN_TEST=1 GRASP_SSH_TEST_BINDIR=/opt/grasp/bin \
+    GRASP_SSH_TEST_MPIRUN=/usr/bin/mpirun python3 -m pytest tests/test_remote_run_settings_ssh.py -v -ra
+```
+
+The two tests check the real dialog's missing-program report, set the server path, run example1 with 1 and 2
+processes, compare reference energies, inspect MPI commands in the log, and ensure server preferences remain
+absent. They skip without explicit opt-in. 专用环境下验证中英文界面另见 offscreen 测试；未配置专用 SSH 时跳过真实验收。
 
 ### Continuous run ranges / 连续分段运行
 
@@ -247,7 +311,23 @@ Unlink local copy asks default-No and changes only local preferences, leaving th
 上传先预览差异并确认，再在锁内核对修订号和运行状态，先建/更新记录再传输入。记录或任务状态冲突时拒绝覆盖，提供重新取出。
 同名服务器文件保留；传输失败只需补传，不删除记录。丢失回答先核对：配置一致则关联；修订号仍等于保存值则提示“写入未执行，
 可以再次确认上传”，保留本机修改。新建没有记录时须先证明目标仍为空，才允许用户重新确认创建。均不自动重发；其他变化保持冲突。
-选择“上传并运行…”后仍走现有工作站/Slurm 的确认和最终输入检查。
+上传完成后点“打开远程窗口”，再用其中的运行范围按钮及工作站/Slurm 确认启动；上传不再自动运行。
+“上传并运行…”入口已合并到“上传到服务器…”，已关联时显示“更新服务器流程…”。
+
+The upload target is the directory being browsed. New or directly typed nonexistent targets are marked for
+creation at final upload confirmation; selecting them makes no server write request. An existing calculation
+in an unlinked target offers fetching into a new local copy, with an export reminder for current local edits.
+A nonempty target without a calculation record explicitly asks for an empty directory or New subdirectory…;
+other failures keep their diagnostics. Pending targets save the last browsed existing directory (or server HOME) as the
+connection default, so cancelling the upload does not leave a nonexistent default directory.
+非空且无计算记录时明确提示改用空目录或新建子目录；其他错误保留原因。待创建目标不保存为默认连接目录，
+改存最近浏览的已有目录（新建子目录时为上级），尚未浏览时用服务器 HOME，避免取消后默认路径不存在。
+Upload/download tables share Select all, Deselect all and Restore defaults. No selection means pipeline-only
+upload, with missing inputs listed; configuration-attached files keep their existing treatment. Completion
+offers Open remote window, reusing and refreshing the same host/directory if already open, without starting
+any run. Then use the existing workstation/Slurm range controls. Direct server Create and run is unchanged.
+Only desktop interactions change: server methods/capabilities, revisions, unknown-write recovery and the
+retain-existing-file policy are unchanged. See [upload interface details](INTERFACE.md#upload-local-pipeline--上传本机流程).
 
 Screenshots: [target EN](images/en_remote_edit_target.png) / [目标中文](images/zh_remote_edit_target.png),
 [upload EN](images/en_remote_edit_upload.png) / [上传中文](images/zh_remote_edit_upload.png),
@@ -295,7 +375,7 @@ mv -Tf "$HOME/.local/bin/grasp_gui.next" "$HOME/.local/bin/grasp_gui"
 指定完整路径；成功选择目录时按主机保存实际路径和目录 (`remote_hosts` 用户偏好)。找不到、不能启动或协议不兼容时，
 对话框显示原始错误输出，可明确选择安装捆绑版、使用已有路径或取消。手动更新后也可设置完整路径重试。
 示例中的版本目录需替换为所下载的版本，不覆盖仍运行的版本；管理员可统一安装到 `/opt` 或通过 module 提供路径。
-工作站上的 GRASP bin、MPI 等运行设置由服务器端原有配置决定；Slurm 作业的路径、资源和模块命令在提交对话框中核对。
+工作站上的 GRASP bin、MPI 等运行设置在桌面端的“服务器运行设置”中核对；Slurm 作业的路径、资源和模块命令在提交对话框中核对。
 
 ### 登录
 

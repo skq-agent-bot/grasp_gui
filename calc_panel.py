@@ -1090,14 +1090,15 @@ class CalcPanel(QWidget):
         self.run_from = button("▶ 从选中开始", self.run_from_selected)
         self.run_to = button("▶ 运行到选中", lambda: self.run_selection("to"))
         self.run_selected = button("▶ 运行选中的步骤", lambda: self.run_selection("selected"))
+        self.upload_button = button("上传到服务器…", self.upload_remote)
         pl.addWidget(ButtonColumn([[self.run_all, self.run_from, self.run_to, self.run_selected,
-                                    button("上传到服务器…", lambda: self.upload_remote()),
-                                    button("上传并运行…", lambda: self.upload_remote(True))],
+                                    self.upload_button],
                                    [button("编辑", self.edit_job), button("更新所选", self.update_job),
                                     button("查看", self.show_job)],
                                    [button("上移", lambda: self.move(-1)), button("下移", lambda: self.move(1))],
                                    [button("删除", self.remove_job), button("清空", self.clear_pipeline)],
                                    [export]]))
+        self.refresh_remote_copy()
         self.btabs.addTab(pw, T("流程"))
 
         self.prev = QPlainTextEdit()
@@ -1785,9 +1786,9 @@ class CalcPanel(QWidget):
     def run_pipeline(self):
         self.start(list(self.pipeline))
 
-    def upload_remote(self, run=False):
+    def upload_remote(self):
         from remote_edit_panel import upload
-        upload(self, run)
+        upload(self)
 
     def refresh_remote_copy(self):
         from grasp_remote_edit import association
@@ -1795,6 +1796,8 @@ class CalcPanel(QWidget):
         text = T("服务器副本 {h}:{p}", h=link["host"], p=link["directory"]) if link else ""
         self.copy_label.setText(text)
         self.copy_label.setVisible(bool(text))
+        if hasattr(self, "upload_button"):
+            self.upload_button.setText(T("更新服务器流程…") if link else T("上传到服务器…"))
         self.copyChanged.emit(text)
 
     def run_from_selected(self):

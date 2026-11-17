@@ -146,7 +146,8 @@ def test_stdio_write_capability_and_mutation_roundtrip(tmp_path, cfg):
 def test_preview_checks_programs_using_server_run_settings(tmp_path, cfg, monkeypatch):
     bindir = tmp_path / "bin"
     bindir.mkdir()
-    monkeypatch.setattr(core, "saved_run_settings", lambda: dict(bindir=str(bindir), np=1))
+    monkeypatch.setattr(core, "saved_run_settings", lambda **kw:
+                        dict(bindir=str(bindir), np=1, mpirun="mpirun", mpitmp="tmp_mpi", nice=True))
     monkeypatch.setenv("PATH", "")
     operation = remote.Operations()
     root = str(tmp_path / "server")

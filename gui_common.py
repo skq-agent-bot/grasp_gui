@@ -135,8 +135,9 @@ def viewer_for(path):
 class RunSettings(QWidget):
     """可收起的设置区；收起时只显示一行摘要。展开 / 收起的按钮 (self.toggle) 由主窗口放在工作目录一行。"""
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, *, remote=False):
         super().__init__()
+        self.remote = remote
         top = QVBoxLayout(self)
         top.setContentsMargins(0, 0, 0, 0)
         self.toggle = QPushButton()
@@ -149,13 +150,15 @@ class RunSettings(QWidget):
         g = QGridLayout(self.box)
         g.setContentsMargins(0, 0, 0, 0)
         self.bindir_edit = QLineEdit(cfg["bindir"])
-        self.bindir_edit.editingFinished.connect(self.save)     # 改完立即保存，下次启动沿用
+        if not remote:
+            self.bindir_edit.editingFinished.connect(self.save)  # 本机改完立即保存；服务器设置由确认对话框保存。
         g.addWidget(QLabel(T("GRASP bin 目录")), 0, 0)
         g.addWidget(self.bindir_edit, 0, 1)
-        g.addWidget(button("浏览…", self.pick_bindir), 0, 2)
+        if not remote:
+            g.addWidget(button("浏览…", self.pick_bindir), 0, 2)
         mp = QHBoxLayout()
         self.np_spin = QSpinBox()
-        self.np_spin.setRange(1, max(os.cpu_count() or 1, 1))
+        self.np_spin.setRange(1, 100000 if remote else max(os.cpu_count() or 1, 1))
         self.np_spin.setValue(cfg["np"])
         self.mpirun_edit = QLineEdit(cfg["mpirun"])
         self.mpitmp_edit = QLineEdit(cfg["mpitmp"])
@@ -176,8 +179,8 @@ class RunSettings(QWidget):
         self.bindir_edit.textChanged.connect(self.update_summary)
         self.np_spin.valueChanged.connect(self.update_summary)
         # 按上次的收起状态显示；GRASP bin 目录中找不到 GRASP 时总是展开，提醒检查路径
-        collapsed = core.load_config().get("settings_collapsed", True)
-        if not os.path.isfile(os.path.join(cfg["bindir"], "rmcdhf")):
+        collapsed = False if remote else core.load_config().get("settings_collapsed", True)
+        if not remote and not os.path.isfile(os.path.join(cfg["bindir"], "rmcdhf")):
             collapsed = False
         self.show_box(not collapsed, save=False)
 
@@ -186,7 +189,7 @@ class RunSettings(QWidget):
         self.summary.setVisible(not visible)
         self.toggle.setText(("▾ " if visible else "▸ ") + T("设置"))
         self.update_summary()
-        if save:
+        if save and not self.remote:
             core.save_config(settings_collapsed=not visible)
 
     def update_summary(self):
@@ -235,6 +238,8 @@ class RunSettings(QWidget):
 
     def save(self):
         """保存到 ~/.config/grasp_gui.json，作为下次启动的默认值。"""
+        if self.remote:
+            return
         core.save_config(bindir=self.bindir().strip(), np=self.np(), mpirun=self.mpirun(), mpitmp=self.mpitmp(),
                          nice=self.nice())
 
