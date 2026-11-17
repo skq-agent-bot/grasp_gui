@@ -1361,6 +1361,34 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     # 跳过的块与未写完的混合系数文件 (#57)
     "文件尚未写完，仅显示完整块中的能级。": "File is incomplete; only levels from complete blocks are shown.",
     "文件尚未写完：{files}": "Incomplete files: {files}",
+    # 上传目标、文件选择和流程更新 (#66)
+    "此目录不是空的，也没有计算记录，不能上传到这里。请选择空目录，或点“新建子目录…”。":
+        "This directory is not empty and has no calculation record; uploading here is not allowed. "
+        "Choose an empty directory or click New subdirectory…",
+    "新建子目录…": "New subdirectory…",
+    "子目录名": "Subdirectory name",
+    "子目录名不能为空。": "The subdirectory name cannot be empty.",
+    "子目录名不能包含 /，也不能是 . 或 ..。": "A subdirectory name must not contain / and must not be . or ..",
+    "上传到此目录": "Upload to this directory",
+    "上传到：{p}": "Upload to: {p}",
+    "确认上传时创建": "Created when the upload is confirmed",
+    "请连接 / 刷新以核对这个目标目录。": "Connect / refresh to check this target directory.",
+    "更新服务器流程…": "Update server pipeline…",
+    "更新 {h}:{p} 的流程": "Update the pipeline at {h}:{p}",
+    "修改完成后，在计算页点“更新服务器流程…”。": "After editing, click Update server pipeline… on the Calculation tab.",
+    "服务器已有计算": "Existing server calculation",
+    "此目录已有计算，请先取出到本机编辑。当前本机流程的修改不会带到取出的副本中；需要保留时请先“导出配置…”。":
+        "This directory already contains a calculation. Fetch it for local editing first. "
+        "Changes in the current local pipeline will not be carried into the fetched copy; "
+        "use Export configuration… first if you need to keep them.",
+    "取出到本机编辑…": "Fetch for local editing…",
+    "打开远程窗口": "Open remote window",
+    "默认选择不超过阈值的小文件；大文件默认不选。":
+        "Small files up to the threshold are selected by default; large files are not.",
+    "默认选择小文件；流程生成文件、服务器已有同名文件和大文件默认不选。":
+        "Small files are selected by default; generated files, server-existing names and large files are not.",
+    "只写入流程，不传输输入文件": "Write the pipeline only; do not transfer input files",
+    "缺少输入文件：{names}": "Missing input files: {names}",
 }
 
 

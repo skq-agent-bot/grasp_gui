@@ -311,7 +311,23 @@ Unlink local copy asks default-No and changes only local preferences, leaving th
 上传先预览差异并确认，再在锁内核对修订号和运行状态，先建/更新记录再传输入。记录或任务状态冲突时拒绝覆盖，提供重新取出。
 同名服务器文件保留；传输失败只需补传，不删除记录。丢失回答先核对：配置一致则关联；修订号仍等于保存值则提示“写入未执行，
 可以再次确认上传”，保留本机修改。新建没有记录时须先证明目标仍为空，才允许用户重新确认创建。均不自动重发；其他变化保持冲突。
-选择“上传并运行…”后仍走现有工作站/Slurm 的确认和最终输入检查。
+上传完成后点“打开远程窗口”，再用其中的运行范围按钮及工作站/Slurm 确认启动；上传不再自动运行。
+“上传并运行…”入口已合并到“上传到服务器…”，已关联时显示“更新服务器流程…”。
+
+The upload target is the directory being browsed. New or directly typed nonexistent targets are marked for
+creation at final upload confirmation; selecting them makes no server write request. An existing calculation
+in an unlinked target offers fetching into a new local copy, with an export reminder for current local edits.
+A nonempty target without a calculation record explicitly asks for an empty directory or New subdirectory…;
+other failures keep their diagnostics. Pending targets save the last browsed existing directory (or server HOME) as the
+connection default, so cancelling the upload does not leave a nonexistent default directory.
+非空且无计算记录时明确提示改用空目录或新建子目录；其他错误保留原因。待创建目标不保存为默认连接目录，
+改存最近浏览的已有目录（新建子目录时为上级），尚未浏览时用服务器 HOME，避免取消后默认路径不存在。
+Upload/download tables share Select all, Deselect all and Restore defaults. No selection means pipeline-only
+upload, with missing inputs listed; configuration-attached files keep their existing treatment. Completion
+offers Open remote window, reusing and refreshing the same host/directory if already open, without starting
+any run. Then use the existing workstation/Slurm range controls. Direct server Create and run is unchanged.
+Only desktop interactions change: server methods/capabilities, revisions, unknown-write recovery and the
+retain-existing-file policy are unchanged. See [upload interface details](INTERFACE.md#upload-local-pipeline--上传本机流程).
 
 Screenshots: [target EN](images/en_remote_edit_target.png) / [目标中文](images/zh_remote_edit_target.png),
 [upload EN](images/en_remote_edit_upload.png) / [上传中文](images/zh_remote_edit_upload.png),
