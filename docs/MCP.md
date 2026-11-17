@@ -260,6 +260,11 @@ GUI screenshots / 界面截图：
 | 外部修改 / External change | ![中文](images/zh_mcp_conflict.png) | ![English](images/en_mcp_conflict.png) |
 | 运行来源 / Run origin | ![中文](images/zh_mcp_origin.png) | ![English](images/en_mcp_origin.png) |
 
+工作目录清理只在本机和服务器的计算界面提供。MCP 没有清理工具，不能通过 MCP 工具移动或删除计算文件。
+
+Work-directory cleanup is available in the local and server calculation windows. MCP provides no cleanup tool
+for moving or deleting calculation files.
+
 ## 目录与命令限制 / Directory and command limits
 
 拒绝包含 `..` 的路径和真实目标在根目录外的符号链接。新建、更新、运行均拒绝自定义命令，除非

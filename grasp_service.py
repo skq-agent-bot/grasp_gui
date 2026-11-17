@@ -215,7 +215,6 @@ class Service:
                 if action[0] == "cp":
                     self.path(str(root / action[1]))
                     self.path(str(root / action[2]))
-        work.idle(root)
         import tempfile
         # scope 启动失败时保留 systemd 原始诊断；文件不构成与后台进程相连的管道。
         diagnostic = tempfile.TemporaryFile() if user_scope else None
@@ -223,7 +222,9 @@ class Service:
             options = dict(started_by=started_by, user_scope=user_scope)
             if diagnostic is not None:
                 options["stderr"] = diagnostic
-            proc = bg.launch(str(root), jobs, settings, **options)
+            with sessions.locked(root):
+                work.idle(root)
+                proc = bg.launch(str(root), jobs, settings, **options)
             threading.Thread(target=proc.wait, daemon=True).start()
             connection = bg.connect(str(root), timeout=bg.ATTACH_WAIT)
             if connection is None and diagnostic is not None:
