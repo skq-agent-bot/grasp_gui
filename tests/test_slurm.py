@@ -209,7 +209,7 @@ def test_remote_slurm_submit_never_launches_background_runner(tmp_path, monkeypa
     result = op.run(str(root), plan["revision"], server_type="slurm", slurm=settings)
     assert result["backend"] == "slurm" and result["job_id"] == "42"
     with pytest.raises(ValueError, match="Slurm"):
-        op.run(str(root), plan["revision"], server_type="slurm", slurm=settings)
+        op.run(str(root), result["revision"], server_type="slurm", slurm=settings)
     assert calls.count("sbatch") == 1
 
 

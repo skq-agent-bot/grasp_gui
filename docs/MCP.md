@@ -260,6 +260,15 @@ GUI screenshots / 界面截图：
 | 外部修改 / External change | ![中文](images/zh_mcp_conflict.png) | ![English](images/en_mcp_conflict.png) |
 | 运行来源 / Run origin | ![中文](images/zh_mcp_origin.png) | ![English](images/en_mcp_origin.png) |
 
+新建或更新工作目录记录会生成 `grasp_run/` 中的两个脚本。MCP 的 `run` 继续用后台运行进程，在实际运行设置
+变化时更新目录记录。返回值可能含 `revision` 和 `warnings`。生成脚本失败只告警，记录仍保存成功。
+运行后修改配置前，请用返回的修订号或先读取 `get_pipeline`。
+
+Creating or updating a work-directory record generates both scripts under `grasp_run/`. MCP `run` still uses
+the background runner. It may update the record when run settings change and return `revision` and `warnings`.
+Script generation errors are reported while the record remains saved. Use the returned revision or refresh
+it with `get_pipeline` before the next edit.
+
 ## 目录与命令限制 / Directory and command limits
 
 拒绝包含 `..` 的路径和真实目标在根目录外的符号链接。新建、更新、运行均拒绝自定义命令，除非

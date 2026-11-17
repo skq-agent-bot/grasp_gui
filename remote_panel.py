@@ -1024,6 +1024,10 @@ class RemoteCalculation(QWidget):
             if self.server_type != "slurm":
                 text += "\n" + T("用户 scope 失败时可导出 Slurm，或重新选择照常启动；请先核对运行状态。")
             QMessageBox.warning(self, T("远程运行"), text)
+        elif value:
+            self.revision = value.get("revision", self.revision)
+            if value.get("warnings"):
+                QMessageBox.warning(self, T("远程运行"), "\n".join(value["warnings"]))
         self.load()
 
     def stop(self):

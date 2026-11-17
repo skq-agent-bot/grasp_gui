@@ -79,6 +79,26 @@ path, or arrange the required library paths in the server's noninteractive login
 
 Screenshots / 截图：[中文](images/zh_server_run_settings.png) / [English](images/en_server_run_settings.png).
 
+#### Generated run scripts / 自动生成运行脚本
+
+Saving a pipeline on the server regenerates `grasp_run/run.sh` and `grasp_run/submit.sbatch`. Confirmed runs
+and submissions record changed MPI, nice, or Slurm settings in the existing fields, so a later launch with the
+same settings keeps the same revision. Reports may include `revision` and `warnings`. Previews leave the record
+and server preferences untouched. A bin directory explicitly supplied from the desktop applies to that launch.
+It is excluded from the record and both scripts. The scripts use the generating server's GRASP default and can
+be overridden with `GRASP_RUN_BINDIR`.
+
+生成脚本使用服务器已保存的流程。正式运行或提交只在设置改变时更新目录记录中的已有字段，响应可能含新的 `revision` 和
+`warnings`。预检不保存设置，不创建服务器偏好。桌面显式传入的 GRASP 路径仅用于本次运行，不保存到目录记录，也不进入
+脚本。脚本使用生成所在服务器的默认路径，可用 `GRASP_RUN_BINDIR` 覆盖。上传和下载默认不勾选 `grasp_run/` 中的文件。
+
+For manual Slurm submission, run `sbatch grasp_run/submit.sbatch [start end]` from the calculation directory.
+The wrapper loads the recorded modules and launcher settings, then calls `run.sh`. A manual submission does
+not create a GUI Slurm record. The dedicated Slurm fixture runs both the full and split generated script tests.
+
+手动提交需在计算目录下调用 `sbatch grasp_run/submit.sbatch [起始步骤 结束步骤]`。脚本加载记录中的模块和启动设置，
+再调用 `run.sh`。手动提交不会生成界面的 Slurm 记录。专用 Slurm 夹具覆盖生成脚本的完整与分段提交。
+
 #### Optional SSH acceptance / 可选 SSH 验收
 
 Use the dedicated disposable sshd fixture below, install this branch's server, and keep the server account free

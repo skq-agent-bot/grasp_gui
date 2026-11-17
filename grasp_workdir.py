@@ -214,6 +214,8 @@ def prepare_update(workdir, cfg, current=None):
     old = dict(current if current is not None else disk)
     old.pop("workdir", None)
     old.pop("bindir", None)
+    if isinstance(old.get("slurm"), dict):
+        old["slurm"] = {key: value for key, value in old["slurm"].items() if key != "bindir"}
     new = dict(old, **config.session(cfg))
     # 补齐未在新流程中出现的表单，避免界面保留上个方案的隐含参数。
     new["steps"] = {s.key: dict(s.defaults(), **new["steps"].get(s.key, {})) for s in core.STEPS
@@ -249,12 +251,12 @@ def prepare_update(workdir, cfg, current=None):
                 inputs=inputs, inputs_expected=inputs_raw, **compare(old, new))
 
 
-def apply_update(plan, overwrite=()):
+def apply_update(plan, overwrite=(), *, bindir=None):
     with sessions.locked(plan["root"]):
-        return _apply_update(plan, overwrite)
+        return _apply_update(plan, overwrite, bindir=bindir)
 
 
-def _apply_update(plan, overwrite=()):
+def _apply_update(plan, overwrite=(), *, bindir=None):
     root = plan["root"]
     idle(root)
     try:
@@ -302,7 +304,8 @@ def _apply_update(plan, overwrite=()):
                     raise
             originals.append((path, previous))
             _atomic(path, item["text"].encode("utf-8"), item.get("mode"))
-        _atomic(Path(root) / core.SESSION_FILE, json.dumps(plan["session"], ensure_ascii=False, indent=1).encode())
+        sessions.write(root, plan["session"], sessions.revision(raw), warnings=plan.setdefault("script_warnings", []),
+                       bindir=bindir)
     except OSError:
         for path, previous in reversed(originals):
             if previous is None:
@@ -321,12 +324,12 @@ def _apply_update(plan, overwrite=()):
     return plan["session"]
 
 
-def restore(workdir):
+def restore(workdir, *, warnings=None, bindir=None):
     with sessions.locked(workdir):
-        return _restore(workdir)
+        return _restore(workdir, warnings=warnings, bindir=bindir)
 
 
-def _restore(workdir):
+def _restore(workdir, *, warnings=None, bindir=None):
     idle(workdir)
     choices = backups(workdir)
     if not choices:
@@ -337,7 +340,7 @@ def _restore(workdir):
         raise ValueError(T("工作目录记录的格式有误"))
     _, current = _record(workdir)
     _backup(workdir, current)
-    _atomic(Path(workdir) / core.SESSION_FILE, raw)
+    sessions.write_bytes(workdir, raw, sessions.revision(current), warnings=warnings, bindir=bindir)
     return data
 
 
@@ -398,7 +401,7 @@ def prepare_clear(workdir, all_files=False, allow_untracked=False):
         except FileNotFoundError:
             pass
     inputs = config.parse_inputs(inputs_raw) if inputs_raw is not None else None
-    protected = set(inputs or ()) | {core.SESSION_FILE, config.INPUTS_FILE}
+    protected = set(inputs or ()) | {core.SESSION_FILE, config.INPUTS_FILE, "grasp_run"}
     protected.update(p.name for p in backups(root))
     entries, kept = [], []
     fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)

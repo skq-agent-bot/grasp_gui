@@ -202,6 +202,7 @@ grasp_gui FILE             open the tab for this file by content, only this file
 grasp_gui check CONFIG.json             check a shared configuration (exit code 1 if it cannot be imported)
 grasp_gui script CONFIG.json [--bindir DIR] [--mpi "mpirun -np N"]
                                         print the shell script of its pipeline (runs in the current directory)
+grasp_gui script WORKDIR                rebuild and print the paths of the work-directory scripts
 grasp_gui steps                         reference of all program tabs and fields (Markdown, = docs/STEPS.md)
 grasp_gui reference FILE.cm …           level energies of mixing coefficient files as "reference" JSON
 ```
@@ -382,6 +383,41 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   JSON file elsewhere.
 * **Slurm job script (Slurm 作业脚本)** dialog: job name, partition, nodes, tasks, time, memory, modules, e-mail,
   extra `#SBATCH` lines (remembered). Upload the script with the inputs of the working directory and `sbatch` it.
+
+### Run scripts in the working directory / 工作目录运行脚本
+
+Saving a nonempty pipeline updates `grasp_run/run.sh` and `grasp_run/submit.sbatch` from `.grasp_gui.json`.
+The script headers identify the record revision. Each step appears once with its primary inputs and outputs.
+Unchanged scripts keep their modification times. On a generation error the record is still saved and the
+warning appears in the calculation output and status bar. A same-named user file is preserved. When the pipeline
+becomes empty, the app removes its own scripts and removes the directory if it is empty.
+
+```sh
+cd /path/to/calculation
+sh grasp_run/run.sh
+sh grasp_run/run.sh 4 6
+sbatch grasp_run/submit.sbatch
+sbatch grasp_run/submit.sbatch 4 6
+```
+
+Both commands accept an inclusive one-based range. `run.sh` finds its working directory relative to the script
+and reports the failing step if a command exits with an error. It uses the GRASP program directory from the
+machine that generated it. Set `GRASP_RUN_BINDIR`, `GRASP_RUN_NP`, `GRASP_RUN_MPIRUN`, `GRASP_RUN_MPI_TMP`,
+or `GRASP_RUN_NICE` in the environment to override settings. MPI launcher prefixes should use
+`$GRASP_RUN_NP` for the process count. The GUI continues to use its existing background runner.
+
+保存非空流程后，从 `.grasp_gui.json` 更新 `grasp_run/run.sh` 和 `grasp_run/submit.sbatch`。文件头标注记录修订号，
+每步正文只出现一次，前面列出主要输入和输出。内容相同则保留修改时间。生成失败时记录照常保存，提示显示在计算输出和状态栏。
+程序保留用户同名文件。流程为空时，只删除程序生成的脚本，目录变空才删除。
+
+可以按上面的命令手动运行全部或指定连续步骤，起止编号从 1 开始且均包含。计算目录由 `run.sh` 的位置确定，某步命令失败时
+显示步号后停止。GRASP 路径使用生成时所在机器的默认值，可用列出的环境变量覆盖。MPI 启动前缀用 `$GRASP_RUN_NP`
+统一进程数；界面仍用原有后台运行方式。用 `grasp_gui script 工作目录` 手动重建脚本。只清理结果时保留 `grasp_run/`，
+明确选择“全部删除”才可一并删除。上传和下载默认不勾选其中的文件。
+
+| 中文 | English |
+|---|---|
+| ![传输默认保留脚本](images/zh_run_script_transfer.png) | ![Generated scripts unchecked for transfer](images/en_run_script_transfer.png) |
 
 ### Background runs and logging out / 后台运行与退出登录 (KillUserProcesses)
 

@@ -143,7 +143,8 @@ def test_clear_selection_and_all_delete_survives_close(qapp, tmp_path, no_dialog
 
     def delete_results(d):
         assert not d.all_files.isChecked()
-        assert {d.kept.item(i).text() for i in range(d.kept.count())} == {"input", core.SESSION_FILE, config.INPUTS_FILE}
+        assert {d.kept.item(i).text() for i in range(d.kept.count())} == {
+            "input", core.SESSION_FILE, config.INPUTS_FILE, "grasp_run"}
         for i in range(d.files.count()):
             if d.files.item(i).data(Qt.UserRole)["name"] == "other.cm":
                 d.files.item(i).setCheckState(Qt.Unchecked)
