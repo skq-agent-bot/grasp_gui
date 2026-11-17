@@ -329,6 +329,8 @@ class SparseCoefficients:
 
 
 class RemoteLevels(LevelPanel):
+    LOCAL_TRANSITIONS = False
+
     def __init__(self, source, directory):
         self.remote_source, self.remote_directory = source, directory
         self.remote_generation, self.remote_closed, self.remote_rows = 0, False, []

@@ -732,6 +732,7 @@ class DiagramExportDialog(QDialog):
 class LevelPanel(Panel):
     KIND, TITLE = "levels", "能级图"
     MAX_ROWS = 500
+    LOCAL_TRANSITIONS = True
 
     def __init__(self, workdir, settings=saved_settings):
         super().__init__()
@@ -1157,15 +1158,10 @@ class LevelPanel(Panel):
         self.tr_all.clicked.connect(lambda: self.compute(full=True))
         self.tr_np = QSpinBox()
         self.tr_np.setRange(1, max(os.cpu_count() or 1, 1) * 4)
-        cfg = core.load_config()
-        if "tr_np" not in cfg:
-            settings = self.settings()
-            cfg["tr_np"] = core.default_mpi_np(settings["bindir"], settings["mpirun"])
-            core.save_config(tr_np=cfg["tr_np"])
-        self.tr_np.setValue(int(cfg["tr_np"]))
+        self.refresh_transition_default()
         self.tr_np.setToolTip(T("计算全部 J 时的 MPI 进程数") + "\n" +
                               T("默认按物理核数；超线程对 GRASP 帮助不大。"))
-        self.tr_np.valueChanged.connect(lambda n: core.save_config(tr_np=n))
+        self.tr_np.valueChanged.connect(lambda n: core.save_config(tr_np=n, tr_np_user=True))
         self.tr_stop = QPushButton(T("停止"))
         self.tr_stop.clicked.connect(self.runner.stop)
         row.addWidget(self.tr_run)
@@ -1740,6 +1736,25 @@ class LevelPanel(Panel):
                 return T("找不到 {p}", p=prog)
         return None
 
+    def refresh_transition_default(self, settings=None):
+        prefs = core.load_config()
+        previous = prefs.get("tr_np")
+        if not self.LOCAL_TRANSITIONS or core.user_process_count(prefs, "tr_np"):
+            value = int(previous or 1)
+        else:
+            settings = self.settings() if settings is None else settings
+            value = core.default_mpi_np(settings["bindir"], settings["mpirun"])
+            if value != previous:
+                core.save_config(tr_np=value, tr_np_user=False)
+                if previous is not None:
+                    text = T("跃迁 MPI 进程数的默认值已改为 {n}。", n=value)
+                    QTimer.singleShot(0, lambda: self.status(text))
+        blocked = self.tr_np.blockSignals(True)
+        try:
+            self.tr_np.setValue(value)
+        finally:
+            self.tr_np.blockSignals(blocked)
+
     def compute(self, full=False):
         """计算选中的一对能级之间的跃迁：默认只算两个能级所在的 J^π (用主窗口的进程数)；
         full 时算两个文件的全部 J^π，用 MPI (进程数见跃迁页)。"""
@@ -1752,6 +1767,7 @@ class LevelPanel(Panel):
             kinds = missing
         cfg = dict(self.settings())
         if full:
+            self.refresh_transition_default(cfg)
             cfg["np"] = self.tr_np.value()
         self.tr_log.clear()
         try:

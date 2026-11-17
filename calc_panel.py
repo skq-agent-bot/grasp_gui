@@ -1853,9 +1853,9 @@ class CalcPanel(QWidget):
                     groups=self.groups, group=self.group,
                     pipeline=self.pipeline, tab=self.nav.currentWidget().step.key)
 
-    def apply(self, data):
+    def apply(self, data, *, user_run_settings=False):
         self.session_cleared = False
-        self.run.apply(data)
+        self.run.apply(data, user=user_run_settings)
         if "workdir" in data:
             d = os.path.abspath(str(data["workdir"]))
             if d != self.cur_workdir:
@@ -2054,5 +2054,5 @@ class CalcPanel(QWidget):
         if not path:
             return
         with open(path) as f:
-            self.apply(json.load(f))
+            self.apply(json.load(f), user_run_settings=True)
         self.status(T("已载入 {p}", p=path))
