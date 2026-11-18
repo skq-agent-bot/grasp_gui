@@ -76,6 +76,15 @@ def upgrade(doc):
     return doc
 
 
+def choice_errors(step, values):
+    """列出实际提供的无效选项；缺少的值仍使用字段默认值。"""
+    for field in step.fields:
+        if isinstance(field, core.Choice) and field.key in values and field.code(values[field.key]) is None:
+            yield T("{field} 的值 {value} 不在可选范围内 ({options})",
+                    field=T(field.label), value=repr(values[field.key]),
+                    options=", ".join(code for code, _ in field.options))
+
+
 def check(doc, *, validate=True):
     """升级并检查配置：返回 (配置, 警告列表)；无法导入时抛出 ConfigError。
     缺少的参数用默认值补上，不认识的参数忽略 (都列入警告)。
@@ -104,6 +113,9 @@ def check(doc, *, validate=True):
         vals = job.get("vals")
         if not isinstance(vals, dict):
             raise ConfigError(T("第 {i} 步的格式有误", i=i))
+        error = next(choice_errors(step, vals), None)
+        if error:
+            raise ConfigError(T("第 {i} 步 ({step})：{e}", i=i, step=step.key, e=error))
         keys = {f.key for f in step.fields if isinstance(f, core.Field)}
         unknown = sorted(set(vals) - keys)
         missing = sorted(keys - set(vals) - {f.key for f in step.fields if getattr(f, "added", False)})
