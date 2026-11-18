@@ -197,10 +197,12 @@ def valid_cache(data, kind, saved):
 
 def save_cache(saved, kind, data):
     unchanged(saved)
+    directory = next(iter(cache_dirs(saved[0])), None)
+    if directory is None:
+        return
     doc = dict(version=CACHE_VERSION, stamp=saved, stride=STRIDE, kind=kind, data=data)
     encoded = json.dumps(data, separators=(",", ":"), sort_keys=True).encode("utf-8")
     doc["digest"] = hashlib.sha256(encoded).hexdigest()
-    directory = cache_dirs(saved[0])[0]
     temp = None
     try:
         directory.mkdir(parents=True, exist_ok=True)
@@ -224,7 +226,9 @@ def save_cache(saved, kind, data):
 def clean_cache(directory):
     """只清理用户缓存中本目录已删除文件的索引，保留结果目录中的旧缓存。"""
     directory = os.path.abspath(directory)
-    folder = cache_dirs(os.path.join(directory, "_"))[0]
+    folder = next(iter(cache_dirs(os.path.join(directory, "_"))), None)
+    if folder is None:
+        return
     try:
         names = list(folder.glob("*.json"))
     except OSError:

@@ -149,6 +149,11 @@ def test_user_cache_and_memory_fallback(tmp_path, monkeypatch):
     assert len(mix.open_csfs(source)[0]) == 1100
     assert not legacy.exists()
 
+    with monkeypatch.context() as disabled:
+        disabled.setattr(index, "cache_dirs", lambda *args: [])
+        assert len(mix.open_csfs(source)[0]) == 1100
+        index.clean_cache(path.parent)
+
     legacy.mkdir(parents=True)
     cache.rename(legacy / name)
     assert index.cached(source, "csf") is not None
