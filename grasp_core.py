@@ -1429,6 +1429,11 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "阈值 {n} cm⁻¹，参考能级 {ref}": "Threshold {n} cm⁻¹, reference {ref}",
     "受数据或行数上限影响，部分结果未列出。": "Some results were omitted because of data or row limits.",
     "激发能与增量 (cm⁻¹)": "Excitation and increment (cm⁻¹)",
+    "激发能增量绝对值 ({unit}，对数刻度)": "Absolute excitation increment ({unit}, log scale)",
+    "|ΔE| ({unit}，对数)": "|ΔE| ({unit}, log)",
+    "没有可绘制的非零增量。": "There are no nonzero increments to plot.",
+    "轨道层": "Orbital layer",
+    "零增量保留在表中。": "Zero increments are listed in the table.",
     "状态": "Status",
 }
 
