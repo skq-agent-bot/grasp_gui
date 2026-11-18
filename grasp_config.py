@@ -104,6 +104,12 @@ def check(doc, *, validate=True):
             c = job["command"]
             if not isinstance(c, dict) or not isinstance(c.get("prog"), str) or not c["prog"].strip():
                 raise ConfigError(T("第 {i} 步的格式有误", i=i))
+            for key in ("pre", "post"):
+                actions = job["command"].get(key)
+                if isinstance(actions, (list, tuple)) and any(
+                    isinstance(action, (list, tuple)) and action and action[0] == "write" for action in actions
+                ):
+                    raise ConfigError(T("配置中的自定义命令不能使用写文件动作"))
             continue
         step = STEPS.get(job.get("step"))
         if step is None:

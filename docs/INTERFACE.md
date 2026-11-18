@@ -243,6 +243,14 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use
   *Custom*). `rcsfgenerate` has several CSF lists (*+ Add list*, *− Delete current list*, *Reference configurations
   (one per line)*). `rmcdhf` can use the in-memory version `rmcdhf_mem` / `rmcdhf_mem_mpi`.
+* **rcsfgenerate user orbital order / 自定义轨道顺序**. Select `u` (*user*) to edit *Orbital order*.
+  Enter nonrelativistic orbitals such as `2p,2s,1s`, separated by commas or newlines. Entries must be unique
+  and satisfy `n ≤ 15` and `l < n`. Preview shows both the file-writing action and stdin. Running the step
+  writes `clist.ref` in the working directory before launching GRASP. GRASP appends unlisted orbitals in default order.
+
+  在 *轨道排序* 中选择 `u`（用户指定）后可编辑 *轨道顺序*。输入非相对论轨道，例如 `2p,2s,1s`，
+  可用逗号或换行分隔。轨道不重复，并满足 `n ≤ 15` 和 `l < n`。预览同时显示写文件动作和交互回答。
+  运行该步时先在工作目录写出 `clist.ref`，再启动 GRASP。GRASP 将未列出的轨道按默认顺序接在后面。
 * **rmcdhf NSIC**: *Modify NSIC (修改 NSIC)* enables a non-negative count of extra first-cycle orbital improvements; unchecked uses the program default.
   EOL defaults: `(NW-NFIX)/4` serial, `4+(NW-NFIX)/4` MPI, or 0 with varied correlation orbitals; AL: `2+(NW-NFIX)/4` (integer division).
   The page description explains the defaults; older configurations import with this option unchecked and no warning.
