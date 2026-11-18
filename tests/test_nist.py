@@ -1,8 +1,15 @@
 """NIST 数据解析、匹配、缓存和网络边界；测试不连接外部主机。"""
 
+from concurrent.futures import ThreadPoolExecutor
+from email.message import Message
+from io import BytesIO
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
+from urllib.request import HTTPSHandler
+from urllib.response import addinfourl
 
 import pytest
 
@@ -24,6 +31,63 @@ def test_spectra_and_fixed_endpoint(value, expected):
 def test_invalid_spectrum_does_not_create_url(value):
     with pytest.raises(ValueError):
         nist.query_url(value)
+
+
+def test_fetch_ignores_proxy_and_rejects_redirect(monkeypatch):
+    url = nist.query_url("Li I")
+    raw = (DATA / "li-i.csv").read_bytes()
+    requests = []
+    monkeypatch.setenv("https_proxy", "http://proxy.invalid:8080")
+    monkeypatch.delenv("no_proxy", raising=False)
+    monkeypatch.delenv("NO_PROXY", raising=False)
+
+    def https_open(_self, request):
+        assert request.full_url == url and request.host == "physics.nist.gov"
+        requests.append(request.full_url)
+        headers = Message()
+        if len(requests) == 1:
+            headers["Location"] = "https://redirect.invalid/levels"
+            response = addinfourl(BytesIO(), headers, url, 302)
+        else:
+            response = addinfourl(BytesIO(raw), headers, url, 200)
+        response.msg = "Fake NIST response"
+        return response
+
+    monkeypatch.setattr(HTTPSHandler, "https_open", https_open)
+    with pytest.raises(HTTPError) as error:
+        nist.fetch("Li I")
+    assert error.value.code == 302
+    error.value.close()
+    # 失败后应能重新发起请求。
+    assert nist.fetch("Li I") == raw
+    assert requests == [url, url]
+
+
+def test_fetch_allows_only_one_request_at_a_time(monkeypatch):
+    raw = (DATA / "li-i.csv").read_bytes()
+    started, release = Event(), Event()
+    requests = []
+
+    def https_open(_self, request):
+        requests.append(request.full_url)
+        assert request.full_url == nist.query_url("Li I")
+        started.set()
+        assert release.wait(5)
+        response = addinfourl(BytesIO(raw), Message(), request.full_url, 200)
+        response.msg = "Fake NIST response"
+        return response
+
+    monkeypatch.setattr(HTTPSHandler, "https_open", https_open)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(nist.fetch, "Li I")
+        try:
+            assert started.wait(5)
+            with pytest.raises(ValueError, match="已有一次 NIST 请求在进行"):
+                nist.fetch("Fe XV")
+        finally:
+            release.set()
+        assert first.result(timeout=5) == raw
+    assert requests == [nist.query_url("Li I")]
 
 
 def test_read_official_csv_and_uncertain_tsv():
