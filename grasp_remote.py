@@ -356,8 +356,11 @@ class Operations(service.Service):
         root = self.directory_files(directory)
         path = self.path(str(root / file))
         blocks = mix.open_mix(path, summary=True, k=limit, cancel=self.cancel)
-        b = next(b for b in blocks if b.nb == block)
-        lv = next(lv for lv in b.levels if lv.pos == index)
+        try:
+            b = next(b for b in blocks if b.nb == block)
+            lv = next(lv for lv in b.levels if lv.pos == index)
+        except StopIteration as e:
+            raise ValueError(T("块或能级不存在")) from e
         csf = mix.find_csf_for(str(path))
         csfs = mix.open_csfs(csf, cancel=self.cancel) if csf else None
         top = lv.top_components(limit)

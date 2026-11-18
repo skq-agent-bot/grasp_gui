@@ -962,7 +962,8 @@ class LevelPanel(Panel):
     def render_levels(self):
         unit_label, factor, efmt = self.unit_info()
         data = []
-        previous_partial = getattr(self, "partial_files", [])
+        read_errors = []
+        previous_warnings = getattr(self, "level_warnings", [])
         self.partial_files = []
         signals = QSignalBlocker(self.files)  # 提示 / 颜色不是用户勾选；不能再触发 itemChanged 重入重绘。
         for i in range(self.files.count()):
@@ -976,6 +977,7 @@ class LevelPanel(Panel):
             if isinstance(res, Exception):
                 it.setForeground(QColor("#c00"))
                 it.setToolTip(T("无法读取：{e}", e=res))
+                read_errors.append(f"{os.path.basename(path)}: {res}")
                 continue
             it.setForeground(QColor("black"))
             tooltip = path
@@ -1032,12 +1034,15 @@ class LevelPanel(Panel):
         self.load_marked()
         self.show_composition()
         warnings = []
+        if read_errors:
+            warnings.append(T("无法读取：{e}", e="; ".join(read_errors)))
         if self.partial_files:
             warnings.append(T("文件尚未写完：{files}", files=", ".join(self.partial_files)))
         if self.zero_warnings:
             warnings.append(T("无法确定哈密顿量，零点可能不可比") + "：" + ", ".join(self.zero_warnings))
-        if warnings or previous_partial:
-            self.status("；".join(warnings))
+        self.level_warnings = warnings
+        if warnings or previous_warnings:
+            self.status(T("；").join(warnings))
 
     @staticmethod
     def jp(block):
@@ -1796,7 +1801,7 @@ class LevelPanel(Panel):
                     self.loading = False
                     self.read_data = result
                     self.render_levels()
-                    if not self.zero_warnings:
+                    if not self.level_warnings and self.checked_paths():
                         self.status(T("读入完成"))
                 elif token == self.composition_token:
                     self.compositions = {token[2]: result}

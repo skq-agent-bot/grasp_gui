@@ -1344,6 +1344,10 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。": "The zero-order CSF list {z} and {f} have different symmetry blocks ({a} / {b}): their J and parity blocks must match one to one.",
     "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
     "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
+    # 代码审核修复 (#59)
+    "；": "; ",
+    "块或能级不存在": "Block or level does not exist",
+    "能量不是有限的数，计算可能已经发散": "Energy is not finite; the calculation may have diverged",
     # 服务器工作站运行设置 (#55)
     "按主机保存的运行设置无效：{e}，运行时可在服务器运行设置中修改。":
         "Saved run settings for this host are invalid: {e}. Edit them in Server run settings before running.",
@@ -2751,7 +2755,9 @@ def shell_script(pipeline, bindir, workdir, mpi_prefix="", mpitmp="tmp_mpi"):
             f"export PATH={shlex.quote(bindir)}:$PATH", *program_fallbacks(pipeline),
             f"cd {shlex.quote(workdir)}", ""]
     if mpi_prefix:
-        body += [f"export MPI_TMP=\"$PWD\"/{shlex.quote(mpitmp or 'tmp_mpi')}", 'mkdir -p "$MPI_TMP"',
+        temporary = mpitmp or "tmp_mpi"
+        value = shlex.quote(temporary) if os.path.isabs(temporary) else f'"$PWD"/{shlex.quote(temporary)}'
+        body += [f"export MPI_TMP={value}", 'mkdir -p "$MPI_TMP"',
                  "# hwloc's GL plugin makes mpirun hang under WSLg",
                  'export HWLOC_COMPONENTS="${HWLOC_COMPONENTS:--gl}"', ""]
     for i, job in enumerate(pipeline, 1):

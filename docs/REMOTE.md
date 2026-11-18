@@ -472,6 +472,14 @@ remote grouping. Older servers without these fields are shown as unknown for `.c
 目录签名已有 `.csum` 大小/修改时间，单独更新总结文件也使远程缓存失效；旧端缺字段时按未知组提示，不查本机文件。
 
 Two server workers permit pipelined reads; run/stop are serialized. Server code uses only the Python standard library.
+`levels` / `view(kind=levels)` may additionally return `errors: [{file, error}]` for unreadable mixing files.
+Non-finite energies reject the whole affected file while retaining other results, including the brief preview.
+The desktop marks these files unreadable with the reported reason. Healthy replies omit `errors`; the protocol is unchanged.
+能级请求可选返回逐文件的 `errors`；非有限能量使该文件无法读取，不影响其他文件及预览，桌面显示原因。
+没有文件错误时不返回该字段，协议号不变。
+`errors` and `partial_files` may coexist in one levels reply. Unreadable files occur only in `errors`,
+while incomplete readable files retain their levels and warnings. 两种字段可以同时返回；无法读取的文件只列在
+`errors`，可读但未写完的文件保留能级和提示。
 
 ```json
 {"id":1,"method":"hello","args":{"protocol":1,"version":"client version"}}

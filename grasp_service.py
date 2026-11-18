@@ -375,7 +375,11 @@ class Service:
         result = dict(levels=rows, truncated=False)
         for name in names:
             path = self.path(str(root / name))
-            blocks = mix.open_mix(path, summary=not brief, k=max(components, 1), cancel=cancel, progress=progress)
+            try:
+                blocks = mix.open_mix(path, summary=not brief, k=max(components, 1), cancel=cancel, progress=progress)
+            except (OSError, ValueError) as e:
+                result.setdefault("errors", []).append(dict(file=path.name, error=str(e)))
+                continue
             if blocks.partial:
                 result.setdefault("partial_files", []).append(path.name)
             hamiltonian = mix.hamiltonian(path, self.path)

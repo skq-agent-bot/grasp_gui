@@ -500,6 +500,8 @@ results-only cleanup is refused. Shared configuration and session formats are un
 permanent, including selected subdirectories; symbolic links are only unlinked. Root, home and system directories
 are refused; a directory without a session requires a separate confirmation. Clearing everything also clears the
 visible pipeline, and closing the window does not recreate the removed record.
+Refusal before deletion begins (for example, an active run) reports only its reason. Errors after deletion
+begins warn that some selected items may already have been deleted.
 
 “清空工作目录…”先列出删除与保留项、总数量和大小（B / KB / MB / GB，保留一位小数），可取消勾选或用“全选 / 全不选”
 批量选择可删除项；默认只删结果，保留工作目录记录、备份、输入清单及清单中的附带输入，运行状态、日志和缓存可以清理。
@@ -508,6 +510,7 @@ visible pipeline, and closing the window does not recreate the removed record.
 “全部删除”包括输入、清单和记录，必须输入目录名确认；删除不能恢复，选中的子目录会递归删除，
 符号链接只删除链接本身。根目录、家目录、系统目录禁止清空；没有工作目录记录的目录另行确认。
 全部删除后界面流程也清空，关闭窗口不会重新生成记录。
+开始删除前被拒绝（例如仍有任务运行）时只显示原因；开始删除后才发生的错误才提示可能已有部分项目被删除。
 
 ### Export configuration (导出配置)
 
@@ -559,6 +562,14 @@ rmcdhf 部分另含 `name.sum` 中每个轨道最终的自洽程度和广义占�
 
 Large mixing and CSF files are indexed in the background. The status bar shows *Reading … (正在读取 …)*
 and progress; changing the directory or file selection cancels obsolete work. Tabs and controls remain usable.
+Mixing files with any non-finite energy (NaN or ±Inf) are unreadable: the file is marked red and its tooltip
+and the status bar explain that the calculation may have diverged. Other files remain visible. Local, remote,
+summary and MCP readers use the same check before cache writing or energy-zero calculations.
+混合系数文件中只要有 NaN 或正负无穷能量，整个文件就标为无法读取；文件名变红，提示框和状态栏说明计算可能已经发散，
+其他文件仍可显示。本机、远程、摘要与 MCP 共用检查，在写索引缓存或计算零点前拒绝该文件。
+Read errors, incomplete-file notices and uncertain energy-zero warnings appear together; their separator is
+localized. Clearing the last warning also clears its status message. 读取错误、未写完和零点不确定三类提示同时显示；
+全部消失后清除旧状态提示，英文界面使用英文分隔符。
 The composition pane briefly shows *Reading composition… (正在读取组成…)* when the selected level's CSFs are read.
 Only the displayed components are parsed; changing the weight threshold reuses the same data. Small mixing files
 are analyzed serially to avoid process startup delays; larger files can use up to four local analysis processes.
