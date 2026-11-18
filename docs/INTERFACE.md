@@ -22,8 +22,8 @@ without starting it). Labels are given as *English (中文)*. Screenshots: `docs
 ```
 
 * **Working directory (工作目录)**: edit + *Browse… (浏览…)* + *Recent (最近)* menu (its first item, *Open another
-  directory… (打开其他目录…)*, opens a folder dialog). Changing it saves the session
-  of the old directory, loads the new one's, and refreshes the viewers. On start the last directory is opened.
+  directory… (打开其他目录…)*, opens a folder dialog). Changing it saves the previous session when needed,
+  loads the new one's, and refreshes the viewers. On start the last directory is opened.
 * **Settings (设置)** toggle: collapsed it shows a one-line summary (`GRASP bin: … · serial` / `MPI n processes`);
   expanded: *GRASP bin directory (GRASP bin 目录)* + *Browse…*, *MPI processes (MPI 进程数)*, *mpirun command
   (mpirun 命令)*, *MPI_TMP*, *Lower priority of calculations (nice) (降低计算进程优先级)*. With more than one process
@@ -69,6 +69,12 @@ reported; a read-only viewer can still close, while starting a run requires a sa
 保存之前和窗口重新获得焦点时，计算页检查工作目录记录。外部修改会显示与更新预览相同的摘要；
 默认载入新记录，新增步骤不自动运行；保留自己的修改须再次确认覆盖。取消不写入。保存失败会提示，
 只读查看仍可关闭；开始计算前必须保存成功。
+
+When a workdir record contains an unrecognized choice, the Calculation tab opens using the current default
+and lists the affected steps or form fields and the original values. Shared configuration imports reject
+unknown choices before installation.
+工作目录记录含未知选项时仍可打开，计算页使用当前默认值并列出受影响的步骤或表单字段及原值。
+导入共享配置时则在写入前拒绝未知选项。
 
 While MCP is enabled, opening a calculation with `started_by: "mcp"` shows **[This calculation was
 started by an MCP agent] ([此计算由 MCP agent 启动])** in the output, including after completion.
@@ -377,9 +383,16 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
     starting a new run there asks first.
   * Files in the working directory: `.grasp_gui_run.json` (process, host, start / end, steps, current step, result),
     `.grasp_gui_run.log` (the whole output of the last run).
-* **Session (工作目录记录)**: parameters, groups and pipeline are saved in `<workdir>/.grasp_gui.json` on every change
-  and restored when the directory is opened again. *Save / Load parameters* write / read the same content as a
-  JSON file elsewhere.
+* **Session (工作目录记录)**: opening a directory restores its parameters, groups and pipeline from
+  `<workdir>/.grasp_gui.json`. For a directory without a record, the first record is created by editing or
+  clearing the pipeline, running, importing, or saving changed form or group parameters when switching
+  groups or directories or closing the window. Inherited parameters, browsing results and switching tabs
+  or groups by themselves do not create a record. Changing only run settings saves user preferences.
+  *Save / Load parameters* write / read the same content as a JSON file elsewhere.
+
+  工作目录已有记录时照常保存。没有记录时，编辑或清空流程、运行、导入会建立记录。修改表单或态组参数后，
+  在切换态组、切换目录或关闭窗口时保存。沿用上个目录的参数、查看结果、切换标签页或仅切换态组不产生记录。
+  只调整运行设置时保存到用户偏好。
 * **Slurm job script (Slurm 作业脚本)** dialog: job name, partition, nodes, tasks, time, memory, modules, e-mail,
   extra `#SBATCH` lines (remembered). Upload the script with the inputs of the working directory and `sbatch` it.
 
@@ -550,11 +563,12 @@ The composition pane briefly shows *Reading composition… (正在读取组成�
 Only the displayed components are parsed; changing the weight threshold reuses the same data. Small mixing files
 are analyzed serially to avoid process startup delays; larger files can use up to four local analysis processes.
 
-Indexes and leading-component summaries are cached in `<workdir>/.grasp_gui/index/`. For a read-only directory,
-the cache falls back to `~/.cache/grasp_gui/index/<directory hash>/` (`$XDG_CACHE_HOME` if set). If neither location
-is writable, viewing still works without a disk cache. A changed source invalidates its cache; damaged caches
-are rebuilt, and entries for deleted sources are removed on the next directory scan. These caches contain no
-copies of the full calculation files and can be deleted to reclaim space.
+New indexes and leading-component summaries go in `$XDG_CACHE_HOME/grasp_gui/index/<directory hash>/`
+(`~/.cache` when unset), using the server user's cache for remote reads. Existing
+`<workdir>/.grasp_gui/index/` entries can still be read. Viewing works without a disk cache if the user cache
+cannot be written. Changing a source invalidates its cache, and a directory scan removes entries for deleted
+sources from the user cache. These indexes can be deleted to reclaim space. Calculated transitions are stored
+in `<workdir>/.grasp_gui/tr/`.
 
 Skipped symmetry blocks are matched to the CSF list by their original block numbers. An rci empty-block
 header and an omitted rmcdhf block do not hide later levels. A file ending at a complete block is considered
@@ -565,9 +579,10 @@ Remote views use the server's partial-file metadata; summary output retains its 
 
 中文：大型混合系数和 CSF 文件在后台建立索引，状态栏显示读取进度；切换文件或目录会取消旧请求，界面保持响应。
 选中能级时只解析所需的 CSF，阈值改变时复用已读数据。小混合文件串行分析，避免启动进程池的延迟；大文件至多用四个本地分析进程。
-索引和主要成分摘要保存在工作目录的 `.grasp_gui/index/`；
-只读目录改用用户的 `~/.cache/grasp_gui/index/<目录哈希>/`，两处都不可写时仍可查看，但不保留磁盘缓存。
-源文件变化时缓存失效，损坏时重建，源文件删除后在下次扫描清理；缓存不含完整结果文件的副本，可直接删除。
+新索引和主要成分摘要写到 `$XDG_CACHE_HOME/grasp_gui/index/<目录哈希>/`（未设置时用 `~/.cache`），
+远程读取使用服务器用户的缓存目录。仍可读取工作目录中已有的 `.grasp_gui/index/`。
+用户缓存不可写时仍可查看。源文件变化时缓存失效，下次扫描会清理用户缓存中已删除源文件的索引。
+这些索引可直接删除。计算出的跃迁结果保存在工作目录的 `.grasp_gui/tr/`。
 
 跳过的对称块按原始块号与 CSF 配对，rci 的空块头和 rmcdhf 省略的块不会丢掉后面的能级。文件在完整块后结束时，
 还须按文件头的能级总数核对是否完整；记录被截断仍视为未写完。未写完的文件在文件提示框中显示
