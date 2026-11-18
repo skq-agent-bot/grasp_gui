@@ -28,9 +28,10 @@ def test_block_level_lines(text, expected):
     assert core.count_levels(["", "  ", " - ", "1,3-4"]) == 3
 
 
-def test_stdin_keeps_skips_and_counts_only_selected_levels_for_weights():
-    one = job("rmcdhf", levels="\n1\n-", weights="9", uweights="2")["stdin"].splitlines()
-    assert one == ["y", "", "1", "", "*", "*", "100"]
+@pytest.mark.parametrize("level", ["1", ",1,", "1- 1", "1-,1"])
+def test_stdin_keeps_skips_and_counts_only_selected_levels_for_weights(level):
+    one = job("rmcdhf", levels=f"\n{level}\n-", weights="9", uweights="2")["stdin"].splitlines()
+    assert one == ["y", "", level, "", "*", "*", "100"]
     two = job("rmcdhf", levels="1\n-\n1", weights="9", uweights="1,2")["stdin"].splitlines()
     assert two == ["y", "1", "", "1", "9", "1,2", "*", "*", "100"]
     ci = job("rci", levels="1\n\n-\n")
@@ -39,9 +40,10 @@ def test_stdin_keeps_skips_and_counts_only_selected_levels_for_weights():
 
 
 @pytest.mark.parametrize("step", ["rmcdhf", "rci"])
-def test_rejects_all_skipped(step):
+@pytest.mark.parametrize("levels", ["\n-\n-", "\n, ,\n-"])
+def test_rejects_all_skipped(step, levels):
     with pytest.raises(ValueError, match="至少有一个块"):
-        job(step, levels="\n-\n-")
+        job(step, levels=levels)
 
 
 @pytest.mark.parametrize("levels,why", [("1\n1", "缺少块 3:3/2-"), ("1\n1\n1\n1", "多填了 1 行")])

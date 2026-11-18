@@ -1502,12 +1502,14 @@ def count_levels(lines):
     for ln in lines:
         if ln.strip() in ("", "-"):
             continue
-        for item in re.split(r"[\s,]+", ln):
+        # ITEMS 跳过逗号和空格，包括区间连字符后面的分隔符。
+        ln = re.sub(r"(?<=[0-9])-[ ,]+(?=\+?[0-9])", "-", ln)
+        for item in re.findall(r"[^\s,]+", ln):
             a, _, b = item.partition("-")
             try:
                 n += int(b) - int(a) + 1 if b else 1
             except ValueError:
-                n += 1 if item else 0
+                n += 1
     return n
 
 
@@ -1956,7 +1958,7 @@ class RWfnEstimate(Step):
 class BlockLevelsStep(Step):
     def validate(self, v):
         # LODSTATE 会重新读所有块，无法靠后续交互回答退出全跳过。
-        if not any(block_level_lines(v["levels"])):
+        if not any(line.replace(",", "").strip() for line in block_level_lines(v["levels"])):
             raise ValueError(T("至少有一个块需要选择能级"))
 
 
