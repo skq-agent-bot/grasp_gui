@@ -1,8 +1,9 @@
-"""在 Linux CI 也能核对桌面平台分支；实际 Cocoa 和后台套接字由 macOS CI 验证。"""
+"""平台环境与桌面查看流程；macOS CI 在 arm64 上验证 Qt 离屏界面。"""
 
 import os
 from pathlib import Path
 import shutil
+import sys
 
 import pytest
 
@@ -54,6 +55,8 @@ def test_native_mac_skips_wsl_and_bundled_font_config(qapp, tmp_path, monkeypatc
 @pytest.mark.gui
 @pytest.mark.parametrize("language", ["zh", "en"])
 def test_desktop_opens_example_wavefunctions_and_levels(qapp, tmp_path, monkeypatch, language):
+    from PySide6.QtGui import QAction, QFontDatabase, QKeySequence, QTextLayout
+
     import grasp_config as config
     import grasp_gui as gui
     from test_gui import spin
@@ -81,5 +84,28 @@ def test_desktop_opens_example_wavefunctions_and_levels(qapp, tmp_path, monkeypa
         assert panel.level_table.rowCount() == 2
         window.show_tab("calc")
         assert window.current_tab() == "calc"
+        if sys.platform == "darwin":
+            fonts = ("PingFang SC", "Helvetica Neue") if language == "zh" else ("Helvetica Neue", "PingFang SC")
+            available = set(QFontDatabase.families())
+            preferred = next((family for family in fonts if family in available), None)
+            if preferred:
+                assert qapp.font().family() == preferred
+            layout = QTextLayout("能级图 Levels", qapp.font())
+            layout.beginLayout()
+            layout.createLine().setLineWidth(1000)
+            layout.endLayout()
+            glyphs = [index for run in layout.glyphRuns() for index in run.glyphIndexes()]
+            assert glyphs and all(glyphs)
+
+            menus = {action.text(): action.menu() for action in window.menuBar().actions()}
+            switch = next(a for a in menus[core.T("视图")].actions() if a.text() == core.T("能级图"))
+            assert switch.shortcut().toString(QKeySequence.NativeText) == "⌘3"
+            switch.trigger()
+            assert window.current_tab() == "levels"
+            quit_action = next(a for a in menus[core.T("文件")].actions() if a.text() == core.T("退出"))
+            assert quit_action.menuRole() == QAction.QuitRole
+            quit_action.trigger()
+            assert not window.isVisible()
     finally:
-        assert window.close()
+        if window.isVisible():
+            assert window.close()
