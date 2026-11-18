@@ -1869,6 +1869,13 @@ class CalcPanel(QWidget):
 
     def apply(self, data):
         self.session_cleared = False
+        choice_warnings = []
+
+        def warn(step, values, location):
+            errors = list(grasp_config.choice_errors(step, values))
+            choice_warnings.extend(f"{location} · {error}" for error in errors)
+            return bool(errors)
+
         self.run.apply(data)
         if "workdir" in data:
             d = os.path.abspath(str(data["workdir"]))
@@ -1882,6 +1889,7 @@ class CalcPanel(QWidget):
             # 兼容旧版本以中文标签页名保存的"自定义"参数
             d = steps.get(f.step.key) or steps.get(f.step.name)
             if d and f.step.key not in core.GROUP_STEPS:
+                warn(f.step, d, T("表单 ({step})", step=f.step.key))
                 f.set_values(d)
         saved = data.get("groups")
         if saved is None:
@@ -1889,10 +1897,23 @@ class CalcPanel(QWidget):
             saved = {core.GROUPS[0]: {k: steps[k] for k in core.GROUP_STEPS if k in steps}}
         self.groups = {g: {k: dict(v, **saved.get(g, {}).get(k, {})) for k, v in core.group_defaults(g).items()}
                        for g in core.GROUPS}
+        for group, pages in self.groups.items():
+            for key, values in pages.items():
+                step = grasp_config.STEPS[key]
+                if warn(step, values, T("态组 {group} ({step})", group=group, step=key)):
+                    for field in step.fields:
+                        if isinstance(field, core.Choice):
+                            values[field.key] = core.normalize(field, values[field.key])
         self.group = data.get("group") if data.get("group") in core.GROUPS else core.GROUPS[0]
         self.load_group()
-        self.pipeline = [dict(j, pre=[tuple(a) for a in j["pre"]], post=[tuple(a) for a in j["post"]])
-                         for j in data.get("pipeline", [])]
+        self.pipeline = []
+        for i, job in enumerate(data.get("pipeline", []), 1):
+            step = grasp_config.STEPS.get(job.get("step"))
+            values = job.get("vals")
+            if step is not None and isinstance(values, dict) and warn(
+                    step, values, T("第 {i} 步 ({step})", i=i, step=step.key)):
+                job = dict(job, **grasp_config.make_job(job))
+            self.pipeline.append(dict(job, pre=[tuple(a) for a in job["pre"]], post=[tuple(a) for a in job["post"]]))
         self.refresh_list()
         tab = data.get("tab")
         if isinstance(tab, int):                # 旧版本按序号保存
@@ -1902,6 +1923,10 @@ class CalcPanel(QWidget):
             for f in self.forms:
                 if f.step.key == tab:
                     self.nav.setCurrentWidget(f)
+        if choice_warnings:
+            QMessageBox.warning(self, T("工作目录记录"),
+                                T("记录中的下列选项无法识别，已用默认值替换：\n{details}",
+                                  details="\n".join(choice_warnings)))
 
     def import_demo(self):
         self.import_config(examples=True)
