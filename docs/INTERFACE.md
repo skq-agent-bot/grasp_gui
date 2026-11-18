@@ -493,6 +493,9 @@ current pipeline are selected initially. The **External inputs** category includ
 Unrecognized files, including undeclared custom-command outputs, start unchecked. Internal files, including run
 records, are hidden in this mode.
 
+Cleanup recognizes serial and MPI angular coefficient files regardless of the current process count. It checks the
+recorded MPI working directory, or the current setting if absent, and also checks the default `tmp_mpi` directory.
+
 The default moves selected files to `.grasp_gui_cleaned/<timestamp>/` and keeps their relative paths.
 Choose **Delete permanently** to free space. The dialog shows the directory, count, total size, and method before
 asking for confirmation, with **No** selected by default. The backup list shows time, file count, and size.
@@ -509,6 +512,7 @@ the visible pipeline clears and closing the window leaves the record absent.
 
 计算页从 **程序输出 → 工作目录 → 清空工作目录…** 打开。初始只勾选流程生成的文件。附带输入和首次读取前尚未由流程生成的
 文件归入“外部输入”，勾选时会提示重跑风险。未知文件（包括自定义命令未声明的输出）默认不勾选，内部文件和运行记录不显示。
+清理识别串行和 MPI 角系数文件。MPI 目录优先使用工作记录的设置，缺少时使用当前设置，同时检查默认的 `tmp_mpi`。
 
 默认将文件移到 `.grasp_gui_cleaned/<时间>/`，保持相对路径。要释放空间可选“直接删除”。最终确认列出目录、数量、大小
 和方式，默认选“否”。备份列表显示时间、数量和大小，选中后可以确认删除。后台运行中或 Slurm 作业未结束、状态未知时

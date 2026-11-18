@@ -33,7 +33,7 @@ def test_example1_reruns_after_cleanup(grasp_bindir, tmp_path):
 
     run()
     files = {p.name: p.read_bytes() for p in tmp_path.iterdir() if p.is_file() and not p.name.startswith(".grasp")}
-    plan = grasp_workdir.prepare_clear(tmp_path, classified=True, run=dict(np=1))
+    plan = grasp_workdir.prepare_clear(tmp_path, classified=True, run=dict(np=8))
     names = {row["name"] for row in plan["classes"]["generated"]}
     assert names == files.keys()
     result = grasp_workdir.clear(plan, names, "move")

@@ -42,6 +42,26 @@ def test_cleanup_classifies_pipeline_files_in_read_and_write_order(tmp_path):
         ".grasp_gui_run.log", ".grasp_gui_cleaned/old/state.c", "grasp_run/run.sh"}
 
 
+@pytest.mark.parametrize("np", [1, 8])
+def test_cleanup_recognizes_both_angular_layouts(np):
+    jobs = session([job("rangular"), job("rmcdhf")])["pipeline"]
+    angular = {"mcp.30", "mcp.37", "tmp_mpi/000/mcp000.30", "tmp_mpi/024/mcp024.34", "recorded/003/mcp003.99"}
+    other = {"current/000/mcp000.30", "tmp_mpi/001/mcp000.30", "tmp_mpi/000/mcp000.29", "mcp.100"}
+    run = dict(np=np, mpitmp="current")
+    names = angular | other
+    expected = dict.fromkeys(angular, "generated") | dict.fromkeys(other, "unknown")
+    assert work.cleanup_classes(names, jobs, run=run, recorded_mpitmp="recorded") == expected
+    assert work.cleanup_classes(names, jobs[1:], run=run, recorded_mpitmp="recorded") == (
+        dict.fromkeys(angular, "external") | dict.fromkeys(other, "unknown"))
+    assert work.cleanup_classes(names, jobs, run=run)["current/000/mcp000.30"] == "generated"
+
+
+def test_cleanup_recognizes_files_written_before_they_are_read():
+    jobs = session([job("rcsfgenerate"), job("rangular", csf="state.c")])["pipeline"]
+    jobs[0]["pre"] += [("write", "state.c", "test")]
+    assert work.cleanup_classes(["state.c", "rcsf.inp"], jobs) == {"state.c": "generated", "rcsf.inp": "generated"}
+
+
 def test_classified_cleanup_preserves_relative_paths_and_reports_partial_failure(tmp_path, monkeypatch):
     root = tmp_path / "calc"
     config.install(cfg([job()]), str(root))

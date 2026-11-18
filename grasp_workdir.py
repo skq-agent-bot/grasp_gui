@@ -30,7 +30,27 @@ def _internal(name):
     return any(part.startswith(".grasp_gui") or part == "grasp_run" for part in PurePosixPath(name).parts)
 
 
-def cleanup_classes(names, jobs, attached=(), run=None, directory=None):
+def _angular_cleanup_files(names, mpitmp, directory):
+    """匹配串行及实际存在的 MPI 角系数文件，不依赖当前进程数。"""
+    roots = {("tmp_mpi",)}
+    if mpitmp:
+        if os.path.isabs(mpitmp):
+            mpitmp = os.path.relpath(mpitmp, directory) if directory is not None else ".."
+        parts = PurePosixPath(mpitmp).parts
+        if ".." not in parts:
+            roots.add(parts)
+    files = set()
+    for name in names:
+        parts = PurePosixPath(name).parts
+        if len(parts) == 1 and re.fullmatch(r"mcp\.[3-9][0-9]", name):
+            files.add(name)
+        elif len(parts) >= 2 and parts[:-2] in roots:
+            if re.fullmatch(r"([0-9]{3})/mcp\1\.[3-9][0-9]", "/".join(parts[-2:])):
+                files.add(name)
+    return files
+
+
+def cleanup_classes(names, jobs, attached=(), run=None, directory=None, *, recorded_mpitmp=None):
     """记录每个现有文件第一次被读时是否已由流程写出，再按外部输入优先分类。"""
     from grasp_summary import page
 
@@ -38,6 +58,8 @@ def cleanup_classes(names, jobs, attached=(), run=None, directory=None):
     external, generated, available = set(attached), set(), set()
     internal = {name for name in names if _internal(name)}
     candidates = set(names) - internal
+    mpitmp = recorded_mpitmp or (run or {}).get("mpitmp")
+    angular = _angular_cleanup_files(candidates, mpitmp, directory)
     directories = defaultdict(list)
     for name in candidates:
         directories[os.path.dirname(name)].append(name)
@@ -65,26 +87,33 @@ def cleanup_classes(names, jobs, attached=(), run=None, directory=None):
         generated.update(files)
         available.update(files)
 
-    def copies(actions):
+    def apply_actions(actions):
         for action in actions:
             if action[0] == "cp":
                 read(action[1])
                 written(action[2])
+            elif action[0] == "write":
+                written(action[1])
 
     for job in jobs:
         step, vals = page(job)
         # 未声明的用户命令不推断文件，明确声明的标准输出日志仍可定位。
         if step is not None:
-            copies(job["pre"] if "pre" in job else step.pre(vals))
-            for name in step.inputs(vals, run) or []:
+            apply_actions(job["pre"] if "pre" in job else step.pre(vals))
+            for name in step.inputs(vals) or []:
                 read(name)
-            for name in step.side_inputs(vals, run):
+            for name in step.side_inputs(vals):
                 read(name, declared_pattern=True)
-            for name in (step.outputs(vals, run) or []) + step.result_files(vals):
+            if isinstance(step, core.RMcdhf):
+                external.update(angular - available)
+            for name in (step.outputs(vals) or []) + step.result_files(vals):
                 written(name)
-            for name in step.side_outputs(vals, run):
+            for name in step.side_outputs(vals):
                 written(name, declared_pattern=True)
-            copies(job["post"] if "post" in job else step.post(vals))
+            if isinstance(step, core.RAngular):
+                generated.update(angular)
+                available.update(angular)
+            apply_actions(job["post"] if "post" in job else step.post(vals))
             for name in step.removes(vals):
                 available.difference_update(matches(name))
         written(job.get("log"))
@@ -583,7 +612,8 @@ def _prepare_clean(workdir, allow_untracked=False, jobs=None, run=None):
     jobs = (record or {}).get("pipeline", []) if jobs is None else jobs
     if run is None and jobs:
         run = core.saved_run_settings(persist=False)
-    kinds = cleanup_classes((row["name"] for row in rows), jobs, attached, run, root)
+    kinds = cleanup_classes((row["name"] for row in rows), jobs, attached, run, root,
+                            recorded_mpitmp=(record or {}).get("mpitmp"))
     groups = {kind: [] for kind in ("generated", "external", "unknown", "internal")}
     for row in rows:
         groups[kinds[row["name"]]].append(row)

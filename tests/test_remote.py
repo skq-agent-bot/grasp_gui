@@ -104,6 +104,32 @@ def test_protocol_cleanup_preview_move_and_revision(tmp_path):
         peer.close()
 
 
+def test_server_cleanup_uses_recorded_mpitmp_and_ignores_saved_np(tmp_path, monkeypatch):
+    directory = tmp_path / "calc"
+    directory.mkdir()
+    step = config.STEPS["rangular"]
+    jobs = [step.job(step.defaults())]
+    assert core.save_session(str(directory), dict(pipeline=jobs, mpitmp="recorded"))
+    expected = {"mcp.30", "tmp_mpi/000/mcp000.30", "recorded/008/mcp008.37"}
+    for name in expected | {"current/000/mcp000.30"}:
+        target = directory / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("angular coefficients")
+    home = tmp_path / "home"
+    prefs = home / ".config/grasp_gui.json"
+    prefs.parent.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    for np in (1, 8):
+        prefs.write_text(json.dumps(dict(np=np, mpitmp="current")))
+        peer = Peer()
+        try:
+            preview = peer.call("preview_clean", directory=str(directory))["result"]["classes"]
+            assert {row["name"] for row in preview["generated"]} == expected
+            assert {row["name"] for row in preview["unknown"]} == {"current/000/mcp000.30"}
+        finally:
+            peer.close()
+
+
 def test_streamed_radial_properties_match_existing_reader(tmp_path):
     path = tmp_path / "state.w"
     wavefunction(path)
