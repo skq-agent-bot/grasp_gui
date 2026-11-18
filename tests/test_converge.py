@@ -106,6 +106,17 @@ def write_layer(path, orbitals, energies, columns):
                                      "".join(f" {orb}( 1)\n\n 1/2-\n" for orb in orbitals))
 
 
+def test_zero_coefficients_do_not_match_different_states(tmp_path):
+    write_layer(tmp_path / "first.m", ("2p-", "3p-"), (0.,), ((1., 0.),))
+    write_layer(tmp_path / "second.m", ("2p-", "3p-"), (.05,), ((0., 1.),))
+    layers = converge.read_layers(tmp_path, ["first.m", "second.m"])
+
+    first, second = converge.analyze(layers)["rows"]
+    assert first["status"] == second["status"] == "unmatched"
+    assert first["points"][1]["total_hartree"] is None
+    assert second["points"][0]["total_hartree"] is None
+
+
 def test_read_csf_identifiers_in_visible_order_and_scf_log(tmp_path):
     write_layer(tmp_path / "layer10.m", ("2p-", "3p-"), (0, .1), ((1., 0.), (0., 1.)))
     write_layer(tmp_path / "layer3.m", ("3p-", "2p-"), (-.01, .08), ((1., 0.), (0., 1.)))

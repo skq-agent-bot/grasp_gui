@@ -134,7 +134,9 @@ def read_layers(directory, files, *, jobs=(), limit=MAX_PER_LAYER, path_check=No
         levels = []
         for block in blocks:
             index.checkpoint(cancel)
-            top = [(lv, lv.top_components(3)) for lv in block.levels if id(lv) in selected]
+            # 系数为零的 CSF 不参与匹配，即使它被索引列在前三项中。
+            top = [(lv, [(i, coeff) for i, coeff in lv.top_components(3) if coeff != 0])
+                   for lv in block.levels if id(lv) in selected]
             names = csfs[block.nb - 1].read_many([i - 1 for _, comps in top for i, _ in comps], cancel) if csfs else {}
             levels.extend(_state(lv, names, comps, labels.get((block.nb, lv.pos)), core) for lv, comps in top)
         index.unchanged(saved)
