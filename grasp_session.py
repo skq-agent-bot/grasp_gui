@@ -101,8 +101,7 @@ def write_bytes(workdir, raw, expected=ANY_REVISION, *, warnings=None, bindir=No
         previous = _bytes(workdir)
         if expected is not ANY_REVISION and revision(previous) != expected:
             raise Conflict(T("工作目录记录已被其他程序修改，请重新载入"))
-        if raw != previous:
-            atomic(Path(workdir) / core.SESSION_FILE, raw)
+        atomic(Path(workdir) / core.SESSION_FILE, raw)
         current = revision(raw)
         _, notices = scripts.rebuild(workdir, json.loads(raw), current, bindir=bindir, defaults=defaults)
         if warnings is not None:

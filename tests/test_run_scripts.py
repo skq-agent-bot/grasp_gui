@@ -42,6 +42,12 @@ def test_install_cli_language_switch_and_moved_workdir(tmp_path, monkeypatch, ca
     paths = [root / scripts.DIRECTORY / name for name in scripts.SCRIPTS]
     first = {path.name: (path.read_bytes(), path.stat().st_mtime_ns) for path in paths}
     assert all(f"# Record revision: {revision}".encode() in raw for raw, _ in first.values())
+    record = root / core.SESSION_FILE
+    raw_record = record.read_bytes()
+    os.utime(record, ns=(1, 1))
+    assert sessions.write(root, data, expected=revision) == revision
+    assert record.read_bytes() == raw_record and record.stat().st_mtime_ns != 1
+    assert first == {path.name: (path.read_bytes(), path.stat().st_mtime_ns) for path in paths}
     monkeypatch.setattr(core, "LANG", "en" if core.LANG == "zh" else "zh")
     assert config.cli(["script", str(root)]) == 0
     assert capsys.readouterr().out.splitlines() == list(map(str, paths))
