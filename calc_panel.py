@@ -4,6 +4,7 @@
 """
 
 import codecs
+from copy import deepcopy
 import datetime
 import difflib
 import json
@@ -1254,6 +1255,9 @@ class CalcPanel(QWidget):
 
     def open_workdir(self, d):
         self.refresh_remote_copy()
+        self.session_revision = None
+        # 新目录沿用当前计算内容；只比较打开后实际变动的内容。
+        self.session_baseline = deepcopy(self.calculation_fields())
         if not os.path.isdir(d):
             return
         try:
@@ -1284,6 +1288,8 @@ class CalcPanel(QWidget):
             if dlg.choice == "load":
                 self.session_revision = revision
                 self.apply(data or dict(steps={s.key: s.defaults() for s in core.STEPS}, groups={}, pipeline=[]))
+                if revision is None:
+                    self.session_baseline = deepcopy(self.calculation_fields())
                 self.filesChanged.emit()
                 self.status(T("已载入外部修改的记录；新增步骤由用户决定是否运行"))
                 return "loaded"
@@ -1308,7 +1314,12 @@ class CalcPanel(QWidget):
             data.pop(key)
         self.session_revision = sessions.write(self.cur_workdir, data, expected)
 
-    def save_session(self, require_saved=False):
+    def calculation_fields(self):
+        self.flush_group()
+        steps = {f.step.key: f.values() for f in self.forms if f.step.key not in core.GROUP_STEPS}
+        return steps, self.groups, self.pipeline
+
+    def save_session(self, require_saved=False, *, create_record=False):
         if self.session_cleared:
             return True
         action = self.check_external()
@@ -1317,6 +1328,9 @@ class CalcPanel(QWidget):
         if action == "unavailable":
             return not require_saved
         if action in ("loaded", "saved"):
+            return True
+        if (self.session_revision is None and not (require_saved or create_record)
+                and self.calculation_fields() == self.session_baseline):
             return True
         try:
             self._save_record(self.session_revision)
@@ -1674,7 +1688,7 @@ class CalcPanel(QWidget):
             self.pipeline.append(job)
             self.refresh_list()
             self.btabs.setCurrentIndex(0)
-            self.save_session()
+            self.save_session(create_record=True)
 
     def refresh_list(self):
         # 重建列表产生的临时空行不能改变独立的表单预览来源。
@@ -1732,7 +1746,7 @@ class CalcPanel(QWidget):
         p[i], p[i + d] = p[i + d], p[i]
         self.refresh_list()
         self.plist.setCurrentRow(i + d)
-        self.save_session()
+        self.save_session(create_record=True)
 
     def edit_job(self):
         """把选中步骤的参数载入它的程序页 (切换到该步骤的态组)，改好后用“更新所选”写回。"""
@@ -1768,7 +1782,7 @@ class CalcPanel(QWidget):
             self.refresh_list()
             self.plist.setCurrentRow(i)
             self.show_job()
-            self.save_session()
+            self.save_session(create_record=True)
             self.status(T("已更新第 {i} 步", i=i + 1))
 
     def remove_job(self):
@@ -1776,12 +1790,12 @@ class CalcPanel(QWidget):
         if i is not None:
             del self.pipeline[i]
             self.refresh_list()
-            self.save_session()
+            self.save_session(create_record=True)
 
     def clear_pipeline(self):
         self.pipeline.clear()
         self.refresh_list()
-        self.save_session()
+        self.save_session(create_record=True)
 
     def run_pipeline(self):
         self.start(list(self.pipeline))
@@ -1855,6 +1869,13 @@ class CalcPanel(QWidget):
 
     def apply(self, data):
         self.session_cleared = False
+        choice_warnings = []
+
+        def warn(step, values, location):
+            errors = list(grasp_config.choice_errors(step, values))
+            choice_warnings.extend(f"{location} · {error}" for error in errors)
+            return bool(errors)
+
         self.run.apply(data)
         if "workdir" in data:
             d = os.path.abspath(str(data["workdir"]))
@@ -1868,6 +1889,7 @@ class CalcPanel(QWidget):
             # 兼容旧版本以中文标签页名保存的"自定义"参数
             d = steps.get(f.step.key) or steps.get(f.step.name)
             if d and f.step.key not in core.GROUP_STEPS:
+                warn(f.step, d, T("表单 ({step})", step=f.step.key))
                 f.set_values(d)
         saved = data.get("groups")
         if saved is None:
@@ -1875,10 +1897,23 @@ class CalcPanel(QWidget):
             saved = {core.GROUPS[0]: {k: steps[k] for k in core.GROUP_STEPS if k in steps}}
         self.groups = {g: {k: dict(v, **saved.get(g, {}).get(k, {})) for k, v in core.group_defaults(g).items()}
                        for g in core.GROUPS}
+        for group, pages in self.groups.items():
+            for key, values in pages.items():
+                step = grasp_config.STEPS[key]
+                if warn(step, values, T("态组 {group} ({step})", group=group, step=key)):
+                    for field in step.fields:
+                        if isinstance(field, core.Choice):
+                            values[field.key] = core.normalize(field, values[field.key])
         self.group = data.get("group") if data.get("group") in core.GROUPS else core.GROUPS[0]
         self.load_group()
-        self.pipeline = [dict(j, pre=[tuple(a) for a in j["pre"]], post=[tuple(a) for a in j["post"]])
-                         for j in data.get("pipeline", [])]
+        self.pipeline = []
+        for i, job in enumerate(data.get("pipeline", []), 1):
+            step = grasp_config.STEPS.get(job.get("step"))
+            values = job.get("vals")
+            if step is not None and isinstance(values, dict) and warn(
+                    step, values, T("第 {i} 步 ({step})", i=i, step=step.key)):
+                job = dict(job, **grasp_config.make_job(job))
+            self.pipeline.append(dict(job, pre=[tuple(a) for a in job["pre"]], post=[tuple(a) for a in job["post"]]))
         self.refresh_list()
         tab = data.get("tab")
         if isinstance(tab, int):                # 旧版本按序号保存
@@ -1888,6 +1923,10 @@ class CalcPanel(QWidget):
             for f in self.forms:
                 if f.step.key == tab:
                     self.nav.setCurrentWidget(f)
+        if choice_warnings:
+            QMessageBox.warning(self, T("工作目录记录"),
+                                T("记录中的下列选项无法识别，已用默认值替换：\n{details}",
+                                  details="\n".join(choice_warnings)))
 
     def import_demo(self):
         self.import_config(examples=True)
