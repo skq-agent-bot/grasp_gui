@@ -214,8 +214,6 @@ def prepare_update(workdir, cfg, current=None):
     old = dict(current if current is not None else disk)
     old.pop("workdir", None)
     old.pop("bindir", None)
-    if isinstance(old.get("slurm"), dict):
-        old["slurm"] = {key: value for key, value in old["slurm"].items() if key != "bindir"}
     new = dict(old, **config.session(cfg))
     # 补齐未在新流程中出现的表单，避免界面保留上个方案的隐含参数。
     new["steps"] = {s.key: dict(s.defaults(), **new["steps"].get(s.key, {})) for s in core.STEPS

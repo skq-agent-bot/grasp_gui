@@ -1312,7 +1312,6 @@ class CalcPanel(QWidget):
         data = self.collect()
         for key in ("workdir", "bindir"):
             data.pop(key)
-        data["slurm"] = {key: value for key, value in data["slurm"].items() if key != "bindir"}
         warnings = []
         self.session_revision = sessions.write(self.cur_workdir, data, expected, warnings=warnings,
                                                bindir=self.run.bindir())

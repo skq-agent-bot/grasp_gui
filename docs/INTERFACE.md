@@ -409,7 +409,8 @@ sbatch grasp_run/submit.sbatch 4 6
 
 Both commands accept an inclusive one-based range. `run.sh` finds its working directory relative to the script
 and reports the failing step if a command exits with an error. It uses the GRASP program directory from the
-machine that generated it. Set `GRASP_RUN_BINDIR`, `GRASP_RUN_NP`, `GRASP_RUN_MPIRUN`, `GRASP_RUN_MPI_TMP`,
+machine that generated it. `submit.sbatch` uses the Slurm program directory saved in the record and expands
+its home-directory notation on the cluster. Set `GRASP_RUN_BINDIR`, `GRASP_RUN_NP`, `GRASP_RUN_MPIRUN`, `GRASP_RUN_MPI_TMP`,
 or `GRASP_RUN_NICE` in the environment to override settings. MPI launcher prefixes should use
 `$GRASP_RUN_NP` for the process count. The GUI continues to use its existing background runner.
 
@@ -418,7 +419,8 @@ or `GRASP_RUN_NICE` in the environment to override settings. MPI launcher prefix
 程序保留用户同名文件。流程为空时，只删除程序生成的脚本，目录变空才删除。
 
 可以按上面的命令手动运行全部或指定连续步骤，起止编号从 1 开始且均包含。计算目录由 `run.sh` 的位置确定，某步命令失败时
-显示步号后停止。GRASP 路径使用生成时所在机器的默认值，可用列出的环境变量覆盖。MPI 启动前缀用 `$GRASP_RUN_NP`
+显示步号后停止。`run.sh` 使用生成机器的默认 GRASP 路径。`submit.sbatch` 使用记录中的 Slurm 程序目录，在集群上展开
+家目录写法。可用列出的环境变量覆盖路径。MPI 启动前缀用 `$GRASP_RUN_NP`
 统一进程数；界面仍用原有后台运行方式。用 `grasp_gui script 工作目录` 手动重建脚本。只清理结果时保留 `grasp_run/`，
 明确选择“全部删除”才可一并删除。上传和下载默认不勾选其中的文件。
 

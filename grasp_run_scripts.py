@@ -10,6 +10,7 @@ import uuid
 
 import grasp_core as core
 from grasp_core import T
+from grasp_slurm import path_expression
 import grasp_summary as summary
 
 DIRECTORY = "grasp_run"
@@ -184,7 +185,7 @@ def _slurm_tmp(value):
                    for i, part in enumerate(parts))
 
 
-def submit_text(data, revision, settings):
+def submit_text(data, revision):
     stored = data.get("slurm", {})
     slurm = {key: str(stored.get(key, value)).strip() for key, value in core.SLURM_DEFAULTS.items()}
     nodes = slurm["nodes"] or "1"
@@ -198,9 +199,12 @@ def submit_text(data, revision, settings):
              "    exit 2", "fi",
              "if [ ! -f .grasp_gui.json ] || [ ! -f grasp_run/run.sh ]; then",
              "    echo 'The submission directory must contain .grasp_gui.json and grasp_run/run.sh.' >&2",
-             "    exit 2", "fi", "", *core.nonblank_lines(slurm["modules"]), "",
-             "# GRASP bin on the machine that generated this script; override with the environment.",
-             _default("GRASP_RUN_BINDIR", settings["bindir"])]
+             "    exit 2", "fi", ""]
+    modules = core.nonblank_lines(slurm["modules"])
+    if modules:
+        lines += [*modules, ""]
+    lines += ["# GRASP bin from the Slurm settings. Override with the environment.",
+              f'GRASP_RUN_BINDIR=${{GRASP_RUN_BINDIR-{path_expression(slurm["bindir"])}}}']
     if launcher:
         lines += [f'GRASP_RUN_NP=${{GRASP_RUN_NP-${{SLURM_NTASKS:-{fallback}}}}}']
     else:
@@ -288,7 +292,7 @@ def rebuild(workdir, data, revision, *, bindir=None, defaults=None):
                 raise
             return paths, warnings
         try:
-            for name, render in zip(SCRIPTS, (run_text, submit_text)):
+            for name in SCRIPTS:
                 try:
                     existing = _existing(fd, name)
                     if existing is not None and not _ours(existing[0]):
@@ -300,13 +304,17 @@ def rebuild(workdir, data, revision, *, bindir=None, defaults=None):
                             _check_unchanged(fd, name, existing[1])
                             os.unlink(name, dir_fd=fd)
                         continue
-                    if defaults is None:
-                        defaults = core.saved_run_settings(persist=False)
-                    settings = dict(defaults, **{key: data[key] for key in ("np", "mpirun", "mpitmp", "nice")
-                                                 if key in data})
-                    if bindir is not None:
-                        settings["bindir"] = bindir
-                    raw = render(data, revision, settings).encode("utf-8")
+                    if name == "run.sh":
+                        if defaults is None:
+                            defaults = core.saved_run_settings(persist=False)
+                        settings = dict(defaults, **{key: data[key] for key in ("np", "mpirun", "mpitmp", "nice")
+                                                     if key in data})
+                        if bindir is not None:
+                            settings["bindir"] = bindir
+                        text = run_text(data, revision, settings)
+                    else:
+                        text = submit_text(data, revision)
+                    raw = text.encode("utf-8")
                     if existing is None or existing[0] != raw:
                         _replace(fd, name, raw, existing[1] if existing else None)
                     paths.append(str(workdir / DIRECTORY / name))

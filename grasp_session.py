@@ -128,7 +128,7 @@ def save_run_settings(workdir, settings, *, slurm=False, defaults=None):
         data.pop("bindir", None)
         revised = dict(data)
         if slurm:
-            revised["slurm"] = {key: value for key, value in settings.items() if key != "bindir"}
+            revised["slurm"] = dict(settings)
         else:
             revised.update((key, settings[key]) for key in ("np", "mpirun", "mpitmp", "nice"))
         warnings = []

@@ -137,7 +137,8 @@ def test_generated_sbatch_example1(tmp_path, grasp_bindir, split):
     root = tmp_path / "generated"
     cfg, _, _, settings = install(root, grasp_bindir)
     sessions.save_run_settings(root, settings, slurm=True)
-    env = core.child_env(GRASP_RUN_BINDIR=grasp_bindir)
+    env = core.child_env()
+    env.pop("GRASP_RUN_BINDIR", None)
     command = ["sbatch", "--wait", "--parsable", "--output=slurm-generated-%j.log", "grasp_run/submit.sbatch"]
     stop = next(i for i, job in enumerate(cfg["jobs"]) if job["step"] == "rmcdhf")
     ranges = [("1", str(stop)), (str(stop + 1), str(len(cfg["jobs"])))] if split else [()]

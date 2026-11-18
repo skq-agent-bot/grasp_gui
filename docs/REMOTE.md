@@ -84,13 +84,15 @@ Screenshots / 截图：[中文](images/zh_server_run_settings.png) / [English](i
 Saving a pipeline on the server regenerates `grasp_run/run.sh` and `grasp_run/submit.sbatch`. Confirmed runs
 and submissions record changed MPI, nice, or Slurm settings in the existing fields, so a later launch with the
 same settings keeps the same revision. Reports may include `revision` and `warnings`. Previews leave the record
-and server preferences untouched. A bin directory explicitly supplied from the desktop applies to that launch.
-It is excluded from the record and both scripts. The scripts use the generating server's GRASP default and can
-be overridden with `GRASP_RUN_BINDIR`.
+and server preferences untouched. A workstation bin directory explicitly supplied from the desktop applies to
+that launch. `run.sh` uses the generating machine's GRASP default, and `submit.sbatch` uses the recorded Slurm
+bin directory, which defaults to `$HOME/grasp/bin`. The Slurm job's shell expands `$HOME` or `~/` on the cluster.
+Set `GRASP_RUN_BINDIR` in the environment to override either default.
 
 生成脚本使用服务器已保存的流程。正式运行或提交只在设置改变时更新目录记录中的已有字段，响应可能含新的 `revision` 和
-`warnings`。预检不保存设置，不创建服务器偏好。桌面显式传入的 GRASP 路径仅用于本次运行，不保存到目录记录，也不进入
-脚本。脚本使用生成所在服务器的默认路径，可用 `GRASP_RUN_BINDIR` 覆盖。上传和下载默认不勾选 `grasp_run/` 中的文件。
+`warnings`。预检不保存设置，不创建服务器偏好。桌面显式传入的工作站 GRASP 路径仅用于本次运行。`run.sh` 使用生成机器
+的默认 GRASP 路径，`submit.sbatch` 使用记录中的 Slurm 程序目录，默认是 `$HOME/grasp/bin`。作业在集群上展开
+`$HOME` 或 `~/`。两种脚本的默认路径都可用 `GRASP_RUN_BINDIR` 覆盖。上传和下载默认不勾选 `grasp_run/` 中的文件。
 
 For manual Slurm submission, run `sbatch grasp_run/submit.sbatch [start end]` from the calculation directory.
 The wrapper loads the recorded modules and launcher settings, then calls `run.sh`. A manual submission does

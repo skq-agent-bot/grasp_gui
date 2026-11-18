@@ -59,19 +59,47 @@ def test_install_cli_language_switch_and_moved_workdir(tmp_path, monkeypatch, ca
     settings["bindir"] = "/opt/local GRASP/bin"
     monkeypatch.setattr(core, "saved_run_settings", lambda **kwargs: settings)
     assert config.cli(["script", str(moved)]) == 0
-    for path in paths:
-        text = (moved / scripts.DIRECTORY / path.name).read_text()
-        assert "/opt/local GRASP/bin" in text
+    assert "/opt/local GRASP/bin" in (moved / scripts.DIRECTORY / "run.sh").read_text()
+    assert "/opt/local GRASP/bin" not in (moved / scripts.DIRECTORY / "submit.sbatch").read_text()
     assert sessions.read(moved)[1] == revision
+
+
+@pytest.mark.parametrize("cluster_path", [None, "$HOME/cluster software/bin", "~/cluster software/bin"])
+def test_sbatch_uses_cluster_bindir_and_expands_home(tmp_path, cluster_path):
+    home = tmp_path / "cluster home"
+    bindir = home / ("cluster software/bin" if cluster_path else "grasp/bin")
+    bindir.mkdir(parents=True)
+    executable = bindir / "rnucleus"
+    executable.write_text("#!/bin/sh\nprintf '%s\\n' \"$PATH\" > path.txt\n")
+    executable.chmod(0o755)
+    root = tmp_path / "calc"
+    config.install(nucleus(), root)
+    data, revision = sessions.read(root)
+    if cluster_path is not None:
+        data["slurm"] = {"bindir": cluster_path}
+    desktop_path = "/desktop/local GRASP/bin"
+    sessions.write(root, data, expected=revision, bindir=desktop_path)
+    generated = root / scripts.DIRECTORY
+    submit = generated / "submit.sbatch"
+    assert desktop_path in (generated / "run.sh").read_text()
+    assert desktop_path not in submit.read_text()
+    env = core.child_env(HOME=str(home), SLURM_SUBMIT_DIR=str(root), GRASP_RUN_NICE="0")
+    env.pop("GRASP_RUN_BINDIR", None)
+    result = subprocess.run(["bash", str(submit)], env=env, capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    assert (root / "path.txt").read_text().split(os.pathsep)[0] == str(bindir)
 
 
 def test_record_update_restore_and_empty_cleanup(tmp_path):
     config.install(nucleus(), tmp_path)
-    _, initial = sessions.read(tmp_path)
+    data, initial = sessions.read(tmp_path)
+    data["slurm"] = {"bindir": "$HOME/cluster/grasp"}
+    initial = sessions.write(tmp_path, data, expected=initial)
     plan = work.prepare_update(tmp_path, nucleus("4"))
     work.apply_update(plan)
-    _, revised = sessions.read(tmp_path)
+    updated, revised = sessions.read(tmp_path)
     assert revised != initial
+    assert updated["slurm"]["bindir"] == "$HOME/cluster/grasp"
     generated = tmp_path / scripts.DIRECTORY
     run = generated / "run.sh"
     assert f"# Record revision: {revised}" in run.read_text()
@@ -172,6 +200,9 @@ def test_example1_generated_scripts_reproduce_reference(tmp_path, grasp_bindir, 
     if mode == "split":
         args = [["sh", str(run), "1", str(stop)], ["sh", str(run), str(stop + 1), str(len(cfg["jobs"]))]]
     elif mode == "batch-wrapper":
+        settings = dict(core.SLURM_DEFAULTS, bindir=grasp_bindir, nodes="1", ntasks="1", mpirun="")
+        sessions.save_run_settings(tmp_path, settings, slurm=True)
+        env.pop("GRASP_RUN_BINDIR")
         args = [["bash", str(submit)]]
     else:
         args = [["sh", str(run)]]
