@@ -33,9 +33,9 @@ def test_stdin_keeps_skips_and_counts_only_selected_levels_for_weights():
     assert one == ["y", "", "1", "", "*", "*", "100"]
     two = job("rmcdhf", levels="1\n-\n1", weights="9", uweights="1,2")["stdin"].splitlines()
     assert two == ["y", "1", "", "1", "9", "1,2", "*", "*", "100"]
-    ci = job("rci", levels="1\n\n-\n")["stdin"]
-    assert ci.endswith("\n1\n\n\n")
-    assert "<<" in core.describe(dict(job("rci"), stdin=ci))
+    ci = job("rci", levels="1\n\n-\n")
+    assert ci["stdin"].endswith("\n1\n\n\n")
+    assert ci["stdin"] + "EOF" in core.describe(ci)
 
 
 @pytest.mark.parametrize("step", ["rmcdhf", "rci"])
@@ -67,6 +67,10 @@ def test_export_updates_legacy_stdin_and_rejects_real_mismatch(tmp_path, monkeyp
     raw = job("rmcdhf", levels="\n1\n-")
     previous = dict(raw, stdin=job("rmcdhf", levels="1")["stdin"])
     assert summary.checked_script_jobs(tmp_path, [previous])[0]["stdin"] == raw["stdin"]
+    rendered = core.describe(previous)
+    assert raw["stdin"] + "EOF" in rendered
+    assert previous["stdin"] + "EOF" not in rendered
+    assert previous["stdin"] != raw["stdin"]
     shutil.copyfile(CSF, tmp_path / "rcsf.inp")
     bad = job("rmcdhf", levels="1\n1")
     cfg = config.export([bad], dict(title="mismatch"))

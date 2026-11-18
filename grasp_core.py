@@ -1609,6 +1609,10 @@ class Step:
     def defaults(cls):
         return {f.key: f.default for f in cls.fields if isinstance(f, Field)}
 
+    def saved_values(self, values):
+        """用字段默认值和类型恢复保存的表单参数。"""
+        return {f.key: normalize(f, values.get(f.key, f.default)) for f in self.fields if isinstance(f, Field)}
+
     def validate(self, v):
         """检查表单参数；不合法时由程序页抛出 ValueError。"""
         pass
@@ -2651,6 +2655,18 @@ STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RcsfZeroFirst(
          RTableLevels(), RTabTrans1(), RTabTrans2(),
          RBioTransform(), RTransition(), Custom()]
 
+_BLOCK_LEVEL_STEPS = {step.key: step for step in STEPS if isinstance(step, BlockLevelsStep)}
+
+
+def refresh_block_input(job):
+    """由表单值重建块选择，避免使用旧记录中已删空行的输入。"""
+    key, values = job.get("step"), job.get("vals")
+    step = _BLOCK_LEVEL_STEPS.get(key) if isinstance(key, str) else None
+    if step is None or not isinstance(values, dict):
+        return job
+    return dict(job, stdin=step.stdin(step.saved_values(values)))
+
+
 # 界面左侧程序列表的功能分组 (每个程序恰好出现一次)
 STEP_GROUPS = [
     ("准备", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst"]),
@@ -2760,6 +2776,7 @@ def describe(job, mpi_prefix="", fallback=True):
 
     mpi_prefix 非空 (如 "mpirun -np 4") 时，有并行版本的程序写成 "<mpi_prefix> <prog>_mpi"。
     """
+    stdin = refresh_block_input(job)["stdin"]
     out = (program_fallbacks([job]) if fallback else []) + [action_sh(a) for a in job["pre"]]
     args = " ".join(shlex.quote(x) for x in job["args"])
     if mpi_prefix and job.get("mpi"):
@@ -2768,13 +2785,13 @@ def describe(job, mpi_prefix="", fallback=True):
         cmd = f"{shlex.quote(job['prog'])} {args}".rstrip()
     if job["log"]:
         cmd += f" > {shlex.quote(job['log'])}"
-    if any(ln.startswith(ICCUT + " ") for ln in job["stdin"].split("\n")):
+    if any(ln.startswith(ICCUT + " ") for ln in stdin.split("\n")):
         # 各块的 ICCUT 在运行时由零阶列表算出：不加引号的 here-document，其余各行转义
         lines = [f"$(awk '{ICCUT_AWK}' {shlex.quote(ln.split()[1])})" if ln.startswith(ICCUT + " ")
-                 else re.sub(r"([\\$`])", r"\\\1", ln) for ln in job["stdin"].split("\n")]
+                 else re.sub(r"([\\$`])", r"\\\1", ln) for ln in stdin.split("\n")]
         out.append(f"{cmd} <<EOF\n" + "\n".join(lines) + "EOF")
-    elif job["stdin"].strip():
-        out.append(f"{cmd} <<'EOF'\n{job['stdin']}EOF")
+    elif stdin.strip():
+        out.append(f"{cmd} <<'EOF'\n{stdin}EOF")
     else:
         out.append(cmd + " < /dev/null")
     out += [action_sh(a) for a in job["post"]]

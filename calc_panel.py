@@ -1425,7 +1425,11 @@ class CalcPanel(QWidget):
                 job = form.job()
             except (ValueError, KeyError):
                 return                    # 设置变化时表单可能尚未填完，保留旧文字且不弹框
-        self.prev.setPlainText(core.describe(job, self.run.mpi_prefix()) + "\n")
+        try:
+            text = core.describe(job, self.run.mpi_prefix())
+        except ValueError as e:
+            text = str(e)
+        self.prev.setPlainText(text + "\n")
 
     def check_inputs(self):
         form = self.nav.currentWidget()
@@ -1925,7 +1929,7 @@ class CalcPanel(QWidget):
                     step, values, T("第 {i} 步 ({step})", i=i, step=step.key)):
                 job = dict(job, **grasp_config.make_job(job))
             try:
-                job = summary.refresh_block_input(job)
+                job = core.refresh_block_input(job)
             except ValueError:
                 # 保留可编辑的旧记录；运行前预检会给出提示。
                 pass

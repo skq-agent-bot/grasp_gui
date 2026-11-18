@@ -208,15 +208,9 @@ def check_files(workdir, jobs, start=0, run=None, offset=0, path_check=None):
     return dict(missing=missing, skipped=skipped, invalid=invalid, issues=issues)
 
 
-def refresh_block_input(job):
-    """由保存的表单值重建能级块输入，兼容旧记录中已经删除空行的 stdin。"""
-    step, values = page(job)
-    return dict(job, stdin=step.stdin(values)) if isinstance(step, core.BlockLevelsStep) else job
-
-
 def checked_script_jobs(workdir, jobs, path_check=None):
     """导出只拦截可核对的能级行数问题及不合法的能级输入。"""
-    jobs = [refresh_block_input(job) for job in jobs]
+    jobs = [core.refresh_block_input(job) for job in jobs]
     report = check_files(workdir, jobs, path_check=path_check)
     invalid = [row for row in report["invalid"] if row["kind"] == "block_levels"]
     if invalid:

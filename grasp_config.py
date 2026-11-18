@@ -192,9 +192,7 @@ def list_demos(path=DEMO_DIR):
 
 def job_values(job):
     """step 任务的完整表单参数 (缺少的用默认值，按字段类型转换)。"""
-    step = STEPS[job["step"]]
-    return {f.key: core.normalize(f, job["vals"].get(f.key, f.default)) for f in step.fields
-            if isinstance(f, core.Field)}
+    return STEPS[job["step"]].saved_values(job["vals"])
 
 
 def make_job(job):
