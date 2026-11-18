@@ -1433,6 +1433,14 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "无匹配": "No match",
     "自动匹配": "Automatic match",
     "计算能级": "Calculated levels",
+    # 配置选项校验 (#69)
+    "{field} 的值 {value} 不在可选范围内 ({options})":
+        "Value {value} for {field} is not one of the supported options ({options})",
+    "表单 ({step})": "Form ({step})",
+    "第 {i} 步 ({step})": "Step {i} ({step})",
+    "态组 {group} ({step})": "Group {group} ({step})",
+    "记录中的下列选项无法识别，已用默认值替换：\n{details}":
+        "Unrecognized options in the record were replaced with defaults:\n{details}",
 }
 
 
@@ -1571,6 +1579,12 @@ class Choice(Field):
     def __init__(self, key, label, options, hint="", **kw):
         super().__init__(key, label, options[0][0], hint, options=options, **kw)
 
+    def code(self, value):
+        """旧记录可能在代码后附带显示文字。"""
+        words = str(value).split()
+        code = words[0] if words else ""
+        return code if any(code == option for option, _ in self.options) else None
+
 
 class Program(Field):
     pass
@@ -1592,8 +1606,8 @@ def normalize(field, value):
     if isinstance(field, Check):
         return bool(value)
     if isinstance(field, Choice):
-        code = str(value).split()[0] if str(value).split() else ""
-        return code if code in [o[0] for o in field.options] else field.default
+        code = field.code(value)
+        return field.default if code is None else code
     if isinstance(field, CsfLists):
         return [dict(CsfLists.EMPTY, **d) for d in value] or [dict(CsfLists.EMPTY)]
     return str(value)
