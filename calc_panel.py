@@ -4,6 +4,7 @@
 """
 
 import codecs
+from copy import deepcopy
 import datetime
 import difflib
 import json
@@ -1254,6 +1255,9 @@ class CalcPanel(QWidget):
 
     def open_workdir(self, d):
         self.refresh_remote_copy()
+        self.session_revision = None
+        # 新目录沿用当前计算内容；只比较打开后实际变动的内容。
+        self.session_baseline = deepcopy(self.calculation_fields())
         if not os.path.isdir(d):
             return
         try:
@@ -1284,6 +1288,8 @@ class CalcPanel(QWidget):
             if dlg.choice == "load":
                 self.session_revision = revision
                 self.apply(data or dict(steps={s.key: s.defaults() for s in core.STEPS}, groups={}, pipeline=[]))
+                if revision is None:
+                    self.session_baseline = deepcopy(self.calculation_fields())
                 self.filesChanged.emit()
                 self.status(T("已载入外部修改的记录；新增步骤由用户决定是否运行"))
                 return "loaded"
@@ -1318,7 +1324,12 @@ class CalcPanel(QWidget):
             self.write("\n" + notice + "\n", "err")
             QTimer.singleShot(0, lambda: self.status(notice))
 
-    def save_session(self, require_saved=False):
+    def calculation_fields(self):
+        self.flush_group()
+        steps = {f.step.key: f.values() for f in self.forms if f.step.key not in core.GROUP_STEPS}
+        return steps, self.groups, self.pipeline
+
+    def save_session(self, require_saved=False, *, create_record=False):
         if self.session_cleared:
             return True
         action = self.check_external()
@@ -1327,6 +1338,9 @@ class CalcPanel(QWidget):
         if action == "unavailable":
             return not require_saved
         if action in ("loaded", "saved"):
+            return True
+        if (self.session_revision is None and not (require_saved or create_record)
+                and self.calculation_fields() == self.session_baseline):
             return True
         try:
             self._save_record(self.session_revision)
@@ -1684,7 +1698,7 @@ class CalcPanel(QWidget):
             self.pipeline.append(job)
             self.refresh_list()
             self.btabs.setCurrentIndex(0)
-            self.save_session()
+            self.save_session(create_record=True)
 
     def refresh_list(self):
         # 重建列表产生的临时空行不能改变独立的表单预览来源。
@@ -1742,7 +1756,7 @@ class CalcPanel(QWidget):
         p[i], p[i + d] = p[i + d], p[i]
         self.refresh_list()
         self.plist.setCurrentRow(i + d)
-        self.save_session()
+        self.save_session(create_record=True)
 
     def edit_job(self):
         """把选中步骤的参数载入它的程序页 (切换到该步骤的态组)，改好后用“更新所选”写回。"""
@@ -1778,7 +1792,7 @@ class CalcPanel(QWidget):
             self.refresh_list()
             self.plist.setCurrentRow(i)
             self.show_job()
-            self.save_session()
+            self.save_session(create_record=True)
             self.status(T("已更新第 {i} 步", i=i + 1))
 
     def remove_job(self):
@@ -1786,12 +1800,12 @@ class CalcPanel(QWidget):
         if i is not None:
             del self.pipeline[i]
             self.refresh_list()
-            self.save_session()
+            self.save_session(create_record=True)
 
     def clear_pipeline(self):
         self.pipeline.clear()
         self.refresh_list()
-        self.save_session()
+        self.save_session(create_record=True)
 
     def run_pipeline(self):
         self.start(list(self.pipeline))
