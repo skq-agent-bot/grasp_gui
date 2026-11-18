@@ -32,9 +32,14 @@ without starting it). Labels are given as *English (中文)*. Screenshots: `docs
   MPI launcher and the MPI versions of rangular, rmcdhf, rci, rbiotransform and rtransition can be found
   through the normal GRASP bin/PATH lookup;
   otherwise it defaults to 1. Physical cores come from Linux CPU topology or macOS `hw.physicalcpu`, with
-  a fallback of half the logical cores (at least 1). The initial value is saved immediately. Existing saved
-  counts are retained; changing the bin directory or launcher never recalculates them. The input maximum
+  a fallback of half the logical cores (at least 1). The initial value is saved immediately. Editing or browsing
+  for the bin directory or editing the launcher recalculates the automatic default, with a status message
+  when it changes. Counts entered by hand or loaded from a parameter file are retained. Older saved counts
+  with no source indicator are treated as user choices. The input maximum
   remains the logical core count. Its tooltip explains that hyperthreading offers little benefit for GRASP.
+  初始值立即保存。编辑或浏览选择 GRASP bin 目录、编辑 mpirun 命令后，自动默认值重新计算，数值改变时状态栏提示一次。
+  手动输入、载入参数文件指定的进程数，以及没有来源标记的旧设置均保留。
+  [English screenshot](images/en_mpi_default.png) / [中文截图](images/zh_mpi_default.png)。
 * **GRASP bin lookup**: `$GRASP_BINDIR` → last used → directory of `rmcdhf` on `PATH` → `../bin` of the program.
 * **Tabs (标签页)**: *Calculation (计算)*, *Radial wave functions (径向波函数)*, *Levels (能级图)*; bold labels.
   The viewer tabs show the working directory and refresh after a run finishes. *Open in new window (在新窗口中打开)*
@@ -672,11 +677,17 @@ levels come from the same file — and which multipoles: E1, or M2 when E1 is fo
 same parity; J = 0 → 0 is refused). Buttons, in two rows: *Compute (selected J) (计算跃迁 (所选 J))* — only the J^π symmetries of
 the two levels (the GUI writes `.c`/`.cm` files with just those blocks), with the main window's process count;
 *Compute all J (MPI) (计算全部 J (MPI))* — all transitions between the two files (lifetimes, branching ratios) with
-the MPI programs and *Processes (进程数)* next to it (first use: the same physical-core/MPI availability rule as the main window,
-saved independently as `tr_np`; existing values are retained, and its maximum remains four times the logical
-core count); *Stop*; *Export ▾*: transitions of the current level (CSV),
+the MPI programs and *Processes (进程数)* next to it. Its default follows the main window's physical-core
+and MPI availability rule and is saved independently as `tr_np`. Opening Levels or starting an all-J
+calculation refreshes the automatic default and shows a status message if it changes. Manual and older
+saved counts are retained. The maximum remains four times the logical core count. *Stop*; *Export ▾*:
+transitions of the current level (CSV),
 all computed transitions between the two files (CSV), *GRASP transition file (for rtabtrans1 / rtabtrans2)*
 (`even4.odd4.ct`).
+
+“计算全部 J”的进程数独立保存。打开能级图页或开始计算全部 J 时，按主窗口同样的物理核数和 MPI 可用性规则更新自动默认值，
+数值改变时状态栏提示一次。手动设置及没有来源标记的旧设置均保留。上限仍为逻辑核数的四倍。
+[English screenshot](images/en_mpi_transition_default.png) / [中文截图](images/zh_mpi_transition_default.png)。
 
 Results: table *Type*, *Gauge (规范)* — Babushkin (length) and Coulomb (velocity), A (s⁻¹), gf, S (a.u.); their
 ratio close to 1 indicates a reliable calculation. *Transitions drawn in the diagram (图上标注的跃迁)* list with

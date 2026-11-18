@@ -210,6 +210,7 @@ EN = {
     "计算两个文件中全部 J^π 之间的跃迁 (用于寿命、分支比)，用 MPI 并行":
         "All J^π symmetries of both files (for lifetimes and branching ratios), in parallel with MPI",
     "计算全部 J 时的 MPI 进程数": "Number of MPI processes when computing all J",
+    "跃迁 MPI 进程数的默认值已改为 {n}。": "The default transition MPI process count changed to {n}.",
     "默认按物理核数；超线程对 GRASP 帮助不大。":
         "Defaults use physical cores; hyperthreading offers little benefit for GRASP.",
     "进程数": "Processes",
@@ -558,6 +559,7 @@ EN = {
     "输入 (stdin)": "Input (stdin)",
     # MPI / 性能
     "MPI 进程数": "MPI processes",
+    "MPI 进程数的默认值已改为 {n}。": "The default MPI process count changed to {n}.",
     "mpirun 命令": "mpirun command",
     "降低计算进程优先级 (nice)": "Lower priority of calculations (nice)",
     "进程数 > 1 时 rangular / rmcdhf / rci / rbiotransform / rtransition 改用 *_mpi 版本；"
@@ -1441,9 +1443,14 @@ def saved_run_settings(*, persist=True):
     if "np" not in cfg:
         cfg["np"] = default_mpi_np(bindir, mpirun)
         if persist:
-            save_config(np=cfg["np"])
+            save_config(np=cfg["np"], np_user=False)
     return dict(bindir=bindir, np=int(cfg["np"]), mpirun=mpirun,
                 mpitmp=cfg.get("mpitmp", "tmp_mpi"), nice=cfg.get("nice", True))
+
+
+def user_process_count(cfg, key):
+    """旧偏好只保存数值，没有来源标记，按用户设置保留。"""
+    return key in cfg and cfg.get(key + "_user", True) is not False
 
 
 def save_config(**kw):
