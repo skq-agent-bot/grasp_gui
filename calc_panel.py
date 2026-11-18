@@ -1312,7 +1312,16 @@ class CalcPanel(QWidget):
         data = self.collect()
         for key in ("workdir", "bindir"):
             data.pop(key)
-        self.session_revision = sessions.write(self.cur_workdir, data, expected)
+        warnings = []
+        self.session_revision = sessions.write(self.cur_workdir, data, expected, warnings=warnings,
+                                               bindir=self.run.bindir())
+        self.show_script_warnings(warnings)
+
+    def show_script_warnings(self, warnings):
+        if warnings:
+            notice = "\n".join(warnings)
+            self.write("\n" + notice + "\n", "err")
+            QTimer.singleShot(0, lambda: self.status(notice))
 
     def calculation_fields(self):
         self.flush_group()
@@ -1856,6 +1865,8 @@ class CalcPanel(QWidget):
             return
         self.slurm = dlg.settings()
         core.save_config(slurm=self.slurm)
+        if not self.save_session(require_saved=True):
+            return
         self.save_text(T("Slurm 作业脚本"), f"{self.slurm['job'] or 'grasp'}.slurm",
                        core.slurm_script(self.pipeline, self.slurm))
 
@@ -1953,8 +1964,9 @@ class CalcPanel(QWidget):
         if dlg.update.isChecked():
             self.update_workdir(cfg)
             return
+        warnings = []
         try:
-            grasp_config.install(cfg, path)
+            grasp_config.install(cfg, path, warnings=warnings, run=self.run.values())
         except OSError as e:
             QMessageBox.warning(self, T("导入配置"), str(e))
             return
@@ -1964,6 +1976,7 @@ class CalcPanel(QWidget):
         else:
             self.workdirRequested.emit(path)
         self.status(T("已导入“{t}”到 {p}；点“▶ 运行全部”开始计算", t=grasp_config.text(cfg, "title"), p=path))
+        self.show_script_warnings(warnings)
 
     def update_workdir(self, cfg):
         if self.check_external() == "cancel":
@@ -1973,7 +1986,7 @@ class CalcPanel(QWidget):
             dlg = UpdateDialog(self, plan)
             if dlg.exec() != QDialog.Accepted:
                 return
-            data = workdir_ops.apply_update(plan, dlg.overwrite())
+            data = workdir_ops.apply_update(plan, dlg.overwrite(), bindir=self.run.bindir())
             _, self.session_revision = sessions.read(self.cur_workdir)
         except (OSError, ValueError, KeyError) as e:
             QMessageBox.warning(self, T("更新当前工作目录"), str(e))
@@ -1987,6 +2000,7 @@ class CalcPanel(QWidget):
         else:
             self.status(T("已更新当前目录；原有结果文件保留"))
         self.filesChanged.emit()
+        self.show_script_warnings(plan.get("script_warnings"))
         if plan.get("warnings"):
             QMessageBox.warning(self, T("更新当前工作目录"),
                                 T("更新已完成，但临时备份清理失败：{e}", e="\n".join(plan["warnings"])))
@@ -2005,8 +2019,9 @@ class CalcPanel(QWidget):
         if QMessageBox.question(self, T("恢复上一次的工作目录记录"),
                                T("只恢复流程和参数，计算结果与附带文件不变。当前记录也会备份；连续恢复两次会回到恢复前的状态。确定恢复吗？")) != QMessageBox.Yes:
             return
+        warnings = []
         try:
-            data = workdir_ops.restore(self.cur_workdir)
+            data = workdir_ops.restore(self.cur_workdir, warnings=warnings, bindir=self.run.bindir())
             _, self.session_revision = sessions.read(self.cur_workdir)
         except (OSError, ValueError) as e:
             QMessageBox.warning(self, T("恢复上一次的工作目录记录"), str(e))
@@ -2014,6 +2029,7 @@ class CalcPanel(QWidget):
         self.session_cleared = False
         self.apply(data)
         self.status(T("已恢复上一次的工作目录记录"))
+        self.show_script_warnings(warnings)
 
     def clear_workdir(self):
         if self.check_external() == "cancel":

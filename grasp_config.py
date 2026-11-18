@@ -336,13 +336,13 @@ def save_inputs(workdir, names):
             os.unlink(temporary)
 
 
-def install(cfg, workdir):
+def install(cfg, workdir, *, warnings=None, run=None):
     """在 workdir (不存在或为空) 中写入附带文件和目录记录；目录非空时抛出 FileExistsError。"""
     with sessions.locked(workdir):
-        return _install(cfg, workdir)
+        return _install(cfg, workdir, warnings=warnings, run=run)
 
 
-def _install(cfg, workdir):
+def _install(cfg, workdir, *, warnings=None, run=None):
     cfg, _ = check(cfg)
     if os.path.isdir(workdir) and os.listdir(workdir):
         raise FileExistsError(T("目录不是空的：{p}", p=workdir))
@@ -350,7 +350,9 @@ def _install(cfg, workdir):
     for f in cfg.get("files", []):
         with open(os.path.join(workdir, f["name"]), "w", encoding="utf-8") as out:
             out.write(f["text"])
-    if not core.save_session(workdir, session(cfg)):
+    run = core.saved_run_settings(persist=False) if run is None else run
+    data = dict(session(cfg), **{key: run[key] for key in ("np", "mpirun", "mpitmp", "nice")})
+    if not core.save_session(workdir, data, warnings=warnings, defaults=run):
         raise OSError(T("无法写入 {p}", p=os.path.join(workdir, core.SESSION_FILE)))
     save_inputs(workdir, (f["name"] for f in cfg.get("files", [])))
 
@@ -550,6 +552,20 @@ def cli(args):
     if len(args) != 1 or args[0].startswith("-"):
         print(T(CLI_USAGE), file=sys.stderr)
         return 2
+    if cmd == "script" and os.path.isdir(args[0]):
+        if opts:
+            print(T("重建工作目录脚本时，请通过运行环境变量覆盖设置。"), file=sys.stderr)
+            return 2
+        try:
+            paths, warnings = sessions.rebuild_scripts(os.path.realpath(args[0]))
+        except (OSError, ValueError) as e:
+            print(T("错误：{e}", e=e), file=sys.stderr)
+            return 1
+        for path in paths:
+            print(path)
+        for warning in warnings:
+            print(T("警告：{w}", w=warning), file=sys.stderr)
+        return 1 if warnings else 0
     try:
         cfg, warnings = load(args[0])
     except ConfigError as e:

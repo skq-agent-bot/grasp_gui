@@ -153,7 +153,7 @@ class Service:
     def create_workdir(self, directory, configuration=None, example=None):
         root = self.path(directory)
         cfg, warnings = self.configuration(configuration, example)
-        config.install(cfg, str(root))
+        config.install(cfg, str(root), warnings=warnings)
         _, revision = sessions.read(root)
         return dict(directory=str(root), revision=revision, warnings=warnings)
 
@@ -173,6 +173,7 @@ class Service:
             # 文件冲突统一保留；覆盖需要用户在 GUI 中查看差异并明确选择。
             work.apply_update(plan)
             _, current = sessions.read(root)
+            warnings.extend(plan.get("script_warnings", ()))
         return dict(directory=str(root), revision=current, changes=plan["text"], warnings=warnings,
                     kept_files=[f["name"] for f in plan["files"] if f["kind"] == "conflict"])
 
@@ -187,8 +188,9 @@ class Service:
             text = core.shell_script(jobs, settings["bindir"], str(root), mpi, settings["mpitmp"])
         return dict(text=text[:MAX_TEXT], truncated=len(text) > MAX_TEXT)
 
-    def run(self, directory, start=1, force=False, *, end=None, started_by="mcp", user_scope=False, run_settings=None):
-        root, data, _ = self.record(directory)
+    def run(self, directory, start=1, force=False, *, end=None, started_by="mcp", user_scope=False, run_settings=None,
+            script_bindir=None):
+        root, data, revision = self.record(directory)
         jobs = data.get("pipeline", [])
         first, last = summary.run_bounds(len(jobs), start, end)
         total = len(jobs)
@@ -215,7 +217,6 @@ class Service:
                 if action[0] == "cp":
                     self.path(str(root / action[1]))
                     self.path(str(root / action[2]))
-        work.idle(root)
         import tempfile
         # scope 启动失败时保留 systemd 原始诊断；文件不构成与后台进程相连的管道。
         diagnostic = tempfile.TemporaryFile() if user_scope else None
@@ -223,7 +224,13 @@ class Service:
             options = dict(started_by=started_by, user_scope=user_scope)
             if diagnostic is not None:
                 options["stderr"] = diagnostic
-            proc = bg.launch(str(root), jobs, settings, **options)
+            with sessions.locked(root):
+                work.idle(root)
+                if self.record(str(root))[2] != revision:
+                    raise sessions.Conflict(T("工作目录记录已被其他程序修改，请重新载入"))
+                defaults = dict(settings, bindir=script_bindir) if script_bindir is not None else settings
+                saved = sessions.save_run_settings(root, settings, defaults=defaults)
+                proc = bg.launch(str(root), jobs, settings, **options)
             threading.Thread(target=proc.wait, daemon=True).start()
             connection = bg.connect(str(root), timeout=bg.ATTACH_WAIT)
             if connection is None and diagnostic is not None:
@@ -241,7 +248,7 @@ class Service:
         finally:
             connection.close()
         return dict(started=True, directory=str(root), from_step=start, to_step=last,
-                    total_steps=total, started_by=started_by)
+                    total_steps=total, started_by=started_by, **saved)
 
     def handshake(self, connection):
         """先读初始状态，后台才能确认客户端已连上；不能连上后立刻关闭。"""
