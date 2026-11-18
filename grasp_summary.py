@@ -70,6 +70,38 @@ def range_text(start, end, total):
     return T("第 {a}–{b} 步 (流程共 {n} 步)", a=start, b=end, n=total)
 
 
+def check_block_levels(path, levels):
+    """用 CSF 索引的块元数据核对输入行数，不展开组态。"""
+    try:
+        blocks = index.csf_index(path)["blocks"]
+    except (OSError, ValueError) as e:
+        raise ValueError(T("无法读取 {name} 的对称块：{error}", name=path.name, error=str(e))) from e
+    total, rows = len(blocks), len(core.block_level_lines(levels))
+    if total == rows:
+        return
+    labels = [f"{n}:{''.join(block['jp'] or ['?'])}" for n, block in enumerate(blocks, 1)]
+    message = T("{name} 有 {total} 个对称块 ({blocks})，填写了 {rows} 行。",
+                name=path.name, total=total, blocks=", ".join(labels), rows=rows)
+    if rows < total:
+        why = T("缺少块 {blocks} 的回答。跳过末尾的块请用 -。", blocks=", ".join(labels[rows:]))
+    else:
+        why = T("多填了 {extra} 行。", extra=rows - total)
+    raise ValueError(message + " " + why)
+
+
+def ready_level_csf(root, name, pre, changed, path_check):
+    """前置复制确定实际输入；同次运行生成的文件不能用磁盘旧版预检。"""
+    path = root / name
+    for action in reversed(pre):
+        if action[0] == "cp" and root / action[2] == path:
+            path = root / action[1]
+    if any(path == root / candidate for candidate in changed):
+        return None
+    if path_check:
+        path = path_check(str(path))
+    return path if path.is_file() else None
+
+
 def check_files(workdir, jobs, start=0, run=None, offset=0, path_check=None):
     """检查选中步骤；workdir=None 只检查参数和派生名称，不据文件存在与否判断配置。"""
     root = Path(workdir) if workdir is not None else None
@@ -146,6 +178,14 @@ def check_files(workdir, jobs, start=0, run=None, offset=0, path_check=None):
             if not errors:
                 invalid.append(dict(kind="validation", step=number, program=title, field=None, reason=str(e)))
             continue
+        if root is not None and not errors and isinstance(step, core.BlockLevelsStep):
+            path = ready_level_csf(root, step.level_csf(values), pre, available | removed, path_check)
+            if path is not None:
+                try:
+                    check_block_levels(path, values["levels"])
+                except ValueError as e:
+                    invalid.append(dict(kind="block_levels", step=number, program=title,
+                                        field=T("各块能级"), reason=str(e)))
         origin = dict(step=number, program=title, field=", ".join(step.output_fields) or "outputs")
         for action in pre:
             if action[0] == "cp":
@@ -166,6 +206,22 @@ def check_files(workdir, jobs, start=0, run=None, offset=0, path_check=None):
     invalid.sort(key=lambda r: r["step"])
     issues = sorted(invalid + missing, key=lambda r: r["step"])
     return dict(missing=missing, skipped=skipped, invalid=invalid, issues=issues)
+
+
+def refresh_block_input(job):
+    """由保存的表单值重建能级块输入，兼容旧记录中已经删除空行的 stdin。"""
+    step, values = page(job)
+    return dict(job, stdin=step.stdin(values)) if isinstance(step, core.BlockLevelsStep) else job
+
+
+def checked_script_jobs(workdir, jobs, path_check=None):
+    """导出只拦截可核对的能级行数问题及不合法的能级输入。"""
+    jobs = [refresh_block_input(job) for job in jobs]
+    report = check_files(workdir, jobs, path_check=path_check)
+    invalid = [row for row in report["invalid"] if row["kind"] == "block_levels"]
+    if invalid:
+        raise ValueError(check_text(dict(invalid=invalid, missing=[], skipped=[])))
+    return jobs
 
 
 def check_text(result):

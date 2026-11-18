@@ -515,10 +515,15 @@ def cli(args):
         print(T("错误：{e}", e=e), file=sys.stderr)
         return 1
     if cmd == "script":
+        from grasp_summary import checked_script_jobs
+        try:
+            jobs = checked_script_jobs(".", session(cfg)["pipeline"])
+        except (OSError, ValueError) as e:
+            print(T("错误：{e}", e=e), file=sys.stderr)
+            return 1
         for w in warnings:
             print(T("警告：{w}", w=w), file=sys.stderr)
-        print(core.shell_script(session(cfg)["pipeline"], opts.get("--bindir") or core.default_bindir(), ".",
-                                opts.get("--mpi", "")))
+        print(core.shell_script(jobs, opts.get("--bindir") or core.default_bindir(), ".", opts.get("--mpi", "")))
         return 0
     print(T("{n} 个计算步骤，所需程序：{p}", n=len(cfg["jobs"]), p=" ".join(programs(cfg))))
     for w in warnings:

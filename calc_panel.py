@@ -1842,14 +1842,25 @@ class CalcPanel(QWidget):
         os.chmod(path, 0o755)
         self.status(T("已导出 {p}", p=path))
 
+    def export_jobs(self):
+        if not self.need_pipeline():
+            return None
+        try:
+            return summary.checked_script_jobs(self.cur_workdir, self.pipeline)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, T("导出"), str(e))
+            return None
+
     def export_script(self):
-        if self.need_pipeline():
+        jobs = self.export_jobs()
+        if jobs:
             self.save_text(T("导出 shell 脚本"), "sh_gui",
-                           core.shell_script(self.pipeline, self.run.bindir(), self.cur_workdir,
+                           core.shell_script(jobs, self.run.bindir(), self.cur_workdir,
                                              self.run.mpi_prefix(), self.run.mpitmp()))
 
     def export_slurm(self):
-        if not self.need_pipeline():
+        jobs = self.export_jobs()
+        if not jobs:
             return
         dlg = SlurmDialog(self, self.slurm)
         if dlg.exec() != QDialog.Accepted:
@@ -1857,7 +1868,7 @@ class CalcPanel(QWidget):
         self.slurm = dlg.settings()
         core.save_config(slurm=self.slurm)
         self.save_text(T("Slurm 作业脚本"), f"{self.slurm['job'] or 'grasp'}.slurm",
-                       core.slurm_script(self.pipeline, self.slurm))
+                       core.slurm_script(jobs, self.slurm))
 
     # ---- 参数保存 / 载入 ----
     def collect(self):
@@ -1913,6 +1924,11 @@ class CalcPanel(QWidget):
             if step is not None and isinstance(values, dict) and warn(
                     step, values, T("第 {i} 步 ({step})", i=i, step=step.key)):
                 job = dict(job, **grasp_config.make_job(job))
+            try:
+                job = summary.refresh_block_input(job)
+            except ValueError:
+                # 保留可编辑的旧记录；运行前预检会给出提示。
+                pass
             self.pipeline.append(dict(job, pre=[tuple(a) for a in job["pre"]], post=[tuple(a) for a in job["post"]]))
         self.refresh_list()
         tab = data.get("tab")

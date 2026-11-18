@@ -2,6 +2,7 @@
 对话框一律用替身代替，测试不会停在等待点击的窗口上。"""
 
 import os
+from pathlib import Path
 import time
 
 import pytest
@@ -198,6 +199,28 @@ def test_field_enabled_by(qapp, checked):
     form.put["enabled"](checked)
     assert value.isEnabled() == checked
     form.close()
+
+
+def test_gui_refuses_incorrect_block_count(qapp, tmp_path, no_dialogs, monkeypatch):
+    source = Path(__file__).parent / "data/skipped_blocks/skip1.c"
+    (tmp_path / "rcsf.inp").write_bytes(source.read_bytes())
+    w = window(tmp_path)
+    try:
+        calc = w.calc
+        step = core.RMcdhf()
+        calc.pipeline = [step.job(dict(step.defaults(), levels="1\n1"))]
+        calc.refresh_list()
+
+        def unexpected(*_args, **_kwargs):
+            pytest.fail("launched with a missing symmetry block")
+
+        monkeypatch.setattr(bg, "launch", unexpected)
+        calc.check_inputs()
+        assert "缺少块 3:3/2-" in no_dialogs[-1][1][1]
+        calc.run_pipeline()
+        assert no_dialogs[-1][0] == "warning" and "缺少块 3:3/2-" in no_dialogs[-1][1][1]
+    finally:
+        assert w.close()
 
 
 def test_preview_column_and_buttons_adapt(qapp, tmp_path, no_dialogs):

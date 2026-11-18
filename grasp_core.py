@@ -1397,6 +1397,16 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "态组 {group} ({step})": "Group {group} ({step})",
     "记录中的下列选项无法识别，已用默认值替换：\n{details}":
         "Unrecognized options in the record were replaced with defaults:\n{details}",
+    # 输入时跳过能级块 (#58)
+    "每块一行；空行或 - 表示跳过": "One line per block. A blank line or - skips the block.",
+    "至少有一个块需要选择能级": "Select levels in at least one block",
+    "各块能级": "Levels per block",
+    "{name} 有 {total} 个对称块 ({blocks})，填写了 {rows} 行。":
+        "{name} has {total} symmetry blocks ({blocks}). Supplied {rows} lines.",
+    "缺少块 {blocks} 的回答。跳过末尾的块请用 -。":
+        "Missing answers for blocks {blocks}. Use - to skip a final block.",
+    "多填了 {extra} 行。": "Remove {extra} extra lines.",
+    "无法读取 {name} 的对称块：{error}": "Cannot read symmetry blocks from {name}: {error}",
 }
 
 
@@ -1478,10 +1488,20 @@ def nonblank_lines(s):
     return [ln.strip() for ln in s.splitlines() if ln.strip()]
 
 
+def block_level_lines(text):
+    """末尾空白不表示新块；写 '-' 可显式跳过末块。"""
+    lines = [line.strip() for line in text.splitlines()]
+    while lines and not lines[-1]:
+        lines.pop()
+    return ["" if line == "-" else line for line in lines]
+
+
 def count_levels(lines):
     """各块能级号 (如 1,2,3 或 1-3) 的总个数；无法解析的项按 1 个计。"""
     n = 0
     for ln in lines:
+        if ln.strip() in ("", "-"):
+            continue
         for item in re.split(r"[\s,]+", ln):
             a, _, b = item.partition("-")
             try:
@@ -1929,7 +1949,14 @@ class RWfnEstimate(Step):
         return ["rwfn.inp"]
 
 
-class RMcdhf(Step):
+class BlockLevelsStep(Step):
+    def validate(self, v):
+        # LODSTATE 会重新读所有块，无法靠后续交互回答退出全跳过。
+        if not any(block_level_lines(v["levels"])):
+            raise ValueError(T("至少有一个块需要选择能级"))
+
+
+class RMcdhf(BlockLevelsStep):
     output_fields = ("save",)
     key = name = prog = "rmcdhf"
     mpi = True
@@ -1939,7 +1966,7 @@ class RMcdhf(Step):
              "NSIC 是首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，"
              "含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。"),
         Check("mem", "使用内存版本 rmcdhf_mem", False, "角系数一次读入内存：更快，但更占内存"),
-        Text("levels", "各块要优化的能级", "1\n1", "每块一行", lines=3),
+        Text("levels", "各块要优化的能级", "1\n1", "每块一行；空行或 - 表示跳过", lines=3),
         Choice("weights", "能级权重", [("5", "标准 (EOL)"), ("1", "等权重"), ("9", "用户指定")]),
         Entry("uweights", "  用户权重", "", "选 9 时填写, 如 1,1,2"),
         Entry("vary", "变分轨道", "*", "如 *  或 3*  或 2s,2p*"),
@@ -1955,7 +1982,7 @@ class RMcdhf(Step):
 
     def stdin(self, v):
         self.validate(v)
-        levels = nonblank_lines(v["levels"])
+        levels = block_level_lines(v["levels"])
         # 非默认模式先关闭调试输出，并保留光速 / 网格、ACCY 的默认值。
         lines = (["n", "n", "n", "n"] if v.get("modify_nsic") else ["y"]) + levels
         if count_levels(levels) > 1:        # 只优化一个能级时 rmcdhf 不询问权重
@@ -1965,6 +1992,7 @@ class RMcdhf(Step):
         return answers(lines + [v["vary"], v["spec"], v["nscf"]] + self.other_defaults(v))
 
     def validate(self, v):
+        super().validate(v)
         if v.get("modify_nsic") and not re.fullmatch(r"[0-9]+", str(v.get("nsic", "0")).strip()):
             raise ValueError(T("NSIC 必须是非负整数"))
 
@@ -1989,7 +2017,10 @@ class RMcdhf(Step):
         return f"{self.program(v)} -> {s}" if s else self.program(v)
 
     def inputs(self, v, run=None):
-        return ["isodata", "rcsf.inp", "rwfn.inp"] + angular_files(run)
+        return ["isodata", self.level_csf(v), "rwfn.inp"] + angular_files(run)
+
+    def level_csf(self, v):
+        return "rcsf.inp"
 
     def outputs(self, v, run=None):
         state = v["save"].strip()
@@ -2030,7 +2061,7 @@ class RSave(Step):
         return [v["state"].strip() + ".m"]
 
 
-class RCi(Step):
+class RCi(BlockLevelsStep):
     output_fields = ("state",)
     key = name = prog = "rci"
     mpi = True
@@ -2046,12 +2077,13 @@ class RCi(Step):
         Check("sms", "特殊质量移动 (SMS)", False),
         Check("se", "估计自能 (Self-energy)", True),
         Entry("nqed", "  自能计算的最大 n (≤8)", "4"),
-        Text("levels", "各块计算的能级", "1\n1", "每块一行", lines=3),
+        Text("levels", "各块计算的能级", "1\n1", "每块一行；空行或 - 表示跳过", lines=3),
     ] + zero_first_fields("odd2.c") + [
         Entry("log", "输出日志文件", "outodd_rci"),
     ]
 
     def validate(self, v):
+        super().validate(v)
         state_name(v["state"], 127, "rci")            # rci92.f90: NAME*128
 
     def stdin(self, v):
@@ -2068,7 +2100,7 @@ class RCi(Step):
         lines += [yn(v["vp"]), yn(v["nms"]), yn(v["sms"]), yn(v["se"])]
         if v["se"]:
             lines.append(v["nqed"])
-        return answers(lines + nonblank_lines(v["levels"]))
+        return answers(lines + block_level_lines(v["levels"]))
 
     def pre(self, v):
         src, dst = v["copyfrom"].strip(), v["state"].strip()
@@ -2080,8 +2112,11 @@ class RCi(Step):
         return f"rci {v['state']}"
 
     def inputs(self, v, run=None):
-        return ["isodata"] + [v["state"].strip() + ext for ext in (".c", ".w")] + (
+        return ["isodata", self.level_csf(v), v["state"].strip() + ".w"] + (
             [v["zero"].strip()] if v.get("zf") else [])
+
+    def level_csf(self, v):
+        return v["state"].strip() + ".c"
 
     def outputs(self, v, run=None):
         return [v["state"].strip() + ".cm"]
