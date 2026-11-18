@@ -759,6 +759,30 @@ Screenshots / 界面截图（本地协议替身，不连接真实 SSH）：
 | Update preview / 更新预览 | [更新](images/zh_upload_update.png) | [Update](images/en_upload_update.png) |
 | Completion / 完成后 | [打开远程窗口](images/zh_upload_complete.png) | [Open remote window](images/en_upload_complete.png) |
 
+## Convergence panel / 收敛面板
+
+Choose a state group to list its existing mixing files in calculation order. Check the orbital layers to include,
+use **Move up** and **Move down** to change their order, or choose other mixing files in the working directory.
+Select a reference level or use the lowest level of each layer. The threshold starts at 1 cm⁻¹ and follows the
+energy unit from the Levels tab.
+
+Each layer column shows excitation energy and its increment. Hover over a cell to see the leading CSF, coupling
+and purity. The last columns show the final total-energy increment, ratio, estimated remainder, purity and
+status. The fine-structure view compares splittings and increments. The layer header tooltip shows the available
+SCF log details. The logarithmic plot can show only selected rows. **Copy as text** and **Export CSV** use the same
+filtered levels and report excitation energies and increments in cm⁻¹.
+
+选择态组后，现有混合系数文件按计算顺序排列。勾选要比较的轨道层，用“上移”和“下移”调整顺序，也可选择工作目录中的
+其他混合系数文件。可指定参考能级或采用各层最低能级。阈值默认为 1 cm⁻¹，显示单位沿用能级图设置。
+
+各层列显示激发能和增量，悬停可看主 CSF、耦合和纯度。末尾各列显示最终总能量增量、比值、余量估计、纯度和状态。
+可切换到精细结构视图比较分裂值及增量。悬停在层表头可看已有的 SCF 日志信息。对数图可仅绘制选中态。
+“复制为文本”和“导出 CSV”使用同一批筛选后的能级，以 cm⁻¹ 报告激发能和增量。
+
+| 中文 | English |
+| --- | --- |
+| ![Fe XV 收敛面板](images/zh_convergence.png) | ![Fe XV convergence panel](images/en_convergence.png) |
+
 ## Direct server configuration import / 直接导入到服务器
 
 The connection browser and an empty remote Calculation tab offer **Create calculation here…**.
