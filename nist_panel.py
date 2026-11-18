@@ -258,7 +258,9 @@ class NistDialog(QDialog):
         self.diagram.set_columns([dict(file=T("计算能级"), title="", levels=computed),
                                   dict(file="NIST ASD", title="", levels=experimental)], "cm⁻¹")
         if computed and experimental:
+            # 默认范围聚焦当前计算态和已配对的实验态。
             values = [v["y"] for v in computed]
+            values.extend(row["experimental_cm"] for row in self.rows if row["experimental_cm"] is not None)
             lo, hi = min(values), max(values)
             pad = 0.06 * (hi - lo) or 1
             self.diagram.yr = (lo - pad, hi + pad)

@@ -143,6 +143,10 @@ def test_nist_dialog_only_fetches_on_click_and_exports_manual_pair(qapp, tmp_pat
     dialog.apply_pair.click()
     assert dialog.rows[0]["status"] == "manual"
     assert manual["Li I"]["upper"]
+    # 单个计算态归零后，实验配对仍应出现在同一张图上。
+    low, high = dialog.diagram.yr
+    assert low < 0 < dialog.rows[0]["experimental_cm"] < high
+    assert high < max(level["y"] for level in dialog.diagram.columns[1]["levels"])
     target = tmp_path / "compare.csv"
     monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a: (str(target), "CSV"))
     dialog.export_button.click()
