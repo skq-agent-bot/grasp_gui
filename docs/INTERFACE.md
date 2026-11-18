@@ -639,6 +639,38 @@ remote path. Older servers without these fields use `unknown` for `.cm`, with th
 
 Screenshots / 截图：[English](images/en_energy_zero.png) / [中文](images/zh_energy_zero.png)。
 
+### Compare NIST levels / 对照 NIST 能级
+
+Select the calculation files in **Levels**, then open **Compare NIST levels…**. If the pipeline has an
+rnucleus step and the selected CSF configurations agree on the number of electrons, the comparison starts
+with that spectrum. You can type a spectrum such as `Li I` or `Fe XV`.
+
+**Fetch from NIST** connects to `physics.nist.gov` only when clicked. A cached spectrum is reused unless
+**Refresh cache** is checked. For offline use, import the NIST CSV or tab-delimited output with energy in cm⁻¹.
+The date shown records when this copy was fetched or imported. The dialog shows the NIST citation.
+
+**Levels** has adjacent columns for calculated and NIST levels. The default calculated zero is the lowest
+chosen calculated level. Select another reference above the diagram to change that zero. The experimental
+column uses the lowest NIST level as zero. **Level comparison table** compares equal J and parity, ranking
+candidates by known configuration and LS term. The comparison allows omitted filled inner shells in the NIST
+configuration. Ties and a candidate shared by two calculated states stay marked for review. Select a row
+and choose its experimental level to match it manually. **Export comparison CSV…** includes both energies,
+the difference in cm⁻¹ and the relative error when the experimental energy is nonzero.
+
+先在 **能级图** 勾选计算文件，再点 **NIST 能级对照…**。流程包含 rnucleus 且各所选文件的 CSF 电子数一致时自动填光谱。
+也可输入 `Li I` 或 `Fe XV` 等光谱。只有点击“从 NIST 获取”才连接 `physics.nist.gov`。同一光谱优先读取缓存，
+勾选“刷新缓存”可主动重新下载。离线时可导入能量单位为 cm⁻¹ 的 NIST CSV 或制表符文件。对话框列出数据下载或导入日期及引用。
+
+能级图的两栏对应计算与实验。计算能量默认以所选计算结果的最低能级为零，可改选参考。实验列以 NIST 最低能级为零。
+对照表按 J 和宇称找候选，再用已知组态和谱项排序，允许 NIST 省略已占满的内层壳。多个候选并列、或两个计算态匹配到同一个
+实验候选时标为待核对；选中一行后可手动配置对应能级。可导出 CSV，含两侧能量、cm⁻¹ 差值和非零实验能量的相对误差。
+
+[NIST ASD Energy Levels Form / 查询表单](https://physics.nist.gov/PhysRefData/ASD/levels_form.html)
+
+Fe XV screenshots / 截图：
+[Levels](images/en_nist_levels.png) / [能级图](images/zh_nist_levels.png) ·
+[Comparison table](images/en_nist_comparison.png) / [对照表](images/zh_nist_comparison.png)。
+
 ### Transitions on demand / 计算跃迁
 
 For the selected pair: header `upper → lower`, ΔE and λ; a plan (whether `rbiotransform` is needed — skipped when both

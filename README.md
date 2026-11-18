@@ -23,6 +23,9 @@ Edit a fetched server pipeline with the normal local forms, or upload a new loca
 protect remote updates. / 可取出服务器流程到本机编辑，或上传新计算；按修订号检查冲突，再确认上传与运行。
 Selected files can be uploaded/downloaded with system rsync; large files are excluded by default.
 
+Compare calculated levels with NIST ASD in the Levels tab. It connects to NIST only on request.
+在能级图页对照 NIST ASD，只有用户主动获取时才联网。
+
 ## Screenshots / 截图
 
 The screenshots show example 4 of the GRASP2018 manual (Fe XV), imported with *File → Import example…* and run
