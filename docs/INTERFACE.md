@@ -423,11 +423,17 @@ It stores ground-shell occupations, terms, and ionization energies where listed.
 Madelung order (ascending `n+l`, then `n`) and are labeled **estimated**. An estimate supplies no energy or
 term. **Settings → About GRASP GUI…** shows the data citation.
 
+The ground term uses spectroscopic notation in plain text, such as `9D°2`. The ionization energy includes the published
+uncertainty when available. Theoretical and semi-empirical values are labeled using the ASD table notes.
+
 离线快照于 2026-11-17 下载自 NIST ASD 5.12，含 6019 个元素和离化度条目，保存该表给出的基态占据、项和电离能。
 缺少基态数据时依次按 `n+l`、`n` 由低到高填充，界面标注“推算”，且不推算基态项和电离能。“设置 → 关于 GRASP GUI…”
 显示引用。生成脚本为 `tools/make_shell_snapshot.py`。程序运行期间只读离线快照。
 
+基态项按光谱学的纯文本写法显示，例如 `9D°2`。电离能附有表中提供的不确定度，理论值和半经验值按 ASD 表注标明。
+
 [Source / 来源: NIST ground states and ionization energies](https://physics.nist.gov/PhysRefData/ASD/ionEnergy.html)
+· [ASD table notes / 表注](https://physics.nist.gov/PhysRefData/ASD/Html/iehelp.html)
 · [NIST ASD DOI](https://doi.org/10.18434/T4W30F)
 
 | 中文 | English |

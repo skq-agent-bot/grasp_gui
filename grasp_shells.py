@@ -102,6 +102,32 @@ def ground(z, charge):
     return Ground(tuple(sorted(madelung(z - charge).items())), estimated=charge < z)
 
 
+def format_term(term):
+    """用通用字体可显示的字符表示项符号与 J。"""
+    term = term.replace("*", "°")
+    match = re.fullmatch(r"(.*?)(?:<([0-9]+(?:/[0-9]+)?)>|([0-9]+))", term)
+    if match is None:
+        return term
+    symbol, bracketed, integer = match.groups()
+    j = bracketed or integer
+    return symbol + j if symbol else f"J = {j}"
+
+
+def format_ionization(value, uncertainty):
+    """保留 ASD 给出的有效数字，并标注括号代表的数据来源。"""
+    if not value:
+        return "—"
+    source = ""
+    if value.startswith("(") and value.endswith(")"):
+        source = T("理论值")
+    elif value.startswith("[") and value.endswith("]"):
+        source = T("半经验值")
+    if source:
+        value = value[1:-1].strip()
+    energy = f"{value} ± {uncertainty}" if uncertainty else value
+    return energy + " eV" + (f" · {source}" if source else "")
+
+
 def parity(occupations):
     return "-" if sum(l * count for (_, l), count in occupations.items()) % 2 else "+"
 

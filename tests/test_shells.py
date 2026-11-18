@@ -42,6 +42,48 @@ def test_snapshot_coverage_estimates_and_source():
         shells.ground("Fe", 27)
 
 
+@pytest.mark.parametrize("raw,expected", [
+    ("9D*<2>", "9D°2"), ("7S<3>", "7S3"), ("2S<1/2>", "2S1/2"), ("1S0", "1S0"),
+    ("10D*<5/2>", "10D°5/2"), ("(0,3/2)*<3/2>", "(0,3/2)°3/2"),
+    ("<3/2>", "J = 3/2"), ("0", "J = 0"), ("*", "°"), ("", ""),
+])
+def test_format_ground_term(raw, expected):
+    assert shells.format_term(raw) == expected
+
+
+@pytest.mark.parametrize("lang,theory,semi", [
+    ("zh", "理论值", "半经验值"), ("en", "theoretical", "semi-empirical"),
+])
+def test_format_ionization_preserves_values_and_provenance(lang, theory, semi):
+    core.set_lang(lang)
+    hydrogen = shells.ground("H", 0)
+    neodymium = shells.ground("Nd", 3)
+    assert hydrogen.ionization_ev == "(13.598434599702)"
+    assert neodymium.ionization_ev == "[40.60]"
+    assert shells.format_ionization(hydrogen.ionization_ev, hydrogen.uncertainty_ev) == (
+        f"13.598434599702 ± 0.000000000012 eV · {theory}")
+    assert shells.format_ionization(neodymium.ionization_ev, neodymium.uncertainty_ev) == (
+        f"40.60 ± 0.04 eV · {semi}")
+    assert shells.format_ionization("7.726380", "0.000004") == "7.726380 ± 0.000004 eV"
+    assert shells.format_ionization("[42]", "") == f"42 eV · {semi}"
+    assert shells.format_ionization("", "") == "—"
+
+
+@pytest.mark.gui
+@pytest.mark.parametrize("lang,source", [("zh", "半经验值"), ("en", "semi-empirical")])
+def test_shell_dialog_displays_formatted_nist_data(qapp, lang, source):
+    from shell_model_panel import ShellModelDialog
+
+    core.set_lang(lang)
+    step = core.RcsfGenerate()
+    dialog = ShellModelDialog(None, step, step.defaults(), "Nd")
+    dialog.value.setValue(3)
+    dialog.load_ground()
+    text = dialog.origin.text()
+    assert "4I°9/2" in text and f"40.60 ± 0.04 eV · {source}" in text
+    dialog.close()
+
+
 def references(core_id, block):
     """由手册参考行建立占据，方便逐字对照模型的输出。"""
     configs = []

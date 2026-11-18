@@ -459,6 +459,8 @@ EN = {
     "{symbol} · {electrons} 个电子 · 基态 {config}": "{symbol} · {electrons} electrons · ground state {config}",
     "NIST ASD · 下载于 {date} · 基态项 {term} · 电离能 {energy}":
         "NIST ASD · downloaded {date} · ground term {term} · ionization energy {energy}",
+    "理论值": "theoretical",
+    "半经验值": "semi-empirical",
     "全电离离子没有束缚电子，不能生成 CSF。": "A fully stripped ion has no bound electrons and cannot generate CSFs.",
     "推算组态，按 n+l、n 顺序填充。电离能和基态项无数据。":
         "Estimated occupation by n+l, then n. Ionization energy and ground term are unavailable.",

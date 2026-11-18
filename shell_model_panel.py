@@ -186,10 +186,9 @@ class ShellModelDialog(QDialog):
             return T("全电离离子没有束缚电子，不能生成 CSF。")
         if ground.estimated:
             return T("推算组态，按 n+l、n 顺序填充。电离能和基态项无数据。")
-        source = T("NIST ASD · 下载于 {date} · 基态项 {term} · 电离能 {energy}",
-                   date=metadata["retrieved"], term=ground.term or "—",
-                   energy=(ground.ionization_ev + " eV") if ground.ionization_ev else "—")
-        return source
+        return T("NIST ASD · 下载于 {date} · 基态项 {term} · 电离能 {energy}",
+                 date=metadata["retrieved"], term=shells.format_term(ground.term) or "—",
+                 energy=shells.format_ionization(ground.ionization_ev, ground.uncertainty_ev))
 
     def refresh_references(self, position):
         self.reference_list.blockSignals(True)
