@@ -149,10 +149,14 @@ class StepForm(QScrollArea):
         self.setWidget(inner)
         self.enabled_controls = []
         for f in step.fields:
-            if getattr(f, "enabled_by", None):
-                source, target = controls[f.enabled_by], controls[f.key]
-                source.toggled.connect(target.setEnabled)
-                self.enabled_controls.append((source, target))
+            condition = getattr(f, "enabled_by", None)
+            if condition:
+                key, expected = condition if isinstance(condition, tuple) else (condition, True)
+                source, target, get = controls[key], controls[f.key], self.get[key]
+                changed = source.toggled if isinstance(source, QCheckBox) else source.currentIndexChanged
+                changed.connect(
+                    lambda _, get=get, target=target, expected=expected: target.setEnabled(get() == expected))
+                self.enabled_controls.append((get, target, expected))
         self.set_values(step.defaults())
 
     def values(self):
@@ -163,8 +167,8 @@ class StepForm(QScrollArea):
         for k, val in d.items():
             if k in self.put:
                 self.put[k](core.normalize(fields[k], val))
-        for source, target in self.enabled_controls:
-            target.setEnabled(source.isChecked())
+        for get, target, expected in self.enabled_controls:
+            target.setEnabled(get() == expected)
 
     def job(self):
         return self.step.job(self.values())

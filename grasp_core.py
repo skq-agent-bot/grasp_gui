@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 
 VERSION = "2.10.0"         # 发布时改为发布的版本号 (写入导出的共享配置)
@@ -419,6 +420,15 @@ EN = {
     "默认": "default",
     "反序": "reverse",
     "按对称性": "symmetry",
+    "轨道顺序": "Orbital order",
+    "每行一个或用逗号分隔，如 1s,2s,2p": "One per line or comma-separated, e.g. 1s,2s,2p",
+    "请至少指定一个轨道": "Specify at least one orbital",
+    "轨道 {orbital} 的写法无效（如 2p，不带 -）": "Invalid orbital {orbital} (use e.g. 2p, without a minus sign)",
+    "轨道 {orbital} 必须满足 n ≤ 15 且 l < n": "Orbital {orbital} must satisfy n ≤ 15 and l < n",
+    "轨道 {orbital} 重复": "Duplicate orbital {orbital}",
+    "写文件动作的文件名无效：{name}": "Invalid filename for write action: {name}",
+    "无法写入 {name}：目标不是普通文件": "Cannot write {name}: destination is not a regular file",
+    "配置中的自定义命令不能使用写文件动作": "Custom commands in configurations cannot use write actions",
     "闭壳芯": "Core",
     "无芯": "no core",
     "CSF 列表:": "CSF lists:",
@@ -1596,7 +1606,7 @@ def normalize(field, value):
 #
 #  一个"任务" (job) 是一个 dict:
 #    title, prog, args, stdin, log, mpi,
-#    pre / post: 动作列表, ("cp", src, dst) 或 ("run", [prog, args...])
+#    pre / post: 动作列表, ("cp", src, dst)、("run", [prog, args...]) 或 ("write", name, text)
 # ---------------------------------------------------------------------------
 
 class Step:
@@ -1701,16 +1711,44 @@ class RNucleus(Step):
 class RcsfGenerate(Step):
     output_fields = ("saveas",)
     key = name = prog = "rcsfgenerate"
+    ORBITAL_LETTERS = "spdfghiklmn"
     fields = [
         Note("生成 CSF 列表 rcsf.out。组态写法如 1s(2,i)2s(2,*)2p(1,*)：c=闭壳, i=不激发, *=活跃, "
              "数字=最小占据。可添加多个列表 (Generate more lists)。"),
-        Choice("order", "轨道排序", [("*", "默认"), ("r", "反序"), ("s", "按对称性")]),
+        Choice("order", "轨道排序", [("*", "默认"), ("r", "反序"), ("s", "按对称性"), ("u", "用户指定")]),
+        Text("orbital_order", "轨道顺序", hint="每行一个或用逗号分隔，如 1s,2s,2p",
+             lines=3, added="2.11.0", enabled_by=("order", "u")),
         Choice("core", "闭壳芯", [("0", "无芯"), ("1", "He"), ("2", "Ne"), ("3", "Ar"),
                                   ("4", "Kr"), ("5", "Xe"), ("6", "Rn")]),
         CsfLists("lists", [dict(configs="1s(2,i)2s(2,i)2p(1,i)\n1s(2,i)2p(3,i)",
                                 active="2s,2p", jmin="1", jmax="3", nexc="0")]),
         Entry("saveas", "保存 rcsf.out 为", "odd2.c", "留空则不复制"),
     ]
+
+    def orbital_order(self, v):
+        """按 reffa.f90 的 (3a) 读入规则生成非相对论轨道清单。"""
+        orbitals = [part.strip() for part in re.split(r"[,\n]", v.get("orbital_order", "")) if part.strip()]
+        if not orbitals:
+            raise ValueError(T("请至少指定一个轨道"))
+        seen = set()
+        for orbital in orbitals:
+            match = re.fullmatch(rf"([1-9][0-9]*)([{self.ORBITAL_LETTERS}])", orbital)
+            if match is None:
+                raise ValueError(T("轨道 {orbital} 的写法无效（如 2p，不带 -）", orbital=orbital))
+            n, letter = match.groups()
+            if len(n) > 2 or int(n) > 15 or self.ORBITAL_LETTERS.index(letter) >= int(n):
+                raise ValueError(T("轨道 {orbital} 必须满足 n ≤ 15 且 l < n", orbital=orbital))
+            if orbital in seen:
+                raise ValueError(T("轨道 {orbital} 重复", orbital=orbital))
+            seen.add(orbital)
+        return answers(orbitals)
+
+    def validate(self, v):
+        if v["order"] == "u":
+            self.orbital_order(v)
+
+    def pre(self, v):
+        return [("write", "clist.ref", self.orbital_order(v))] if v["order"] == "u" else []
 
     def stdin(self, v):
         lines = [v["order"], v["core"]]
@@ -1729,7 +1767,7 @@ class RcsfGenerate(Step):
         return f"rcsfgenerate -> {s}" if s else "rcsfgenerate"
 
     def inputs(self, v, run=None):
-        return []
+        return ["clist.ref"] if v["order"] == "u" else []
 
     def outputs(self, v, run=None):
         return ["rcsf.out"]
@@ -2724,10 +2762,43 @@ def save_session(workdir, data, *, warnings=None, defaults=None):
 #  脚本
 # ---------------------------------------------------------------------------
 
+def write_action_name(name):
+    if (not isinstance(name, str) or not name or name == "." or ".." in name
+            or any(char in name for char in ("/", "\\", "\0", "\n", "\r"))):
+        raise ValueError(T("写文件动作的文件名无效：{name}", name=repr(name)))
+    return name
+
+
 def action_sh(a):
-    """动作的 shell 写法：("cp", src, dst) 或 ("run", argv[, stdin])。"""
+    """动作的 shell 写法，供预览和导出共用。"""
     if a[0] == "cp":
         return f"cp {shlex.quote(a[1])} {shlex.quote(a[2])}"
+    if a[0] == "write":
+        target = shlex.quote("./" + write_action_name(a[1]))
+        content = a[2]
+        lines = set(content.split("\n"))
+        delimiter = "GRASP_WRITE"
+        while delimiter in lines:
+            delimiter += "_"
+        # here-document 的定界符必须独占一行；无结尾换行时去掉 shell 补上的换行。
+        header = f"<<'{delimiter}'\n"
+        if content and not content.endswith("\n"):
+            write = f'printf "%s" "$(cat {header}{content}\n{delimiter}\n)" > "$tmp"'
+        else:
+            write = f'cat > "$tmp" {header}{content}{delimiter}'
+        error = shlex.quote(f"Cannot write {a[1]}: destination is not a regular file")
+        return "\n".join((
+            "(",
+            'tmp=$(mktemp ./.grasp-write.XXXXXX) || exit 1',
+            """trap 'rm -f "$tmp"' EXIT""",
+            f'if [ -L {target} ] || {{ [ -e {target} ] && [ ! -f {target} ]; }}; then',
+            f"    echo {error} >&2",
+            '    exit 1',
+            'fi',
+            write,
+            f'[ "$?" -eq 0 ] && mv -f "$tmp" {target}',
+            ') || exit 1',
+        ))
     cmd = " ".join(shlex.quote(x) for x in a[1])
     if len(a) > 2 and a[2]:
         return f"{cmd} <<'EOF'\n{a[2]}EOF"
@@ -2973,6 +3044,21 @@ class Runner:
             src, dst = os.path.join(cfg["cwd"], a[1]), os.path.join(cfg["cwd"], a[2])
             if os.path.abspath(src) != os.path.abspath(dst):     # 如 CSF 文件直接填成 rcsf.inp
                 shutil.copyfile(src, dst)
+        elif a[0] == "write":
+            name = write_action_name(a[1])
+            path = os.path.join(cfg["cwd"], name)
+            if os.path.islink(path) or os.path.exists(path) and not os.path.isfile(path):
+                raise ValueError(T("无法写入 {name}：目标不是普通文件", name=name))
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(dir=cfg["cwd"], prefix=".grasp-write-", delete=False) as f:
+                    temporary = f.name
+                    f.write(a[2].encode("utf-8"))
+                os.replace(temporary, path)
+                temporary = None
+            finally:
+                if temporary is not None:
+                    os.unlink(temporary)
         else:
             rc = self.exec_cmd(a[1], cfg, a[2] if len(a) > 2 else "")
             if rc != 0:

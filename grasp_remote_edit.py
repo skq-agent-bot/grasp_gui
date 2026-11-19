@@ -75,6 +75,8 @@ def generated_files(jobs, run=None):
         for action in [*step.pre(values), *step.post(values)]:
             if action[0] == "cp":
                 names.add(action[2])
+            elif action[0] == "write":
+                names.add(action[1])
     return names
 
 
