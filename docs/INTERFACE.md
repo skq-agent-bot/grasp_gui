@@ -829,6 +829,9 @@ Screenshots / 界面截图（本地协议替身，不连接真实 SSH）：
 
 ## Convergence panel / 收敛面板
 
+Open **Convergence** in the last main-window tab with **Ctrl+4**. The **Window** menu also opens it in a separate
+window. Switching the main working directory cancels the previous read and loads the new directory in the background.
+
 Choose a state group to list its existing mixing files in calculation order. Check the orbital layers to include,
 use **Move up** and **Move down** to change their order, or choose other mixing files in the working directory.
 Select a reference level or use the lowest level of each layer. The threshold starts at 1 cm⁻¹ and follows the
@@ -840,6 +843,9 @@ status. The fine-structure view compares splittings and increments. The layer he
 SCF log details. The logarithmic plot can show only selected rows. **Copy as text** and **Export CSV** use the same
 filtered levels and report excitation energies and increments in cm⁻¹.
 
+主窗口最后一页为“收敛”，可用 **Ctrl+4** 打开。“窗口”菜单也可在独立窗口打开收敛面板。切换主工作目录时会撤销旧的读取，
+并在后台读取新目录。
+
 选择态组后，现有混合系数文件按计算顺序排列。勾选要比较的轨道层，用“上移”和“下移”调整顺序，也可选择工作目录中的
 其他混合系数文件。可指定参考能级或采用各层最低能级。阈值默认为 1 cm⁻¹，显示单位沿用能级图设置。
 
@@ -849,6 +855,7 @@ filtered levels and report excitation energies and increments in cm⁻¹.
 
 | 中文 | English |
 | --- | --- |
+| ![主窗口的收敛页](images/zh_convergence_tab.png) | ![Convergence tab in the main window](images/en_convergence_tab.png) |
 | ![Fe XV 收敛面板](images/zh_convergence.png) | ![Fe XV convergence panel](images/en_convergence.png) |
 
 ## Direct server configuration import / 直接导入到服务器

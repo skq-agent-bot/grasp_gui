@@ -8,7 +8,7 @@ import grasp_converge as converge
 import grasp_core as core
 from grasp_mix import HARTREE_CM
 from test_converge import state
-from test_gui import spin
+from test_gui import spin, window
 
 pytestmark = pytest.mark.gui
 
@@ -111,3 +111,52 @@ def test_open_standalone_and_choose_layers(qapp, results, monkeypatch):
         assert panel.result["rows"][1]["points"][-1]["excitation_cm"] == 0
     finally:
         assert win.close()
+
+
+def test_main_window_convergence_shortcut_open_window_and_change_directory(qapp, tmp_path, monkeypatch):
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtWidgets import QMenu
+
+    import gui_common as gc
+
+    first, second = tmp_path / "first", tmp_path / "second"
+    step = core.RMcdhf()
+    for directory in (first, second):
+        directory.mkdir()
+        (directory / (directory.name + ".m")).touch()
+        job = dict(step.job(dict(step.defaults(), save=directory.name)), group="odd")
+        assert core.save_session(str(directory), {"pipeline": [job]})
+    monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "preferences.json"))
+    first_requests = []
+
+    def read(directory, files, *, jobs, cancel):
+        if Path(directory) == first:
+            first_requests.append(cancel)
+            assert cancel.wait(10)
+        return [converge.Layer(name, (state("2p", -8),), dict(missing=True)) for name in files]
+
+    monkeypatch.setattr(converge, "read_layers", read)
+    w = window(first)
+    try:
+        w.show()
+        assert [w.tabs.tabText(i) for i in range(w.tabs.count())] == ["计算", "径向波函数", "能级图", "收敛"]
+        menus = {menu.title(): menu for menu in w.menuBar().findChildren(QMenu)}
+        view = next(action for action in menus["视图"].actions() if action.text() == "收敛")
+        assert view.shortcut().toString(QKeySequence.PortableText) == "Ctrl+4"
+        view.trigger()
+        assert w.current_tab() == "convergence"
+        panel = w.panel("convergence")
+        initial_read = panel.worker.cancel
+        spin(qapp, lambda: initial_read in first_requests)
+        w.change_workdir(str(second))
+        assert initial_read.is_set()
+        spin(qapp, lambda: not panel.loading)
+        assert [row["file"] for row in panel.result["layers"]] == ["second.m"]
+        standalone = next(action for action in menus["窗口"].actions() if action.text() == "在新窗口中打开收敛")
+        standalone.trigger()
+        opened = gc.PANEL_WINDOWS[-1]
+        assert opened.panel.KIND == "convergence" and opened.panel.dir_box.isVisible()
+        spin(qapp, lambda: not opened.panel.loading)
+        assert [row["file"] for row in opened.panel.result["layers"]] == ["second.m"]
+    finally:
+        assert w.close()

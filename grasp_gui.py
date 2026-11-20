@@ -146,12 +146,17 @@ def level_panel(workdir, settings=gc.saved_settings):
     return LevelPanel(workdir, settings)
 
 
+def convergence_panel(workdir):
+    from convergence_panel import ConvergencePanel
+    return ConvergencePanel(workdir)
+
+
 # ---------------------------------------------------------------------------
-#  主窗口：工作目录和运行设置，下面是计算、径向波函数、能级图三个标签页
+#  主窗口：工作目录和运行设置，下面是计算和结果查看标签页
 # ---------------------------------------------------------------------------
 
 class MainWindow(QMainWindow):
-    TABS = [("calc", "计算"), ("wfn", "径向波函数"), ("levels", "能级图")]
+    TABS = [("calc", "计算"), ("wfn", "径向波函数"), ("levels", "能级图"), ("convergence", "收敛")]
 
     def __init__(self, workdir=None, tab=None):
         super().__init__()
@@ -166,7 +171,7 @@ class MainWindow(QMainWindow):
         self.remote_windows = []
         self.panels = {}           # 已创建的查看器面板：种类 -> 面板 (第一次切换到该标签页时创建)
         self.pending = {}          # 重新创建面板后要恢复的勾选文件：种类 -> [路径]
-        gc.PANEL_FACTORIES.update(wfn=wfn_panel, levels=self.make_level_panel)
+        gc.PANEL_FACTORIES.update(wfn=wfn_panel, levels=self.make_level_panel, convergence=convergence_panel)
         self.build()
         self.restore_layout()
         core.save_config(workdir=self.cur_workdir)
@@ -494,6 +499,7 @@ class MainWindow(QMainWindow):
             p.setParent(None)
             if not p.busy():
                 self.pending[kind] = p.checked_paths()
+                p.shutdown()
                 p.deleteLater()
                 del self.panels[kind]
         self.build()
