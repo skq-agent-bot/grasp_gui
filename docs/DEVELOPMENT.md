@@ -481,6 +481,15 @@ GRASP references. macOS users can view their own files or connect to a Linux ser
 macOS 原生 Qt 使用系统字体，设置仍放在 `~/.config/grasp_gui.json`。arm64 CI 用 offscreen 运行不依赖 GRASP 的测试。
 Linux 继续校验真实 GRASP 的参考能量。macOS 可查看本机文件，也可连接 Linux 服务器执行计算。
 
+On macOS the background process uses a filesystem socket under `~/Library/Caches/grasp_gui/bg/` in
+a directory restricted to its owner. If the encoded socket path exceeds 103 bytes, it uses `/tmp/grasp_gui-<uid>/`
+with the same directory checks. The listener holds an exclusive lock while serving and removing stale sockets.
+Linux continues to use abstract sockets.
+
+macOS 后台进程使用 `~/Library/Caches/grasp_gui/bg/` 下的文件套接字，目录只允许属主访问。套接字路径编码后超过
+103 字节时，改用 `/tmp/grasp_gui-<uid>/` 并执行相同的目录检查。监听期间持有排他锁，清理旧套接字也必须持锁。
+Linux 继续使用抽象套接字。
+
 ## 分支与后续计划
 
 - **V1**：停在 v1.3.0，不再更新；GitHub 上保留分支 `v1`（指向 v1.3.0）。

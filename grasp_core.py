@@ -20,6 +20,9 @@ import sys
 import tempfile
 import threading
 
+IS_LINUX = sys.platform.startswith("linux")
+IS_MACOS = sys.platform == "darwin"
+
 VERSION = "2.10.0"         # 发布时改为发布的版本号 (写入导出的共享配置)
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".config", "grasp_gui.json")
@@ -43,7 +46,7 @@ def program_path(bindir, prog):
 def physical_cpu_count():
     """核数供计算默认值和数据分析共用；缺少拓扑时保守地按逻辑核数的一半估计。"""
     try:
-        if sys.platform.startswith("linux"):
+        if IS_LINUX:
             with open("/proc/cpuinfo", encoding="ascii") as stream:
                 blocks = re.split(r"\n\s*\n", stream.read().strip())
             cores = set()
@@ -58,7 +61,7 @@ def physical_cpu_count():
                 cores.add((int(package), int(core)))
             if cores:
                 return len(cores)
-        elif sys.platform == "darwin":
+        elif IS_MACOS:
             count = int(subprocess.check_output(["sysctl", "-n", "hw.physicalcpu"], text=True,
                                                 stderr=subprocess.DEVNULL, timeout=2).strip())
             if count > 0:
@@ -850,6 +853,8 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "运行中：第 {i}/{n} 步 {t}": "Running: step {i}/{n} {t}",
     "，本步 {d}": ", this step {d}",
     "，最后输出于 {d} 前": ", last output {d} ago",
+    "后台套接字目录不安全：{path}": "Unsafe background socket directory: {path}",
+    "后台套接字路径过长：{path}": "Background socket path is too long: {path}",
     "此目录已有计算在运行": "A run is already in progress in this directory",
     "停止计算并退出": "Stop the run and quit",
     "后台继续": "Continue in background",
@@ -2937,7 +2942,7 @@ def check_mcp(cwd, np, mpitmp):
 def child_env(**extra):
     """子进程 (GRASP、mpirun、后台运行进程) 的环境变量。"""
     env = dict(os.environ, **extra)
-    if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+    if IS_LINUX and getattr(sys, "frozen", False):
         # PyInstaller 打包的程序把 LD_LIBRARY_PATH 指向自带的库；子进程用回原来的值
         orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
         if orig is None:

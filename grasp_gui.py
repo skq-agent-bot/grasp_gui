@@ -41,9 +41,12 @@ if __name__ == "__main__" and sys.argv[1:2] == ["_run"] and len(sys.argv) == 3:
     sys.exit(grasp_bg.serve(sys.argv[2]))
 
 
+import grasp_core as core
+
+
 def fix_wsl_display():
     """WSL 启用 systemd 后 $XDG_RUNTIME_DIR 中常缺少 WSLg 的 wayland 套接字；直接指向它并优先用 Wayland。"""
-    if not sys.platform.startswith("linux") or os.environ.get("QT_QPA_PLATFORM"):
+    if not core.IS_LINUX or os.environ.get("QT_QPA_PLATFORM"):
         return
     wl = os.environ.get("WAYLAND_DISPLAY")
     if not wl:
@@ -83,7 +86,7 @@ def fix_fontconfig():
     """打包的程序自带构建机器上的 fontconfig 库；系统的 /etc/fonts 若来自更新的 fontconfig，
     旧库读它时会打印大量 "invalid attribute 'xsi:nil'" 之类的错误。因此改用一份只列出字体目录的
     简单配置 (系统和用户字体照常可用；打包的字体在 load_fonts 中直接注册)。"""
-    if not sys.platform.startswith("linux") or not getattr(sys, "frozen", False):
+    if not core.IS_LINUX or not getattr(sys, "frozen", False):
         return
     if os.environ.get("FONTCONFIG_FILE") or os.environ.get("FONTCONFIG_PATH"):
         return
@@ -105,7 +108,7 @@ fix_wsl_display()
 fix_fontconfig()
 # 打包的 libxkbcommon 可能比系统的 Compose 文件旧，读到新的按键名 (如 dead_hamza) 时会打印大量 ERROR；
 # 这些行被跳过，不影响使用，因此只显示严重错误
-if sys.platform.startswith("linux"):
+if core.IS_LINUX:
     os.environ.setdefault("XKB_LOG_LEVEL", "critical")
 
 from PySide6.QtCore import QByteArray, QEvent, QObject, QPointF, Qt  # noqa: E402
@@ -129,7 +132,7 @@ DEFAULT_PT = 10.0          # 系统默认字号 (main 中按 QApplication 的默
 def load_fonts():
     """注册随程序打包的字体 (build.sh 放在 fonts/ 中)，使没有安装字体的机器也能正常显示。
     系统已有的字体照常可用；查找位置为可执行文件内部和程序所在目录的 fonts/。"""
-    if sys.platform == "darwin":
+    if core.IS_MACOS:
         return
     dirs = [os.path.join(getattr(sys, "_MEIPASS", ""), "fonts"),
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")]
@@ -185,7 +188,7 @@ class MainWindow(QMainWindow):
         # 中文界面优先用中文字体，英文界面优先用西文字体；另一种文字由 Qt 自动换用其他字体显示
         app = QApplication.instance()
         candidates = gc.CJK_FONTS + gc.LATIN_FONTS if core.LANG == "zh" else gc.LATIN_FONTS + gc.CJK_FONTS
-        if sys.platform == "darwin":
+        if core.IS_MACOS:
             candidates = (["PingFang SC", "Helvetica Neue"] if core.LANG == "zh" else
                           ["Helvetica Neue", "PingFang SC"]) + candidates
         family = gc.first_family(candidates)
@@ -274,7 +277,7 @@ class MainWindow(QMainWindow):
         fm.addSeparator()
         fm.addAction(T("连接服务器…")).triggered.connect(self.connect_server)
         quit_action = fm.addAction(T("退出"))
-        if sys.platform == "darwin":
+        if core.IS_MACOS:
             quit_action.setMenuRole(QAction.QuitRole)
         quit_action.triggered.connect(self.close)
         vm = mb.addMenu(T("视图"))
@@ -643,7 +646,7 @@ def main():
     rc = app.exec()
     # 在 WSLg 的 Wayland 下，进程退出时 Qt 的收尾清理会卡住几十秒以上；
     # 参数在操作时已保存，运行中的程序已在 closeEvent 中结束，因此直接退出
-    if sys.platform == "darwin":
+    if core.IS_MACOS:
         sys.exit(rc)
     sys.stdout.flush()
     sys.stderr.flush()

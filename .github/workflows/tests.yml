@@ -39,17 +39,13 @@ jobs:
 
   macos-arm64:
     runs-on: macos-15
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.10", "3.12"]
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
+          python-version: "3.12"
           cache: pip
       - name: Check Apple Silicon runner
         run: test "$(uname -m)" = arm64

@@ -11,7 +11,8 @@ import grasp_core as core
 
 
 def test_native_mac_source_leaves_linux_environment_prefixes_alone(monkeypatch):
-    monkeypatch.setattr(core.sys, "platform", "darwin")
+    monkeypatch.setattr(core, "IS_LINUX", False)
+    monkeypatch.setattr(core, "IS_MACOS", True)
     monkeypatch.setattr(core.sys, "frozen", True, raising=False)
     monkeypatch.setenv("LD_LIBRARY_PATH", "/current/lib")
     monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/saved/lib")
@@ -21,7 +22,8 @@ def test_native_mac_source_leaves_linux_environment_prefixes_alone(monkeypatch):
 
 
 def test_linux_frozen_launcher_preserves_original_library_prefixes(monkeypatch):
-    monkeypatch.setattr(core.sys, "platform", "linux")
+    monkeypatch.setattr(core, "IS_LINUX", True)
+    monkeypatch.setattr(core, "IS_MACOS", False)
     monkeypatch.setattr(core.sys, "frozen", True, raising=False)
     monkeypatch.setenv("LD_LIBRARY_PATH", "/frozen/lib")
     monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/original/lib")
@@ -36,7 +38,8 @@ def test_linux_frozen_launcher_preserves_original_library_prefixes(monkeypatch):
 def test_native_mac_skips_wsl_and_bundled_font_config(qapp, tmp_path, monkeypatch):
     import grasp_gui as gui
 
-    monkeypatch.setattr(gui.sys, "platform", "darwin")
+    monkeypatch.setattr(core, "IS_LINUX", False)
+    monkeypatch.setattr(core, "IS_MACOS", True)
     monkeypatch.setattr(gui.sys, "frozen", True, raising=False)
     monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
     monkeypatch.delenv("FONTCONFIG_FILE", raising=False)
