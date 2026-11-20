@@ -134,7 +134,10 @@ def test_import_persists_only_valid_input_names(tmp_path):
     config.install(cfg, str(tmp_path))
     assert json.loads((tmp_path / config.INPUTS_FILE).read_text()) == ["extra.in"]
     assert config.load_inputs(tmp_path) == {"extra.in"}
-    assert core.load_session(tmp_path) == json.loads(json.dumps(config.session(cfg)))
+    expected = config.session(cfg)
+    settings = core.saved_run_settings(persist=False)
+    expected.update((key, settings[key]) for key in ("np", "mpirun", "mpitmp", "nice"))
+    assert core.load_session(tmp_path) == json.loads(json.dumps(expected))
     original = (tmp_path / config.INPUTS_FILE).read_bytes()
     with pytest.raises(config.ConfigError):
         config.save_inputs(tmp_path, ["../outside"])
