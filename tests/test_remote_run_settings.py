@@ -7,6 +7,7 @@ import pytest
 import grasp_core as core
 import grasp_config as config
 import grasp_remote as remote
+import grasp_session as sessions
 from test_run_range import install, launches  # noqa: F401
 from test_summary import job
 
@@ -93,6 +94,14 @@ def test_explicit_settings_never_read_or_write_server_preferences(tmp_path, monk
     result = op.run(str(root), revision, run_settings=settings)
     assert result["started"]
     assert launches[0][1] == dict(settings, cwd=str(root))
+    saved, actual_revision = sessions.read(root)
+    assert actual_revision == result["revision"] and actual_revision != revision
+    assert {key: saved[key] for key in ("np", "mpirun", "mpitmp", "nice")} == {
+        key: settings[key] for key in ("np", "mpirun", "mpitmp", "nice")}
+    assert "bindir" not in saved and str(bindir) not in (root / "grasp_run/run.sh").read_text()
+    launches.clear()  # 模拟首次运行结束，可以用同样的设置再次启动。
+    same = op.run(str(root), actual_revision, run_settings=settings)
+    assert same["revision"] == actual_revision
 
 
 def test_remote_plan_is_readonly_and_default_run_still_uses_saved_values(tmp_path, monkeypatch, launches):

@@ -79,6 +79,28 @@ path, or arrange the required library paths in the server's noninteractive login
 
 Screenshots / 截图：[中文](images/zh_server_run_settings.png) / [English](images/en_server_run_settings.png).
 
+#### Generated run scripts / 自动生成运行脚本
+
+Saving a pipeline on the server regenerates `grasp_run/run.sh` and `grasp_run/submit.sbatch`. Confirmed runs
+and submissions record changed MPI, nice, or Slurm settings in the existing fields, so a later launch with the
+same settings keeps the same revision. Reports may include `revision` and `warnings`. Previews leave the record
+and server preferences untouched. A workstation bin directory explicitly supplied from the desktop applies to
+that launch. `run.sh` uses the generating machine's GRASP default, and `submit.sbatch` uses the recorded Slurm
+bin directory, which defaults to `$HOME/grasp/bin`. The Slurm job's shell expands `$HOME` or `~/` on the cluster.
+Set `GRASP_RUN_BINDIR` in the environment to override either default.
+
+生成脚本使用服务器已保存的流程。正式运行或提交只在设置改变时更新目录记录中的已有字段，响应可能含新的 `revision` 和
+`warnings`。预检不保存设置，不创建服务器偏好。桌面显式传入的工作站 GRASP 路径仅用于本次运行。`run.sh` 使用生成机器
+的默认 GRASP 路径，`submit.sbatch` 使用记录中的 Slurm 程序目录，默认是 `$HOME/grasp/bin`。作业在集群上展开
+`$HOME` 或 `~/`。两种脚本的默认路径都可用 `GRASP_RUN_BINDIR` 覆盖。上传和下载默认不勾选 `grasp_run/` 中的文件。
+
+For manual Slurm submission, run `sbatch grasp_run/submit.sbatch [start end]` from the calculation directory.
+The wrapper loads the recorded modules and launcher settings, then calls `run.sh`. A manual submission does
+not create a GUI Slurm record. The dedicated Slurm fixture runs both the full and split generated script tests.
+
+手动提交需在计算目录下调用 `sbatch grasp_run/submit.sbatch [起始步骤 结束步骤]`。脚本加载记录中的模块和启动设置，
+再调用 `run.sh`。手动提交不会生成界面的 Slurm 记录。专用 Slurm 夹具覆盖生成脚本的完整与分段提交。
+
 #### Optional SSH acceptance / 可选 SSH 验收
 
 Use the dedicated disposable sshd fixture below, install this branch's server, and keep the server account free
@@ -472,6 +494,14 @@ remote grouping. Older servers without these fields are shown as unknown for `.c
 目录签名已有 `.csum` 大小/修改时间，单独更新总结文件也使远程缓存失效；旧端缺字段时按未知组提示，不查本机文件。
 
 Two server workers permit pipelined reads; run/stop are serialized. Server code uses only the Python standard library.
+`levels` / `view(kind=levels)` may additionally return `errors: [{file, error}]` for unreadable mixing files.
+Non-finite energies reject the whole affected file while retaining other results, including the brief preview.
+The desktop marks these files unreadable with the reported reason. Healthy replies omit `errors`; the protocol is unchanged.
+能级请求可选返回逐文件的 `errors`；非有限能量使该文件无法读取，不影响其他文件及预览，桌面显示原因。
+没有文件错误时不返回该字段，协议号不变。
+`errors` and `partial_files` may coexist in one levels reply. Unreadable files occur only in `errors`,
+while incomplete readable files retain their levels and warnings. 两种字段可以同时返回；无法读取的文件只列在
+`errors`，可读但未写完的文件保留能级和提示。
 
 ```json
 {"id":1,"method":"hello","args":{"protocol":1,"version":"client version"}}
