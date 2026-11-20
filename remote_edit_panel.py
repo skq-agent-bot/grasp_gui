@@ -53,13 +53,16 @@ def take_out(source, directory, parent, opened, local=None):
         if error:
             QMessageBox.warning(parent, T("在本机编辑…"), str(error))
             return
+        warnings = []
         try:
-            path = edit.checkout(local, source.client.host, directory, value, replace=True)
+            path = edit.checkout(local, source.client.host, directory, value, replace=True, warnings=warnings)
         except (OSError, ValueError) as exc:
             QMessageBox.warning(parent, T("在本机编辑…"), str(exc))
             return
         if value.get("warnings"):
             QMessageBox.warning(parent, T("在本机编辑…"), json.dumps(value["warnings"], ensure_ascii=False, indent=1))
+        if warnings:
+            QMessageBox.warning(parent, T("在本机编辑…"), "\n".join(warnings))
         opened(path)
         widget = parent
         while widget is not None:
@@ -524,6 +527,8 @@ class UploadDialog(TransferDialog):
         self.revision, self.written = value["revision"], True
         self.save_link(dict(host=self.source.client.host, directory=self.directory, revision=self.revision))
         self.refresh_link()
+        if value.get("warnings"):
+            QMessageBox.warning(self, T("远程流程"), "\n".join(value["warnings"]))
         self.send_files(rows)
 
     def send_files(self, rows):
