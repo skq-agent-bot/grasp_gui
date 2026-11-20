@@ -149,10 +149,14 @@ class StepForm(QScrollArea):
         self.setWidget(inner)
         self.enabled_controls = []
         for f in step.fields:
-            if getattr(f, "enabled_by", None):
-                source, target = controls[f.enabled_by], controls[f.key]
-                source.toggled.connect(target.setEnabled)
-                self.enabled_controls.append((source, target))
+            condition = getattr(f, "enabled_by", None)
+            if condition:
+                key, expected = condition if isinstance(condition, tuple) else (condition, True)
+                source, target, get = controls[key], controls[f.key], self.get[key]
+                changed = source.toggled if isinstance(source, QCheckBox) else source.currentIndexChanged
+                changed.connect(
+                    lambda _, get=get, target=target, expected=expected: target.setEnabled(get() == expected))
+                self.enabled_controls.append((get, target, expected))
         self.set_values(step.defaults())
 
     def values(self):
@@ -163,8 +167,8 @@ class StepForm(QScrollArea):
         for k, val in d.items():
             if k in self.put:
                 self.put[k](core.normalize(fields[k], val))
-        for source, target in self.enabled_controls:
-            target.setEnabled(source.isChecked())
+        for get, target, expected in self.enabled_controls:
+            target.setEnabled(get() == expected)
 
     def job(self):
         return self.step.job(self.values())
@@ -1312,7 +1316,16 @@ class CalcPanel(QWidget):
         data = self.collect()
         for key in ("workdir", "bindir"):
             data.pop(key)
-        self.session_revision = sessions.write(self.cur_workdir, data, expected)
+        warnings = []
+        self.session_revision = sessions.write(self.cur_workdir, data, expected, warnings=warnings,
+                                               bindir=self.run.bindir())
+        self.show_script_warnings(warnings)
+
+    def show_script_warnings(self, warnings):
+        if warnings:
+            notice = "\n".join(warnings)
+            self.write("\n" + notice + "\n", "err")
+            QTimer.singleShot(0, lambda: self.status(notice))
 
     def calculation_fields(self):
         self.flush_group()
@@ -1871,6 +1884,8 @@ class CalcPanel(QWidget):
             return
         self.slurm = dlg.settings()
         core.save_config(slurm=self.slurm)
+        if not self.save_session(require_saved=True):
+            return
         self.save_text(T("Slurm 作业脚本"), f"{self.slurm['job'] or 'grasp'}.slurm",
                        core.slurm_script(jobs, self.slurm))
 
@@ -1882,7 +1897,7 @@ class CalcPanel(QWidget):
                     groups=self.groups, group=self.group,
                     pipeline=self.pipeline, tab=self.nav.currentWidget().step.key)
 
-    def apply(self, data):
+    def apply(self, data, *, user_run_settings=False):
         self.session_cleared = False
         choice_warnings = []
 
@@ -1891,7 +1906,7 @@ class CalcPanel(QWidget):
             choice_warnings.extend(f"{location} · {error}" for error in errors)
             return bool(errors)
 
-        self.run.apply(data)
+        self.run.apply(data, user=user_run_settings)
         if "workdir" in data:
             d = os.path.abspath(str(data["workdir"]))
             if d != self.cur_workdir:
@@ -1973,8 +1988,9 @@ class CalcPanel(QWidget):
         if dlg.update.isChecked():
             self.update_workdir(cfg)
             return
+        warnings = []
         try:
-            grasp_config.install(cfg, path)
+            grasp_config.install(cfg, path, warnings=warnings, run=self.run.values())
         except OSError as e:
             QMessageBox.warning(self, T("导入配置"), str(e))
             return
@@ -1984,6 +2000,7 @@ class CalcPanel(QWidget):
         else:
             self.workdirRequested.emit(path)
         self.status(T("已导入“{t}”到 {p}；点“▶ 运行全部”开始计算", t=grasp_config.text(cfg, "title"), p=path))
+        self.show_script_warnings(warnings)
 
     def update_workdir(self, cfg):
         if self.check_external() == "cancel":
@@ -1993,7 +2010,7 @@ class CalcPanel(QWidget):
             dlg = UpdateDialog(self, plan)
             if dlg.exec() != QDialog.Accepted:
                 return
-            data = workdir_ops.apply_update(plan, dlg.overwrite())
+            data = workdir_ops.apply_update(plan, dlg.overwrite(), bindir=self.run.bindir())
             _, self.session_revision = sessions.read(self.cur_workdir)
         except (OSError, ValueError, KeyError) as e:
             QMessageBox.warning(self, T("更新当前工作目录"), str(e))
@@ -2007,6 +2024,7 @@ class CalcPanel(QWidget):
         else:
             self.status(T("已更新当前目录；原有结果文件保留"))
         self.filesChanged.emit()
+        self.show_script_warnings(plan.get("script_warnings"))
         if plan.get("warnings"):
             QMessageBox.warning(self, T("更新当前工作目录"),
                                 T("更新已完成，但临时备份清理失败：{e}", e="\n".join(plan["warnings"])))
@@ -2025,8 +2043,9 @@ class CalcPanel(QWidget):
         if QMessageBox.question(self, T("恢复上一次的工作目录记录"),
                                T("只恢复流程和参数，计算结果与附带文件不变。当前记录也会备份；连续恢复两次会回到恢复前的状态。确定恢复吗？")) != QMessageBox.Yes:
             return
+        warnings = []
         try:
-            data = workdir_ops.restore(self.cur_workdir)
+            data = workdir_ops.restore(self.cur_workdir, warnings=warnings, bindir=self.run.bindir())
             _, self.session_revision = sessions.read(self.cur_workdir)
         except (OSError, ValueError) as e:
             QMessageBox.warning(self, T("恢复上一次的工作目录记录"), str(e))
@@ -2034,6 +2053,7 @@ class CalcPanel(QWidget):
         self.session_cleared = False
         self.apply(data)
         self.status(T("已恢复上一次的工作目录记录"))
+        self.show_script_warnings(warnings)
 
     def clear_workdir(self):
         if self.check_external() == "cancel":
@@ -2055,7 +2075,7 @@ class CalcPanel(QWidget):
             workdir_ops.clear(dlg.plan, dlg.selected_names(), dlg.confirmation.text())
         except (OSError, ValueError) as e:
             QMessageBox.warning(self, T("清空工作目录"),
-                                T("清理未完成，部分项目可能已删除：{e}", e=str(e)))
+                                T("清理未完成，部分项目可能已删除：{e}", e=str(e)) if started else str(e))
             if not started:
                 return
         else:
@@ -2113,5 +2133,5 @@ class CalcPanel(QWidget):
         if not path:
             return
         with open(path) as f:
-            self.apply(json.load(f))
+            self.apply(json.load(f), user_run_settings=True)
         self.status(T("已载入 {p}", p=path))

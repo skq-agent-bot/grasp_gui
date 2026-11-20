@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 
 VERSION = "2.10.0"         # 发布时改为发布的版本号 (写入导出的共享配置)
@@ -210,6 +211,7 @@ EN = {
     "计算两个文件中全部 J^π 之间的跃迁 (用于寿命、分支比)，用 MPI 并行":
         "All J^π symmetries of both files (for lifetimes and branching ratios), in parallel with MPI",
     "计算全部 J 时的 MPI 进程数": "Number of MPI processes when computing all J",
+    "跃迁 MPI 进程数的默认值已改为 {n}。": "The default transition MPI process count changed to {n}.",
     "默认按物理核数；超线程对 GRASP 帮助不大。":
         "Defaults use physical cores; hyperthreading offers little benefit for GRASP.",
     "进程数": "Processes",
@@ -418,6 +420,15 @@ EN = {
     "默认": "default",
     "反序": "reverse",
     "按对称性": "symmetry",
+    "轨道顺序": "Orbital order",
+    "每行一个或用逗号分隔，如 1s,2s,2p": "One per line or comma-separated, e.g. 1s,2s,2p",
+    "请至少指定一个轨道": "Specify at least one orbital",
+    "轨道 {orbital} 的写法无效（如 2p，不带 -）": "Invalid orbital {orbital} (use e.g. 2p, without a minus sign)",
+    "轨道 {orbital} 必须满足 n ≤ 15 且 l < n": "Orbital {orbital} must satisfy n ≤ 15 and l < n",
+    "轨道 {orbital} 重复": "Duplicate orbital {orbital}",
+    "写文件动作的文件名无效：{name}": "Invalid filename for write action: {name}",
+    "无法写入 {name}：目标不是普通文件": "Cannot write {name}: destination is not a regular file",
+    "配置中的自定义命令不能使用写文件动作": "Custom commands in configurations cannot use write actions",
     "闭壳芯": "Core",
     "无芯": "no core",
     "CSF 列表:": "CSF lists:",
@@ -558,6 +569,7 @@ EN = {
     "输入 (stdin)": "Input (stdin)",
     # MPI / 性能
     "MPI 进程数": "MPI processes",
+    "MPI 进程数的默认值已改为 {n}。": "The default MPI process count changed to {n}.",
     "mpirun 命令": "mpirun command",
     "降低计算进程优先级 (nice)": "Lower priority of calculations (nice)",
     "进程数 > 1 时 rangular / rmcdhf / rci / rbiotransform / rtransition 改用 *_mpi 版本；"
@@ -801,6 +813,7 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
   grasp_gui script 配置.json [选项]           输出按配置在当前目录运行整个流程的 shell 脚本
       --bindir 目录                           GRASP 程序目录 (默认同界面)
       --mpi "mpirun -np 4"                    有并行版本的程序用 <程序>_mpi 运行
+  grasp_gui script 工作目录                   从目录记录重建 grasp_run/ 的脚本
   grasp_gui steps                             输出各程序页的参数说明 (Markdown)
   grasp_gui reference 文件.cm …               输出混合系数文件的能级能量 (配置中的 reference，JSON)
 不需要图形界面；源码中也可以用 python3 grasp_config.py 代替 grasp_gui。""": """Usage:
@@ -808,6 +821,7 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
   grasp_gui script CONFIG.json [options]      print a shell script that runs the whole pipeline in the current directory
       --bindir DIR                            GRASP bin directory (default: as in the GUI)
       --mpi "mpirun -np 4"                    run programs that have a parallel version as <prog>_mpi
+  grasp_gui script WORKDIR                   rebuild scripts in grasp_run/ from the work-directory record
   grasp_gui steps                             print the reference of all program tabs and fields (Markdown)
   grasp_gui reference FILE.cm …               print the level energies of mixing coefficient files (the "reference" of a configuration, JSON)
 No window is opened; from the sources, python3 grasp_config.py can be used instead of grasp_gui.""",
@@ -1344,6 +1358,10 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "零阶空间的 CSF 列表 {z} 与 {f} 的对称块不同 ({a} / {b})：两者的 J 和宇称块必须一一对应。": "The zero-order CSF list {z} and {f} have different symmetry blocks ({a} / {b}): their J and parity blocks must match one to one.",
     "块 {s}：零阶空间有 {n} 个 CSF，{f} 有 {ncf} 个；rangular_mpi 要求 1 < ICCUT < CSF 数。": "Block {s}: the zero-order space has {n} CSFs, {f} has {ncf}; rangular_mpi requires 1 < ICCUT < number of CSFs.",
     "块 {s}：零阶空间有 {n} 个 CSF，比 {f} 的 {ncf} 个还多。": "Block {s}: the zero-order space has {n} CSFs, more than the {ncf} of {f}.",
+    # 代码审核修复 (#59)
+    "；": "; ",
+    "块或能级不存在": "Block or level does not exist",
+    "能量不是有限的数，计算可能已经发散": "Energy is not finite; the calculation may have diverged",
     # 服务器工作站运行设置 (#55)
     "按主机保存的运行设置无效：{e}，运行时可在服务器运行设置中修改。":
         "Saved run settings for this host are invalid: {e}. Edit them in Server run settings before running.",
@@ -1397,6 +1415,15 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "态组 {group} ({step})": "Group {group} ({step})",
     "记录中的下列选项无法识别，已用默认值替换：\n{details}":
         "Unrecognized options in the record were replaced with defaults:\n{details}",
+    # 工作目录运行脚本 (#71)
+    "脚本路径不是普通文件：{name}": "Script path is not a regular file: {name}",
+    "脚本在重建期间被修改：{name}": "Script changed during rebuild: {name}",
+    "重建 {name} 失败：{e}": "Could not rebuild {name}: {e}",
+    "同名脚本由用户管理，已保留": "A user-managed script already exists and was kept",
+    "重建工作目录脚本时，请通过运行环境变量覆盖设置。":
+        "When rebuilding work-directory scripts, override their settings through the run environment.",
+    "生成的运行脚本": "Generated run script",
+    "默认选择小文件，生成的运行脚本默认不选。": "Small files are selected by default. Generated scripts start unchecked.",
     # 输入时跳过能级块 (#58)
     "每块一行；空行或 - 表示跳过": "One line per block. A blank line or - skips the block.",
     "至少有一个块需要选择能级": "Select levels in at least one block",
@@ -1447,9 +1474,14 @@ def saved_run_settings(*, persist=True):
     if "np" not in cfg:
         cfg["np"] = default_mpi_np(bindir, mpirun)
         if persist:
-            save_config(np=cfg["np"])
+            save_config(np=cfg["np"], np_user=False)
     return dict(bindir=bindir, np=int(cfg["np"]), mpirun=mpirun,
                 mpitmp=cfg.get("mpitmp", "tmp_mpi"), nice=cfg.get("nice", True))
+
+
+def user_process_count(cfg, key):
+    """旧偏好只保存数值，没有来源标记，按用户设置保留。"""
+    return key in cfg and cfg.get(key + "_user", True) is not False
 
 
 def save_config(**kw):
@@ -1596,7 +1628,7 @@ def normalize(field, value):
 #
 #  一个"任务" (job) 是一个 dict:
 #    title, prog, args, stdin, log, mpi,
-#    pre / post: 动作列表, ("cp", src, dst) 或 ("run", [prog, args...])
+#    pre / post: 动作列表, ("cp", src, dst)、("run", [prog, args...]) 或 ("write", name, text)
 # ---------------------------------------------------------------------------
 
 class Step:
@@ -1705,16 +1737,44 @@ class RNucleus(Step):
 class RcsfGenerate(Step):
     output_fields = ("saveas",)
     key = name = prog = "rcsfgenerate"
+    ORBITAL_LETTERS = "spdfghiklmn"
     fields = [
         Note("生成 CSF 列表 rcsf.out。组态写法如 1s(2,i)2s(2,*)2p(1,*)：c=闭壳, i=不激发, *=活跃, "
              "数字=最小占据。可添加多个列表 (Generate more lists)。"),
-        Choice("order", "轨道排序", [("*", "默认"), ("r", "反序"), ("s", "按对称性")]),
+        Choice("order", "轨道排序", [("*", "默认"), ("r", "反序"), ("s", "按对称性"), ("u", "用户指定")]),
+        Text("orbital_order", "轨道顺序", hint="每行一个或用逗号分隔，如 1s,2s,2p",
+             lines=3, added="2.11.0", enabled_by=("order", "u")),
         Choice("core", "闭壳芯", [("0", "无芯"), ("1", "He"), ("2", "Ne"), ("3", "Ar"),
                                   ("4", "Kr"), ("5", "Xe"), ("6", "Rn")]),
         CsfLists("lists", [dict(configs="1s(2,i)2s(2,i)2p(1,i)\n1s(2,i)2p(3,i)",
                                 active="2s,2p", jmin="1", jmax="3", nexc="0")]),
         Entry("saveas", "保存 rcsf.out 为", "odd2.c", "留空则不复制"),
     ]
+
+    def orbital_order(self, v):
+        """按 reffa.f90 的 (3a) 读入规则生成非相对论轨道清单。"""
+        orbitals = [part.strip() for part in re.split(r"[,\n]", v.get("orbital_order", "")) if part.strip()]
+        if not orbitals:
+            raise ValueError(T("请至少指定一个轨道"))
+        seen = set()
+        for orbital in orbitals:
+            match = re.fullmatch(rf"([1-9][0-9]*)([{self.ORBITAL_LETTERS}])", orbital)
+            if match is None:
+                raise ValueError(T("轨道 {orbital} 的写法无效（如 2p，不带 -）", orbital=orbital))
+            n, letter = match.groups()
+            if len(n) > 2 or int(n) > 15 or self.ORBITAL_LETTERS.index(letter) >= int(n):
+                raise ValueError(T("轨道 {orbital} 必须满足 n ≤ 15 且 l < n", orbital=orbital))
+            if orbital in seen:
+                raise ValueError(T("轨道 {orbital} 重复", orbital=orbital))
+            seen.add(orbital)
+        return answers(orbitals)
+
+    def validate(self, v):
+        if v["order"] == "u":
+            self.orbital_order(v)
+
+    def pre(self, v):
+        return [("write", "clist.ref", self.orbital_order(v))] if v["order"] == "u" else []
 
     def stdin(self, v):
         lines = [v["order"], v["core"]]
@@ -1733,7 +1793,7 @@ class RcsfGenerate(Step):
         return f"rcsfgenerate -> {s}" if s else "rcsfgenerate"
 
     def inputs(self, v, run=None):
-        return []
+        return ["clist.ref"] if v["order"] == "u" else []
 
     def outputs(self, v, run=None):
         return ["rcsf.out"]
@@ -2740,12 +2800,12 @@ def load_session(workdir):
         return None
 
 
-def save_session(workdir, data):
+def save_session(workdir, data, *, warnings=None, defaults=None):
     if not os.path.isdir(workdir):
         return False
     import grasp_session
     try:
-        grasp_session.write(workdir, data)
+        grasp_session.write(workdir, data, warnings=warnings, defaults=defaults)
         return True
     except (OSError, ValueError):
         return False
@@ -2755,10 +2815,43 @@ def save_session(workdir, data):
 #  脚本
 # ---------------------------------------------------------------------------
 
+def write_action_name(name):
+    if (not isinstance(name, str) or not name or name == "." or ".." in name
+            or any(char in name for char in ("/", "\\", "\0", "\n", "\r"))):
+        raise ValueError(T("写文件动作的文件名无效：{name}", name=repr(name)))
+    return name
+
+
 def action_sh(a):
-    """动作的 shell 写法：("cp", src, dst) 或 ("run", argv[, stdin])。"""
+    """动作的 shell 写法，供预览和导出共用。"""
     if a[0] == "cp":
         return f"cp {shlex.quote(a[1])} {shlex.quote(a[2])}"
+    if a[0] == "write":
+        target = shlex.quote("./" + write_action_name(a[1]))
+        content = a[2]
+        lines = set(content.split("\n"))
+        delimiter = "GRASP_WRITE"
+        while delimiter in lines:
+            delimiter += "_"
+        # here-document 的定界符必须独占一行；无结尾换行时去掉 shell 补上的换行。
+        header = f"<<'{delimiter}'\n"
+        if content and not content.endswith("\n"):
+            write = f'printf "%s" "$(cat {header}{content}\n{delimiter}\n)" > "$tmp"'
+        else:
+            write = f'cat > "$tmp" {header}{content}{delimiter}'
+        error = shlex.quote(f"Cannot write {a[1]}: destination is not a regular file")
+        return "\n".join((
+            "(",
+            'tmp=$(mktemp ./.grasp-write.XXXXXX) || exit 1',
+            """trap 'rm -f "$tmp"' EXIT""",
+            f'if [ -L {target} ] || {{ [ -e {target} ] && [ ! -f {target} ]; }}; then',
+            f"    echo {error} >&2",
+            '    exit 1',
+            'fi',
+            write,
+            f'[ "$?" -eq 0 ] && mv -f "$tmp" {target}',
+            ') || exit 1',
+        ))
     cmd = " ".join(shlex.quote(x) for x in a[1])
     if len(a) > 2 and a[2]:
         return f"{cmd} <<'EOF'\n{a[2]}EOF"
@@ -2805,7 +2898,9 @@ def shell_script(pipeline, bindir, workdir, mpi_prefix="", mpitmp="tmp_mpi"):
             f"export PATH={shlex.quote(bindir)}:$PATH", *program_fallbacks(pipeline),
             f"cd {shlex.quote(workdir)}", ""]
     if mpi_prefix:
-        body += [f"export MPI_TMP=\"$PWD\"/{shlex.quote(mpitmp or 'tmp_mpi')}", 'mkdir -p "$MPI_TMP"',
+        temporary = mpitmp or "tmp_mpi"
+        value = shlex.quote(temporary) if os.path.isabs(temporary) else f'"$PWD"/{shlex.quote(temporary)}'
+        body += [f"export MPI_TMP={value}", 'mkdir -p "$MPI_TMP"',
                  "# hwloc's GL plugin makes mpirun hang under WSLg",
                  'export HWLOC_COMPONENTS="${HWLOC_COMPONENTS:--gl}"', ""]
     for i, job in enumerate(pipeline, 1):
@@ -2813,9 +2908,8 @@ def shell_script(pipeline, bindir, workdir, mpi_prefix="", mpitmp="tmp_mpi"):
     return "\n".join(body)
 
 
-def slurm_script(pipeline, s):
-    """s: SLURM_DEFAULTS 中各项的取值。"""
-    s = {k: str(s.get(k, d)).strip() for k, d in SLURM_DEFAULTS.items()}
+def slurm_directives(s):
+    """两个 Slurm 脚本共用的调度参数。"""
     lines = ["#!/bin/bash", f"#SBATCH --job-name={s['job'] or 'grasp'}"]
     if s["partition"]:
         lines.append(f"#SBATCH --partition={s['partition']}")
@@ -2828,6 +2922,13 @@ def slurm_script(pipeline, s):
     if s["mail"]:
         lines += [f"#SBATCH --mail-user={s['mail']}", "#SBATCH --mail-type=END,FAIL"]
     lines += [f"#SBATCH {x if x.startswith('-') else '--' + x}" for x in nonblank_lines(s["extra"])]
+    return lines
+
+
+def slurm_script(pipeline, s):
+    """s: SLURM_DEFAULTS 中各项的取值。"""
+    s = {k: str(s.get(k, d)).strip() for k, d in SLURM_DEFAULTS.items()}
+    lines = slurm_directives(s)
     lines += ["", "# Generated by the GRASP GUI (gui/grasp_gui.py).",
               "# Upload this script together with the input files (isodata, *.c, *.w ...)",
               "# to one directory on the server and submit it there with: sbatch <this script>",
@@ -2997,6 +3098,21 @@ class Runner:
             src, dst = os.path.join(cfg["cwd"], a[1]), os.path.join(cfg["cwd"], a[2])
             if os.path.abspath(src) != os.path.abspath(dst):     # 如 CSF 文件直接填成 rcsf.inp
                 shutil.copyfile(src, dst)
+        elif a[0] == "write":
+            name = write_action_name(a[1])
+            path = os.path.join(cfg["cwd"], name)
+            if os.path.islink(path) or os.path.exists(path) and not os.path.isfile(path):
+                raise ValueError(T("无法写入 {name}：目标不是普通文件", name=name))
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(dir=cfg["cwd"], prefix=".grasp-write-", delete=False) as f:
+                    temporary = f.name
+                    f.write(a[2].encode("utf-8"))
+                os.replace(temporary, path)
+                temporary = None
+            finally:
+                if temporary is not None:
+                    os.unlink(temporary)
         else:
             rc = self.exec_cmd(a[1], cfg, a[2] if len(a) > 2 else "")
             if rc != 0:

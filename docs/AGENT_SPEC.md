@@ -36,6 +36,17 @@ If a step has to change, edit the configuration and generate the script again; d
 空目录中运行；4. 用 `reference` 取得结果文件的能级能量，填入配置的 `reference`。没有程序文件时可在源码目录中用
 `python3 grasp_config.py …`。需要修改时改配置、重新生成脚本，不要改脚本。
 
+## Running a saved working directory / 运行已保存的工作目录
+
+For a directory already installed or saved by GRASP GUI, run `sh grasp_run/run.sh` from that directory,
+or supply an inclusive range such as `sh grasp_run/run.sh 4 6`. On a Slurm server, submit
+`sbatch grasp_run/submit.sbatch 4 6` from the same directory. Use `grasp_gui script /path/to/workdir`
+to regenerate from `.grasp_gui.json`. Keep `grasp_run/` out of shared configuration attachments.
+
+现有工作目录直接运行 `sh grasp_run/run.sh`，或用 `sh grasp_run/run.sh 4 6` 连续运行第 4 至 6 步。
+在 Slurm 服务器的计算目录中可调用 `sbatch grasp_run/submit.sbatch 4 6`。用 `grasp_gui script 工作目录`
+按 `.grasp_gui.json` 重新生成脚本。共享配置的附带文件不包含 `grasp_run/`。
+
 ## Rules / 规则
 
 1. Top level: `"format": "grasp-gui-config"`, `"version": 2`, `"package": "GRASP2018"`, `title`, `summary` (the

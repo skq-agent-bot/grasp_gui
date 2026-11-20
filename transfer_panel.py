@@ -58,7 +58,7 @@ class TransferDialog(QDialog):
         self.large.setTristate(True)
         self.large.stateChanged.connect(self.include_large)
         layout.addWidget(self.large)
-        self.selection_hint = QLabel(T("默认选择不超过阈值的小文件；大文件默认不选。"))
+        self.selection_hint = QLabel(T("默认选择小文件，生成的运行脚本默认不选。"))
         self.selection_hint.setWordWrap(True)
         layout.addWidget(self.selection_hint)
         selection = QHBoxLayout()
@@ -70,7 +70,7 @@ class TransferDialog(QDialog):
         selection.addStretch()
         layout.addLayout(selection)
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels([T("文件"), T("大小"), T("大文件")])
+        self.table.setHorizontalHeaderLabels([T("文件"), T("大小"), T("说明")])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setColumnWidth(0, 520)
         self.table.itemChanged.connect(self.changed)
@@ -154,7 +154,11 @@ class TransferDialog(QDialog):
         threshold = self.threshold.value() * 1_000_000
         for i, row in enumerate(self.rows):
             large = row["size"] > threshold
-            self.table.item(i, 0).setCheckState(Qt.Unchecked if large else Qt.Checked)
+            derived = row["name"].startswith("grasp_run/")
+            self.table.item(i, 0).setCheckState(Qt.Unchecked if large or derived else Qt.Checked)
+            if derived:
+                self.table.item(i, 2).setText(T("生成的运行脚本"))
+                continue
             self.table.item(i, 2).setText(T("大文件") if large else "")
         self.table.blockSignals(False)
         self.changed()
