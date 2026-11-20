@@ -11,6 +11,7 @@ import codecs
 import csv
 import json
 import os
+from pathlib import Path
 import re
 import shlex
 import shutil
@@ -2720,6 +2721,41 @@ STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RcsfZeroFirst(
 _BLOCK_LEVEL_STEPS = {step.key: step for step in STEPS if isinstance(step, BlockLevelsStep)}
 
 
+def check_block_levels(path, levels):
+    """用 CSF 索引的块元数据核对输入行数，不展开组态。"""
+    from grasp_index import csf_index
+
+    try:
+        blocks = csf_index(path)["blocks"]
+    except (OSError, ValueError) as e:
+        raise ValueError(T("无法读取 {name} 的对称块：{error}", name=path.name, error=str(e))) from e
+    total, rows = len(blocks), len(block_level_lines(levels))
+    if total == rows:
+        return
+    labels = [f"{n}:{''.join(block['jp'] or ['?'])}" for n, block in enumerate(blocks, 1)]
+    message = T("{name} 有 {total} 个对称块 ({blocks})，填写了 {rows} 行。",
+                name=path.name, total=total, blocks=", ".join(labels), rows=rows)
+    if rows < total:
+        why = T("缺少块 {blocks} 的回答。跳过末尾的块请用 -。", blocks=", ".join(labels[rows:]))
+    else:
+        why = T("多填了 {extra} 行。", extra=rows - total)
+    raise ValueError(message + (" " if LANG == "en" else "") + why)
+
+
+def check_job_block_levels(job, cwd):
+    key, values = job.get("step"), job.get("vals")
+    step = _BLOCK_LEVEL_STEPS.get(key) if isinstance(key, str) else None
+    if step is None or not isinstance(values, dict):
+        return
+    values = step.saved_values(values)
+    path = Path(cwd) / step.level_csf(values)
+    if path.is_file():
+        try:
+            check_block_levels(path, values["levels"])
+        except ValueError as e:
+            raise RuntimeError(str(e)) from e
+
+
 def refresh_block_input(job):
     """由表单值重建块选择，避免使用旧记录中已删空行的输入。"""
     key, values = job.get("step"), job.get("vals")
@@ -3077,6 +3113,7 @@ class Runner:
         self.emit(f"\n===== {job['title']} =====\n", "head")
         for a in job["pre"]:
             self.do_action(a, cfg)
+        check_job_block_levels(job, cfg["cwd"])
         if job["prog"] in ("rmcdhf", "rmcdhf_mem"):
             err = check_mcp(cfg["cwd"], cfg["np"], cfg["mpitmp"])
             if err:

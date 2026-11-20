@@ -18,6 +18,40 @@ def job(key, **values):
     return step.job(dict(step.defaults(), **values))
 
 
+@pytest.fixture
+def block_pipeline(tmp_path):
+    shutil.copyfile(CSF, tmp_path / "input.c")
+    for name in ("isodata", "rwfn.inp", "mcp.30"):
+        (tmp_path / name).touch()
+    programs = {
+        "rcsfgenerate": "cp input.c rcsf.out\n",
+        "rmcdhf": "touch rwfn.out\n",
+    }
+    for name, command in programs.items():
+        path = tmp_path / name
+        path.write_text("#!/bin/sh\n" + command)
+        path.chmod(0o755)
+    return [job("rcsfgenerate", saveas="rcsf.inp"), job("rmcdhf", levels="1\n1", log="scf.log", save="")]
+
+
+def test_background_checks_new_csf_before_starting_scf(tmp_path, block_pipeline):
+    import grasp_bg as bg
+    from test_bg import messages, run_cfg
+
+    assert not summary.check_files(tmp_path, block_pipeline)["invalid"]
+    assert not (tmp_path / "rcsf.inp").exists()
+    proc = bg.launch(str(tmp_path), block_pipeline, run_cfg(tmp_path))
+    with bg.connect(str(tmp_path), timeout=10) as sock:
+        packets = messages(sock)
+    proc.wait(10)
+    output = "".join(packet.get("s", "") for packet in packets)
+    assert packets[-1] == {"done": "failed"}
+    assert "填写了 2 行。缺少块 3:3/2-" in output
+    assert (tmp_path / "rcsf.inp").read_bytes() == CSF.read_bytes()
+    assert not (tmp_path / "rwfn.out").exists()
+    assert not (tmp_path / "scf.log").exists()
+
+
 @pytest.mark.parametrize("text,expected", [
     ("\n1\n \n2\n\n", ["", "1", "", "2"]),
     ("\n-\n1\n-\n\n", ["", "", "1", ""]),

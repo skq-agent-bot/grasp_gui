@@ -14,6 +14,7 @@ import grasp_bg as bg                    # noqa: E402
 import grasp_config as config            # noqa: E402
 import grasp_core as core                # noqa: E402
 from conftest import DEMOS               # noqa: E402
+from test_block_level_input import block_pipeline  # noqa: E402, F401
 
 
 @pytest.fixture
@@ -240,6 +241,25 @@ def test_gui_refuses_incorrect_block_count(qapp, tmp_path, no_dialogs, monkeypat
         assert "缺少块 3:3/2-" in no_dialogs[-1][1][1]
         calc.run_pipeline()
         assert no_dialogs[-1][0] == "warning" and "缺少块 3:3/2-" in no_dialogs[-1][1][1]
+    finally:
+        assert w.close()
+
+
+def test_gui_checks_csf_generated_during_run(qapp, tmp_path, no_dialogs, monkeypatch, block_pipeline):
+    monkeypatch.setenv("GRASP_BINDIR", str(tmp_path))
+    core.save_config(bindir=str(tmp_path), np=1, np_user=True, nice=False)
+    w = window(tmp_path)
+    try:
+        w.calc.pipeline = block_pipeline
+        w.calc.refresh_list()
+        w.calc.run_pipeline()
+        assert w.calc.busy and not no_dialogs
+        spin(qapp, lambda: not w.calc.busy)
+        assert bg.status(str(tmp_path))["status"] == "failed"
+        assert "填写了 2 行。缺少块 3:3/2-" in w.calc.out.toPlainText()
+        assert (tmp_path / "rcsf.inp").read_bytes() == (tmp_path / "input.c").read_bytes()
+        assert not (tmp_path / "rwfn.out").exists()
+        assert not (tmp_path / "scf.log").exists()
     finally:
         assert w.close()
 
