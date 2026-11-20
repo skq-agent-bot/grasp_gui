@@ -329,6 +329,8 @@ class SparseCoefficients:
 
 
 class RemoteLevels(LevelPanel):
+    LOCAL_TRANSITIONS = False
+
     def __init__(self, source, directory):
         self.remote_source, self.remote_directory = source, directory
         self.remote_generation, self.remote_closed, self.remote_rows = 0, False, []
@@ -415,7 +417,14 @@ class RemoteLevels(LevelPanel):
             compositions[(path, b.nb, lv.pos)] = [(p["csf"], p["coefficient"], p.get("configuration") or "",
                                                    p.get("coupling") or "") for p in parts]
         self.read_data = {}
+        errors = {str(PurePosixPath(self.remote_directory) / row["file"]): row["error"]
+                  for row in data.get("errors", [])}
+        for path in errors:
+            groups.setdefault(path, {})
         for path, bs in groups.items():
+            if path in errors:
+                self.read_data[path] = ValueError(errors[path])
+                continue
             blocks = mix.Blocks(bs.values())
             blocks.partial = partial.get(path, False)
             fallback = dict(zero_group="DC", zero_warning="") if path.endswith(".m") else mix.unknown_hamiltonian()
@@ -439,7 +448,7 @@ class RemoteLevels(LevelPanel):
 
     def redraw(self, *_):
         missing = [PurePosixPath(p).name for p in self.checked_paths()
-                   if p in self.read_data and not self.read_data[p][0]]
+                   if p in self.read_data and not isinstance(self.read_data[p], Exception) and not self.read_data[p][0]]
         if missing:
             self.scan([PurePosixPath(p).name for p in self.checked_paths()])
         self.render_levels()
@@ -1024,6 +1033,10 @@ class RemoteCalculation(QWidget):
             if self.server_type != "slurm":
                 text += "\n" + T("用户 scope 失败时可导出 Slurm，或重新选择照常启动；请先核对运行状态。")
             QMessageBox.warning(self, T("远程运行"), text)
+        elif value:
+            self.revision = value.get("revision", self.revision)
+            if value.get("warnings"):
+                QMessageBox.warning(self, T("远程运行"), "\n".join(value["warnings"]))
         self.load()
 
     def stop(self):

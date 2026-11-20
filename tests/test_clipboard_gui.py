@@ -54,20 +54,20 @@ def test_unknown_choice_blocks_import_but_legacy_record_opens(qapp, tmp_path, di
     core.set_lang(lang)
     step = config.STEPS["rcsfgenerate"]
     values = step.defaults()
-    cfg = dict(format=config.FORMAT, version=2, jobs=[dict(step=step.key, vals=dict(values, order="u"))])
+    cfg = dict(format=config.FORMAT, version=2, jobs=[dict(step=step.key, vals=dict(values, order="z"))])
     QGuiApplication.clipboard().setText(json.dumps(cfg))
     dlg = ConfigDialog(None, [], "")
     assert not dlg.open_clipboard() and not dlg.ok.isEnabled()
-    assert "rcsfgenerate" in dialogs[-1] and "'u'" in dialogs[-1]
+    assert "rcsfgenerate" in dialogs[-1] and "'z'" in dialogs[-1]
     dlg.close()
 
     job = step.job(values)
-    job["vals"]["order"] = "u"
-    job["stdin"] = "u\n" + job["stdin"].partition("\n")[2]
+    job["vals"]["order"] = "z"
+    job["stdin"] = "z\n" + job["stdin"].partition("\n")[2]
     assert core.save_session(tmp_path, dict(pipeline=[job], steps={step.key: job["vals"]}))
     w = window(tmp_path)
     try:
-        assert len(dialogs) == 2 and "rcsfgenerate" in dialogs[-1] and "'u'" in dialogs[-1]
+        assert len(dialogs) == 2 and "rcsfgenerate" in dialogs[-1] and "'z'" in dialogs[-1]
         assert ("第 1 步" if lang == "zh" else "Step 1") in dialogs[-1]
         assert w.calc.pipeline[0]["vals"]["order"] == "*" and w.calc.pipeline[0]["stdin"].startswith("*\n")
         form = next(f for f in w.calc.forms if f.step.key == step.key)
