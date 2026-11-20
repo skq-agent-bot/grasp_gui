@@ -32,9 +32,14 @@ without starting it). Labels are given as *English (中文)*. Screenshots: `docs
   MPI launcher and the MPI versions of rangular, rmcdhf, rci, rbiotransform and rtransition can be found
   through the normal GRASP bin/PATH lookup;
   otherwise it defaults to 1. Physical cores come from Linux CPU topology or macOS `hw.physicalcpu`, with
-  a fallback of half the logical cores (at least 1). The initial value is saved immediately. Existing saved
-  counts are retained; changing the bin directory or launcher never recalculates them. The input maximum
+  a fallback of half the logical cores (at least 1). The initial value is saved immediately. Editing or browsing
+  for the bin directory or editing the launcher recalculates the automatic default, with a status message
+  when it changes. Counts entered by hand or loaded from a parameter file are retained. Older saved counts
+  with no source indicator are treated as user choices. The input maximum
   remains the logical core count. Its tooltip explains that hyperthreading offers little benefit for GRASP.
+  初始值立即保存。编辑或浏览选择 GRASP bin 目录、编辑 mpirun 命令后，自动默认值重新计算，数值改变时状态栏提示一次。
+  手动输入、载入参数文件指定的进程数，以及没有来源标记的旧设置均保留。
+  [English screenshot](images/en_mpi_default.png) / [中文截图](images/zh_mpi_default.png)。
 * **GRASP bin lookup**: `$GRASP_BINDIR` → last used → directory of `rmcdhf` on `PATH` → `../bin` of the program.
 * **Tabs (标签页)**: *Calculation (计算)*, *Radial wave functions (径向波函数)*, *Levels (能级图)*; bold labels.
   The viewer tabs show the working directory and refresh after a run finishes. *Open in new window (在新窗口中打开)*
@@ -208,6 +213,7 @@ grasp_gui FILE             open the tab for this file by content, only this file
 grasp_gui check CONFIG.json             check a shared configuration (exit code 1 if it cannot be imported)
 grasp_gui script CONFIG.json [--bindir DIR] [--mpi "mpirun -np N"]
                                         print the shell script of its pipeline (runs in the current directory)
+grasp_gui script WORKDIR                rebuild and print the paths of the work-directory scripts
 grasp_gui steps                         reference of all program tabs and fields (Markdown, = docs/STEPS.md)
 grasp_gui reference FILE.cm …           level energies of mixing coefficient files as "reference" JSON
 ```
@@ -243,6 +249,14 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   of the manual's test cases (`grasptest/` case1–4, example1–5, 8, 9) except non-default `jj2lsj` runs (use
   *Custom*). `rcsfgenerate` has several CSF lists (*+ Add list*, *− Delete current list*, *Reference configurations
   (one per line)*). `rmcdhf` can use the in-memory version `rmcdhf_mem` / `rmcdhf_mem_mpi`.
+* **rcsfgenerate user orbital order / 自定义轨道顺序**. Select `u` (*user*) to edit *Orbital order*.
+  Enter nonrelativistic orbitals such as `2p,2s,1s`, separated by commas or newlines. Entries must be unique
+  and satisfy `n ≤ 15` and `l < n`. Preview shows both the file-writing action and stdin. Running the step
+  writes `clist.ref` in the working directory before launching GRASP. GRASP appends unlisted orbitals in default order.
+
+  在 *轨道排序* 中选择 `u`（用户指定）后可编辑 *轨道顺序*。输入非相对论轨道，例如 `2p,2s,1s`，
+  可用逗号或换行分隔。轨道不重复，并满足 `n ≤ 15` 和 `l < n`。预览同时显示写文件动作和交互回答。
+  运行该步时先在工作目录写出 `clist.ref`，再启动 GRASP。GRASP 将未列出的轨道按默认顺序接在后面。
 * **rmcdhf NSIC**: *Modify NSIC (修改 NSIC)* enables a non-negative count of extra first-cycle orbital improvements; unchecked uses the program default.
   EOL defaults: `(NW-NFIX)/4` serial, `4+(NW-NFIX)/4` MPI, or 0 with varied correlation orbitals; AL: `2+(NW-NFIX)/4` (integer division).
   The page description explains the defaults; older configurations import with this option unchecked and no warning.
@@ -395,6 +409,43 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
   只调整运行设置时保存到用户偏好。
 * **Slurm job script (Slurm 作业脚本)** dialog: job name, partition, nodes, tasks, time, memory, modules, e-mail,
   extra `#SBATCH` lines (remembered). Upload the script with the inputs of the working directory and `sbatch` it.
+
+### Run scripts in the working directory / 工作目录运行脚本
+
+Saving a nonempty pipeline updates `grasp_run/run.sh` and `grasp_run/submit.sbatch` from `.grasp_gui.json`.
+The script headers identify the record revision. Each step appears once with its primary inputs and outputs.
+Unchanged scripts keep their modification times. On a generation error the record is still saved and the
+warning appears in the calculation output and status bar. A same-named user file is preserved. When the pipeline
+becomes empty, the app removes its own scripts and removes the directory if it is empty.
+
+```sh
+cd /path/to/calculation
+sh grasp_run/run.sh
+sh grasp_run/run.sh 4 6
+sbatch grasp_run/submit.sbatch
+sbatch grasp_run/submit.sbatch 4 6
+```
+
+Both commands accept an inclusive one-based range. `run.sh` finds its working directory relative to the script
+and reports the failing step if a command exits with an error. It uses the GRASP program directory from the
+machine that generated it. `submit.sbatch` uses the Slurm program directory saved in the record and expands
+its home-directory notation on the cluster. Set `GRASP_RUN_BINDIR`, `GRASP_RUN_NP`, `GRASP_RUN_MPIRUN`, `GRASP_RUN_MPI_TMP`,
+or `GRASP_RUN_NICE` in the environment to override settings. MPI launcher prefixes should use
+`$GRASP_RUN_NP` for the process count. The GUI continues to use its existing background runner.
+
+保存非空流程后，从 `.grasp_gui.json` 更新 `grasp_run/run.sh` 和 `grasp_run/submit.sbatch`。文件头标注记录修订号，
+每步正文只出现一次，前面列出主要输入和输出。内容相同则保留修改时间。生成失败时记录照常保存，提示显示在计算输出和状态栏。
+程序保留用户同名文件。流程为空时，只删除程序生成的脚本，目录变空才删除。
+
+可以按上面的命令手动运行全部或指定连续步骤，起止编号从 1 开始且均包含。计算目录由 `run.sh` 的位置确定，某步命令失败时
+显示步号后停止。`run.sh` 使用生成机器的默认 GRASP 路径。`submit.sbatch` 使用记录中的 Slurm 程序目录，在集群上展开
+家目录写法。可用列出的环境变量覆盖路径。MPI 启动前缀用 `$GRASP_RUN_NP`
+统一进程数；界面仍用原有后台运行方式。用 `grasp_gui script 工作目录` 手动重建脚本。只清理结果时保留 `grasp_run/`，
+明确选择“全部删除”才可一并删除。上传和下载默认不勾选其中的文件。
+
+| 中文 | English |
+|---|---|
+| ![传输默认保留脚本](images/zh_run_script_transfer.png) | ![Generated scripts unchecked for transfer](images/en_run_script_transfer.png) |
 
 ### Background runs and logging out / 后台运行与退出登录 (KillUserProcesses)
 
@@ -576,6 +627,14 @@ rmcdhf 部分另含 `name.sum` 中每个轨道最终的自洽程度和广义占�
 
 Large mixing and CSF files are indexed in the background. The status bar shows *Reading … (正在读取 …)*
 and progress; changing the directory or file selection cancels obsolete work. Tabs and controls remain usable.
+Mixing files with any non-finite energy (NaN or ±Inf) are unreadable: the file is marked red and its tooltip
+and the status bar explain that the calculation may have diverged. Other files remain visible. Local, remote,
+summary and MCP readers use the same check before cache writing or energy-zero calculations.
+混合系数文件中只要有 NaN 或正负无穷能量，整个文件就标为无法读取；文件名变红，提示框和状态栏说明计算可能已经发散，
+其他文件仍可显示。本机、远程、摘要与 MCP 共用检查，在写索引缓存或计算零点前拒绝该文件。
+Read errors, incomplete-file notices and uncertain energy-zero warnings appear together; their separator is
+localized. Clearing the last warning also clears its status message. 读取错误、未写完和零点不确定三类提示同时显示；
+全部消失后清除旧状态提示，英文界面使用英文分隔符。
 The composition pane briefly shows *Reading composition… (正在读取组成…)* when the selected level's CSFs are read.
 Only the displayed components are parsed; changing the weight threshold reuses the same data. Small mixing files
 are analyzed serially to avoid process startup delays; larger files can use up to four local analysis processes.
@@ -678,11 +737,17 @@ levels come from the same file — and which multipoles: E1, or M2 when E1 is fo
 same parity; J = 0 → 0 is refused). Buttons, in two rows: *Compute (selected J) (计算跃迁 (所选 J))* — only the J^π symmetries of
 the two levels (the GUI writes `.c`/`.cm` files with just those blocks), with the main window's process count;
 *Compute all J (MPI) (计算全部 J (MPI))* — all transitions between the two files (lifetimes, branching ratios) with
-the MPI programs and *Processes (进程数)* next to it (first use: the same physical-core/MPI availability rule as the main window,
-saved independently as `tr_np`; existing values are retained, and its maximum remains four times the logical
-core count); *Stop*; *Export ▾*: transitions of the current level (CSV),
+the MPI programs and *Processes (进程数)* next to it. Its default follows the main window's physical-core
+and MPI availability rule and is saved independently as `tr_np`. Opening Levels or starting an all-J
+calculation refreshes the automatic default and shows a status message if it changes. Manual and older
+saved counts are retained. The maximum remains four times the logical core count. *Stop*; *Export ▾*:
+transitions of the current level (CSV),
 all computed transitions between the two files (CSV), *GRASP transition file (for rtabtrans1 / rtabtrans2)*
 (`even4.odd4.ct`).
+
+“计算全部 J”的进程数独立保存。打开能级图页或开始计算全部 J 时，按主窗口同样的物理核数和 MPI 可用性规则更新自动默认值，
+数值改变时状态栏提示一次。手动设置及没有来源标记的旧设置均保留。上限仍为逻辑核数的四倍。
+[English screenshot](images/en_mpi_transition_default.png) / [中文截图](images/zh_mpi_transition_default.png)。
 
 Results: table *Type*, *Gauge (规范)* — Babushkin (length) and Coulomb (velocity), A (s⁻¹), gf, S (a.u.); their
 ratio close to 1 indicates a reliable calculation. *Transitions drawn in the diagram (图上标注的跃迁)* list with

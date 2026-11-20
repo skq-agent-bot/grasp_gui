@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt             # noqa: E402
 import calc_panel as panel                # noqa: E402
 import grasp_config as config             # noqa: E402
 import grasp_core as core                 # noqa: E402
+import grasp_session as sessions          # noqa: E402
 import grasp_workdir as work              # noqa: E402
 from conftest import DEMOS                 # noqa: E402
 from test_gui import no_dialogs, spin, window  # noqa: E402, F401
@@ -110,6 +111,16 @@ def test_existing_record_saves_without_changing_contents(qapp, tmp_path, no_dial
     os.utime(path, ns=(1, 1))
     assert window(tmp_path, "levels").close() and not no_dialogs
     assert path.read_bytes() == original and path.stat().st_mtime_ns != 1
+
+
+def test_record_save_keeps_slurm_bindir(qapp, tmp_path, no_dialogs):
+    config.install(cfg([job()]), tmp_path)
+    w = window(tmp_path)
+    w.calc.slurm["bindir"] = "~/cluster/grasp"
+    assert w.close() and not no_dialogs
+    data, _ = sessions.read(tmp_path)
+    assert data["slurm"]["bindir"] == "~/cluster/grasp"
+    assert "bindir" not in data
 
 
 def test_external_first_record_still_prompts_before_close(qapp, tmp_path, no_dialogs, monkeypatch):
@@ -261,6 +272,8 @@ def test_clear_selection_and_all_delete_survives_close(qapp, tmp_path, no_dialog
 
     def delete_results(d):
         assert not d.all_files.isChecked()
+        assert {core.SESSION_FILE, config.INPUTS_FILE, "grasp_run"} <= {
+            row["name"] for row in d.plan["classes"]["internal"]}
         assert d.selected_names() == {"isodata"}
         assert d.mode.currentData() == "move"
         attached = next(row for row in d.rows if row.text(0) == "input")

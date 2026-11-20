@@ -303,7 +303,8 @@ class Operations(service.Service):
                 grasp_workdir.idle(root)
                 selected = [config.make_job(j) for j in cfg["jobs"]]
                 script = grasp_slurm.batch_script(selected, settings)
-                return grasp_slurm.submit(root, script, bg.status(str(root)))
+                saved = sessions.save_run_settings(root, settings, slurm=True)
+                return dict(grasp_slurm.submit(root, script, bg.status(str(root))), **saved)
             if server_type != "workstation" or slurm is not None:
                 raise ValueError("invalid server type")
             plan = self.run_plan(directory, start=start, end=end, run_settings=run_settings)
@@ -316,8 +317,13 @@ class Operations(service.Service):
             if not settings["bindir"]:
                 # 表单留空表示 PATH；不能让运行进程的 PATH 以空项（当前目录）开头。
                 settings["bindir"] = core.default_bindir(use_saved=False)
+            script_options = {}
+            if run_settings is not None:
+                # 桌面明确指定的 GRASP 路径只用于这次运行。
+                bindir = core.default_bindir(use_saved=False)
+                script_options["script_bindir"] = bindir if os.path.isdir(bindir) else ""
             return operation.run(str(root), start, end=end, started_by="remote", user_scope=user_scope,
-                                 run_settings=settings)
+                                 run_settings=settings, **script_options)
 
     def signature(self, directory):
         root = self.directory_files(directory)
@@ -363,8 +369,11 @@ class Operations(service.Service):
         root = self.directory_files(directory)
         path = self.path(str(root / file))
         blocks = mix.open_mix(path, summary=True, k=limit, cancel=self.cancel)
-        b = next(b for b in blocks if b.nb == block)
-        lv = next(lv for lv in b.levels if lv.pos == index)
+        try:
+            b = next(b for b in blocks if b.nb == block)
+            lv = next(lv for lv in b.levels if lv.pos == index)
+        except StopIteration as e:
+            raise ValueError(T("块或能级不存在")) from e
         csf = mix.find_csf_for(str(path))
         csfs = mix.open_csfs(csf, cancel=self.cancel) if csf else None
         top = lv.top_components(limit)
