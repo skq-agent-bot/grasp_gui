@@ -33,7 +33,7 @@ def test_invalid_spectrum_does_not_create_url(value):
         nist.query_url(value)
 
 
-def test_fetch_ignores_proxy_and_rejects_redirect(monkeypatch):
+def test_fetch_uses_https_proxy_and_rejects_redirect(monkeypatch):
     url = nist.query_url("Li I")
     raw = (DATA / "li-i.csv").read_bytes()
     requests = []
@@ -42,7 +42,9 @@ def test_fetch_ignores_proxy_and_rejects_redirect(monkeypatch):
     monkeypatch.delenv("NO_PROXY", raising=False)
 
     def https_open(_self, request):
-        assert request.full_url == url and request.host == "physics.nist.gov"
+        assert request.full_url == url and request.host == "proxy.invalid:8080"
+        assert request._tunnel_host == "physics.nist.gov"
+        assert _self._context.check_hostname
         requests.append(request.full_url)
         headers = Message()
         if len(requests) == 1:
@@ -141,6 +143,48 @@ def test_nist_omitted_filled_inner_shells_match():
     assert match["experimental"] == fe[0] and match["status"] == "automatic"
 
 
+@pytest.mark.parametrize("changes", [{"energy": -7.44}, {"lsj_label": "3p_2P"}, {}])
+def test_saved_match_needs_review_after_calculation_or_nist_changes(tmp_path, changes):
+    _, li = nist.read_data(DATA / "li-i.csv")
+    experimental = li[1]
+    row = dict(pos=1, twoj=experimental.twoj, parity=experimental.parity, energy=-7.45, lsj_label="2p_2P")
+    row["id"] = nist.calculated_id("results/state.cm", row)
+    assert nist.load_matches(tmp_path) == {}
+    assert not (tmp_path / ".grasp_gui").exists()
+    nist.save_match(tmp_path, "Li I", row, experimental.key)
+    pairs = nist.load_matches(tmp_path)["Li I"]
+    assert nist.compare([row], li, manual=nist.match_overrides([row], pairs))[0]["status"] == "manual"
+    updated = dict(row, **changes)
+    assert nist.calculated_id("results/state.cm", updated) == row["id"]
+    levels = li if changes else []
+    pending = nist.compare([updated], levels, manual=nist.match_overrides([updated], pairs))[0]
+    assert pending["status"] == "ambiguous" and pending["experimental"] is None
+    assert nist.load_matches(tmp_path)["Li I"] == pairs
+
+
+def test_saved_matches_merge_independent_edits_and_keep_corrupt_file(tmp_path):
+    upper = dict(id="upper", energy=-7.45, jj="2p-(1)")
+    lower = dict(id="lower", energy=-7.5, jj="2s(1)")
+    with ThreadPoolExecutor(2) as pool:
+        jobs = [pool.submit(nist.save_match, tmp_path, "Li I", upper, "first"),
+                pool.submit(nist.save_match, tmp_path, "Fe XV", lower, "second")]
+        for job in jobs:
+            job.result(timeout=5)
+    spectra = nist.load_matches(tmp_path)
+    assert spectra["Li I"]["upper"]["component"] == "2p-(1)"
+    assert spectra["Fe XV"]["lower"]["experimental"] == "second"
+    with pytest.raises(ValueError, match="已被手动配对"):
+        nist.save_match(tmp_path, "Li I", lower, "first")
+    assert nist.save_match(tmp_path, "Fe XV", lower, None) == {}
+    assert nist.load_matches(tmp_path) == {"Li I": spectra["Li I"]}
+    path = tmp_path / ".grasp_gui/nist-matches.json"
+    raw = b'{"version":1,"spectra":{"Li I":{"upper":{}}}}'
+    path.write_bytes(raw)
+    with pytest.raises(ValueError, match="已保留原件"):
+        nist.save_match(tmp_path, "Li I", upper, "first")
+    assert path.read_bytes() == raw
+
+
 def test_non_gui_entry_points_do_not_load_nist_modules():
     import subprocess
     import sys
@@ -194,8 +238,7 @@ def test_nist_dialog_only_fetches_on_click_and_exports_manual_pair(qapp, tmp_pat
     monkeypatch.setattr(nist, "fetch", lambda ion: downloads.append(ion) or raw)
     calc = dict(id="upper", file="state.cm", J="1/2", pos=1, energy=-7.45, twoj=1, parity=-1,
                 jj="2p-(1)", lsj_label="2p_2P")
-    manual = {}
-    dialog = NistDialog(None, [calc], "Li I", manual)
+    dialog = NistDialog(None, [calc], "Li I", tmp_path)
     assert not downloads and not dialog.rows
     dialog.fetch_button.click()
     spin(qapp, lambda: bool(dialog.rows))
@@ -206,7 +249,8 @@ def test_nist_dialog_only_fetches_on_click_and_exports_manual_pair(qapp, tmp_pat
     dialog.choices.setCurrentIndex(1)
     dialog.apply_pair.click()
     assert dialog.rows[0]["status"] == "manual"
-    assert manual["Li I"]["upper"]
+    saved = nist.load_matches(tmp_path)["Li I"]["upper"]
+    assert saved["experimental"] == dialog.rows[0]["experimental"].key
     # 单个计算态归零后，实验配对仍应出现在同一张图上。
     low, high = dialog.diagram.yr
     assert low < 0 < dialog.rows[0]["experimental_cm"] < high
@@ -222,6 +266,16 @@ def test_nist_dialog_only_fetches_on_click_and_exports_manual_pair(qapp, tmp_pat
     spin(qapp, lambda: dialog.fetch_button.isEnabled())
     assert downloads == ["Li I", "Li I"]
     dialog.close()
+    updated = dict(calc, energy=-7.44)
+    reopened = NistDialog(None, [updated], "Li I", tmp_path)
+    assert reopened.rows[0]["status"] == "ambiguous"
+    assert reopened.choices.currentData() == saved["experimental"]
+    reopened.apply_pair.click()
+    assert reopened.rows[0]["status"] == "manual"
+    reopened.choices.setCurrentIndex(0)
+    reopened.apply_pair.click()
+    assert reopened.rows[0]["status"] == "ambiguous" and nist.load_matches(tmp_path) == {}
+    reopened.close()
 
 
 @pytest.mark.gui
@@ -233,7 +287,7 @@ def test_nist_import_can_run_without_network(qapp, tmp_path, monkeypatch):
     monkeypatch.setattr(nist, "fetch", lambda _: pytest.fail("offline import must not fetch"))
     monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a: (str(DATA / "uncertain.tsv"), "TSV"))
     calc = dict(id="ground", file="state.cm", J="0", pos=1, energy=-300, twoj=0, parity=1)
-    dialog = NistDialog(None, [calc], "Fe XV", {})
+    dialog = NistDialog(None, [calc], "Fe XV", tmp_path)
     dialog.import_button.click()
     assert dialog.current[0]["imported"] and nist.load_cache("Fe XV")
     assert dialog.rows[0]["experimental_cm"] == 0
@@ -252,9 +306,10 @@ def test_failed_nist_request_reenables_import(qapp, tmp_path, monkeypatch):
         raise OSError("network unavailable")
 
     monkeypatch.setattr(nist, "fetch", unavailable)
-    dialog = NistDialog(None, [], "Fe XV", {})
+    dialog = NistDialog(None, [], "Fe XV", tmp_path)
     dialog.fetch_button.click()
     spin(qapp, lambda: dialog.import_button.isEnabled())
-    assert core.T("无法从 NIST 获取数据：{e}。可改用导入。", e="network unavailable") in dialog.info.text()
+    assert core.T("无法从 NIST 获取数据：{e}。请检查代理设置或改用导入。",
+                  e="network unavailable") in dialog.info.text()
     assert nist.load_cache("Fe XV") is None
     dialog.close()

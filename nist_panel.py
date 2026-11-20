@@ -39,9 +39,11 @@ def number(value):
 
 
 class NistDialog(QDialog):
-    def __init__(self, parent, calculated, ion, selections):
+    def __init__(self, parent, calculated, ion, workdir):
         super().__init__(parent)
-        self.calculated, self.selections = calculated, selections
+        self.calculated, self.workdir = calculated, workdir
+        self.pairs = {}
+        self.pairing_error = None
         self.current = None
         self.rows = []
         self.events = queue.Queue()
@@ -81,7 +83,9 @@ class NistDialog(QDialog):
         self.table.setHorizontalHeaderLabels([T(name) for name in FIELDS])
         self.table.verticalHeader().hide()
         self.table.resizeColumnsToContents()
-        for column in (0, 3, 4, 5, 6, 8, 9, 10):
+        for column in (1, 2):
+            self.table.setColumnWidth(column, max(48, self.table.columnWidth(column)))
+        for column in (0, 3, 4, 5, 6, 8, 9, 10, 11):
             self.table.setColumnWidth(column, max(116, self.table.columnWidth(column)))
         self.table.currentCellChanged.connect(self.pair_options)
         self.tabs.addTab(self.table, T("能级对照表"))
@@ -113,6 +117,8 @@ class NistDialog(QDialog):
 
     def show_data(self, value):
         self.current = value
+        self.pairs = {}
+        self.pairing_error = None
         if value:
             metadata, _ = value
             self.ion.setText(metadata["ion"])
@@ -121,6 +127,11 @@ class NistDialog(QDialog):
             if metadata.get("warning"):
                 text += "\n" + metadata["warning"]
             self.info.setText(text + "\n" + nist.CITATION)
+            try:
+                self.pairs = nist.load_matches(self.workdir).get(metadata["ion"], {})
+            except (OSError, ValueError) as error:
+                self.pairing_error = str(error)
+                self.info.setText(self.info.text() + "\n" + self.pairing_error)
         else:
             self.info.setText(T("输入光谱后，可从 NIST 获取或导入 CSV / 制表符文件。"))
         self.update_comparison()
@@ -159,7 +170,7 @@ class NistDialog(QDialog):
         self.import_button.setEnabled(True)
         self.ion.setEnabled(True)
         if error:
-            self.info.setText(T("无法从 NIST 获取数据：{e}。可改用导入。", e=error))
+            self.info.setText(T("无法从 NIST 获取数据：{e}。请检查代理设置或改用导入。", e=error))
         else:
             self.show_data(value)
 
@@ -177,12 +188,9 @@ class NistDialog(QDialog):
             except (OSError, ValueError) as error:
                 self.info.setText(str(error))
 
-    def current_pairs(self):
-        return self.selections.setdefault(self.current[0]["ion"], {})
-
     def update_comparison(self):
         exp = self.current[1] if self.current else []
-        self.rows = nist.compare(self.calculated, exp, manual=self.current_pairs() if self.current else None,
+        self.rows = nist.compare(self.calculated, exp, manual=nist.match_overrides(self.calculated, self.pairs),
                                  reference=self.zero.currentData()) if self.current else []
         self.export_button.setEnabled(bool(self.rows))
         position = self.table.currentRow()
@@ -219,29 +227,24 @@ class NistDialog(QDialog):
         self.choices.clear()
         position = self.table.currentRow()
         valid = 0 <= position < len(self.rows)
-        self.apply_pair.setEnabled(valid)
+        self.apply_pair.setEnabled(valid and not self.pairing_error)
         if not valid:
             return
         row = self.rows[position]
         self.choices.addItem(T("自动匹配"), None)
         for level in row["candidates"]:
             self.choices.addItem(nist_label(level), level.key)
-        current = self.current_pairs().get(row["calculated"]["id"])
+        current = self.pairs.get(row["calculated"]["id"])
         if current:
-            self.choices.setCurrentIndex(max(0, self.choices.findData(current)))
+            self.choices.setCurrentIndex(max(0, self.choices.findData(current["experimental"])))
 
     def set_pair(self):
-        row = self.rows[self.table.currentRow()]
-        old = self.current_pairs()
-        chosen = self.choices.currentData()
-        identity = row["calculated"]["id"]
-        if chosen is None:
-            old.pop(identity, None)
-        else:
-            if any(value == chosen and key != identity for key, value in old.items()):
-                self.info.setText(T("该 NIST 能级已被手动配对到另一计算态。"))
-                return
-            old[identity] = chosen
+        row = self.rows[self.table.currentRow()]["calculated"]
+        try:
+            self.pairs = nist.save_match(self.workdir, self.current[0]["ion"], row, self.choices.currentData())
+        except (OSError, ValueError) as error:
+            self.info.setText(str(error))
+            return
         self.update_comparison()
 
     def draw(self):

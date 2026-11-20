@@ -1424,7 +1424,10 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "输入光谱后，可从 NIST 获取或导入 CSV / 制表符文件。":
         "Enter a spectrum to fetch NIST data or import a CSV or tab-delimited file.",
     "正在从 NIST 获取 {ion}…": "Fetching {ion} from NIST…",
-    "无法从 NIST 获取数据：{e}。可改用导入。": "Could not fetch NIST data: {e}. You can import a file instead.",
+    "无法从 NIST 获取数据：{e}。请检查代理设置或改用导入。":
+        "Could not fetch NIST data: {e}. Check your proxy settings or import a file.",
+    "手动配对文件 nist-matches.json 格式有误，已保留原件。":
+        "The manual matching file nist-matches.json is invalid. The original file has been kept.",
     "请输入有效的 NIST 光谱，例如 Li I 或 Fe XV。": "Enter a valid NIST spectrum such as Li I or Fe XV.",
     "NIST 数据文件过大。": "The NIST data file is too large.",
     "没有可读取的 NIST 能级。": "No readable NIST levels were found.",

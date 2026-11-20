@@ -738,7 +738,6 @@ class LevelPanel(Panel):
         super().__init__()
         self.settings = settings   # 返回运行设置 (bindir, np, mpirun, mpitmp, nice) 的函数
         self.summary_source = None  # 目录 -> (流程, 运行记录) 或 None；主窗口设为计算页的 summary_source
-        self.nist_selections = {}
         self.cache = {}            # 路径 -> (mtime, 数据)
         self.reader = index.ReadWorker()
         self.read_generation = 0
@@ -1250,6 +1249,7 @@ class LevelPanel(Panel):
                     config=rest, prefix=prefix, full=full, term=term, purity=purity, lsj_label=lsj_label, jj=jj)
 
     def open_nist(self):
+        from grasp_nist import calculated_id
         from nist_panel import NistDialog
 
         if not self.levels:
@@ -1261,11 +1261,9 @@ class LevelPanel(Panel):
         for key in keys[:self.MAX_ROWS]:
             row = self.level_desc(key)
             _, path, *_ = self.levels[key]
-            row["id"] = json.dumps([os.path.relpath(path, root), row["twoj"], row["parity"], row["pos"],
-                                    round(row["energy"], 10)], ensure_ascii=False, separators=(",", ":"))
+            row["id"] = calculated_id(os.path.relpath(path, root), row)
             rows.append(row)
-        selections = self.nist_selections.setdefault(root, {})
-        dialog = NistDialog(self, rows, self.nist_ion(root), selections)
+        dialog = NistDialog(self, rows, self.nist_ion(root), root)
         if len(keys) > len(rows):
             dialog.info.setText(dialog.info.text() + "\n" +
                                 T("对照显示最低的 {n} 个计算能级。", n=len(rows)))

@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 import csv
 from dataclasses import dataclass
 from datetime import date
+import fcntl
 from fractions import Fraction
 from hashlib import sha256
 import io
@@ -199,9 +200,10 @@ def query_url(ion):
 
 
 def fetch(ion):
-    """仅由桌面按钮调用，禁止重定向和代理，以免连接其他主机。"""
+    """仅由桌面按钮调用，使用环境中的 HTTPS 代理并拒绝重定向。"""
     import ssl
-    from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
+    from urllib.request import (HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener,
+                                getproxies_environment)
 
     class NoRedirect(HTTPRedirectHandler):
         def redirect_request(self, *args, **kwargs):
@@ -210,7 +212,9 @@ def fetch(ion):
     if not _request.acquire(blocking=False):
         raise ValueError(T("已有一次 NIST 请求在进行。"))
     try:
-        opener = build_opener(ProxyHandler({}), NoRedirect(), HTTPSHandler(context=ssl.create_default_context()))
+        proxy = getproxies_environment().get("https")
+        opener = build_opener(ProxyHandler({"https": proxy} if proxy else {}),
+                              NoRedirect(), HTTPSHandler(context=ssl.create_default_context()))
         request = Request(query_url(ion), headers={"User-Agent": "GRASP GUI (NIST ASD energy levels)"})
         with opener.open(request, timeout=15) as response:
             raw = response.read(MAX_BYTES + 1)
@@ -263,6 +267,79 @@ def load_cache(ion):
             pass              # 损坏的缓存已经弃用；只读目录中不必强行删除。
         return None
     return payload, levels
+
+
+def calculated_id(relative_path, row):
+    return json.dumps([relative_path, row["twoj"], row["parity"], row["pos"]],
+                      ensure_ascii=False, separators=(",", ":"))
+
+
+def _match_path(workdir):
+    return Path(workdir) / ".grasp_gui" / "nist-matches.json"
+
+
+def load_matches(workdir):
+    """配对由用户创建，损坏时保留原件。"""
+    try:
+        payload = json.loads(_match_path(workdir).read_bytes())
+        spectra = payload["spectra"]
+        if type(payload["version"]) is not int or payload["version"] != 1 or not isinstance(spectra, dict):
+            raise ValueError
+        for pairs in spectra.values():
+            if not isinstance(pairs, dict):
+                raise ValueError
+            for pair in pairs.values():
+                if (not isinstance(pair["experimental"], str) or not isinstance(pair["component"], str)
+                        or type(pair["energy"]) not in (int, float) or not math.isfinite(pair["energy"])):
+                    raise ValueError
+        return spectra
+    except FileNotFoundError:
+        return {}
+    except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as error:
+        raise ValueError(T("手动配对文件 nist-matches.json 格式有误，已保留原件。")) from error
+
+
+def _component(row):
+    return row.get("lsj_label") or row.get("jj") or ""
+
+
+def match_overrides(calculated, pairs):
+    """失效的手动配对保留计算态标识，等待用户处理。"""
+    overrides = {}
+    for row in calculated:
+        if pair := pairs.get(row["id"]):
+            current = pair["energy"] == row["energy"] and pair["component"] == _component(row)
+            overrides[row["id"]] = pair["experimental"] if current else None
+    return overrides
+
+
+def save_match(workdir, ion, row, experimental):
+    path = _match_path(workdir)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # 配对使用独立的锁，计算进行中也能写入。
+    fd = os.open(path.with_suffix(".lock"), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        spectra = load_matches(workdir)
+        pairs = spectra.get(ion, {})
+        identity = row["id"]
+        if experimental is None:
+            if identity not in pairs:
+                return pairs
+            del pairs[identity]
+        else:
+            if any(key != identity and pair["experimental"] == experimental for key, pair in pairs.items()):
+                raise ValueError(T("该 NIST 能级已被手动配对到另一计算态。"))
+            pairs[identity] = dict(experimental=experimental, energy=row["energy"], component=_component(row))
+        if pairs:
+            spectra[ion] = pairs
+        else:
+            del spectra[ion]
+        raw = json.dumps(dict(version=1, spectra=spectra), ensure_ascii=False, indent=1).encode("utf-8")
+        sessions.atomic(path, raw)
+        return pairs
+    finally:
+        os.close(fd)
 
 
 def _same_configuration(known, calculated):
@@ -321,7 +398,8 @@ def compare(calculated, experimental, *, manual=None, reference=None):
         rank = reserved if is_manual else automatic
         if picked is not None and rank[picked.key] != 1:
             picked = None
-        status = ("manual" if is_manual else "automatic") if picked else ("ambiguous" if choices else "unmatched")
+        status = ("manual" if is_manual else "automatic") if picked else (
+            "ambiguous" if is_manual or choices else "unmatched")
         value = (row["energy"] - origin) * HARTREE_CM
         known = picked.energy - experimental_origin if picked and picked.energy is not None else None
         delta = value - known if known is not None else None
