@@ -273,6 +273,11 @@ the background runner. It may update the record when run settings change and ret
 Script generation errors are reported while the record remains saved. Use the returned revision or refresh
 it with `get_pipeline` before the next edit.
 
+工作目录清理只在本机和服务器的计算界面提供。MCP 没有清理工具，不能通过 MCP 工具移动或删除计算文件。
+
+Work-directory cleanup is available in the local and server calculation windows. MCP provides no cleanup tool
+for moving or deleting calculation files.
+
 ## 目录与命令限制 / Directory and command limits
 
 拒绝包含 `..` 的路径和真实目标在根目录外的符号链接。新建、更新、运行均拒绝自定义命令，除非
