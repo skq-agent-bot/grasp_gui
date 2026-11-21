@@ -179,7 +179,7 @@ class Service:
 
     def export_script(self, directory, slurm=None):
         root, data, _ = self.record(directory)
-        jobs = data.get("pipeline", [])
+        jobs = summary.checked_script_jobs(root, data.get("pipeline", []), self.path)
         if slurm is not None:
             text = core.slurm_script(jobs, slurm)
         else:

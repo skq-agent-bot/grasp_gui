@@ -263,6 +263,15 @@ A symbolic link named `grasp_levels` / `grasp_wfn` behaves like `levels` / `wfn`
 * **rmcdhf NSIC**: *Modify NSIC (修改 NSIC)* enables a non-negative count of extra first-cycle orbital improvements; unchecked uses the program default.
   EOL defaults: `(NW-NFIX)/4` serial, `4+(NW-NFIX)/4` MPI, or 0 with varied correlation orbitals; AL: `2+(NW-NFIX)/4` (integer division).
   The page description explains the defaults; older configurations import with this option unchecked and no warning.
+* **Levels per symmetry block / 各对称块能级**. In `rmcdhf` and `rci`, enter one line per block in the order in the
+  CSF file. A blank line or `-` skips a block. Use `-` to skip a final block because trailing blank lines are ignored.
+  Select levels in at least one block. Input checks and script export compare the row count with an existing
+  CSF file when the selected steps will use that file. The application also checks the CSF immediately before
+  launching either program, including when an earlier step in the same run generated it.
+
+  在 `rmcdhf` 和 `rci` 中按 CSF 文件的块顺序填写，每块一行。空行或 `-` 表示跳过。末尾的空行会被忽略，跳过末块时请写 `-`。
+  至少在一个块中选择能级。预检与导出脚本时，若所选步骤将使用现有的 CSF 文件，会核对填写的行数。
+  程序启动前也会核对，包括本次运行中由前序步骤生成的 CSF 文件。
 * **rhfszeeman95**: default-settings mode only. *State name (态名称)* is an ASCII basename of at most 23 characters;
   *Mixing coefficients from CI (混合系数来自 CI 计算)* selects `.cm` rather than `.m`.
   *Compute off-diagonal matrix elements (计算非对角矩阵元)* is checked by default and additionally writes

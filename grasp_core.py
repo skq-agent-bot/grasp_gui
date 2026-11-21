@@ -11,6 +11,7 @@ import codecs
 import csv
 import json
 import os
+from pathlib import Path
 import re
 import shlex
 import shutil
@@ -1511,6 +1512,16 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "When rebuilding work-directory scripts, override their settings through the run environment.",
     "生成的运行脚本": "Generated run script",
     "默认选择小文件，生成的运行脚本默认不选。": "Small files are selected by default. Generated scripts start unchecked.",
+    # 输入时跳过能级块 (#58)
+    "每块一行；空行或 - 表示跳过": "One line per block. A blank line or - skips the block.",
+    "至少有一个块需要选择能级": "Select levels in at least one block",
+    "各块能级": "Levels per block",
+    "{name} 有 {total} 个对称块 ({blocks})，填写了 {rows} 行。":
+        "{name} has {total} symmetry blocks ({blocks}). Supplied {rows} lines.",
+    "缺少块 {blocks} 的回答。跳过末尾的块请用 -。":
+        "Missing answers for blocks {blocks}. Use - to skip a final block.",
+    "多填了 {extra} 行。": "Remove {extra} extra lines.",
+    "无法读取 {name} 的对称块：{error}": "Cannot read symmetry blocks from {name}: {error}",
 }
 
 
@@ -1597,16 +1608,28 @@ def nonblank_lines(s):
     return [ln.strip() for ln in s.splitlines() if ln.strip()]
 
 
+def block_level_lines(text):
+    """末尾空白不表示新块；写 '-' 可显式跳过末块。"""
+    lines = [line.strip() for line in text.splitlines()]
+    while lines and not lines[-1]:
+        lines.pop()
+    return ["" if line == "-" else line for line in lines]
+
+
 def count_levels(lines):
     """各块能级号 (如 1,2,3 或 1-3) 的总个数；无法解析的项按 1 个计。"""
     n = 0
     for ln in lines:
-        for item in re.split(r"[\s,]+", ln):
+        if ln.strip() in ("", "-"):
+            continue
+        # ITEMS 跳过逗号和空格，包括区间连字符后面的分隔符。
+        ln = re.sub(r"(?<=[0-9])-[ ,]+(?=\+?[0-9])", "-", ln)
+        for item in re.findall(r"[^\s,]+", ln):
             a, _, b = item.partition("-")
             try:
                 n += int(b) - int(a) + 1 if b else 1
             except ValueError:
-                n += 1 if item else 0
+                n += 1
     return n
 
 
@@ -1707,6 +1730,10 @@ class Step:
     @classmethod
     def defaults(cls):
         return {f.key: f.default for f in cls.fields if isinstance(f, Field)}
+
+    def saved_values(self, values):
+        """用字段默认值和类型恢复保存的表单参数。"""
+        return {f.key: normalize(f, values.get(f.key, f.default)) for f in self.fields if isinstance(f, Field)}
 
     def validate(self, v):
         """检查表单参数；不合法时由程序页抛出 ValueError。"""
@@ -2097,7 +2124,14 @@ class RWfnEstimate(Step):
         return ["rwfn.inp"]
 
 
-class RMcdhf(Step):
+class BlockLevelsStep(Step):
+    def validate(self, v):
+        # LODSTATE 会重新读所有块，无法靠后续交互回答退出全跳过。
+        if not any(line.replace(",", "").strip() for line in block_level_lines(v["levels"])):
+            raise ValueError(T("至少有一个块需要选择能级"))
+
+
+class RMcdhf(BlockLevelsStep):
     output_fields = ("save",)
     key = name = prog = "rmcdhf"
     mpi = True
@@ -2107,7 +2141,7 @@ class RMcdhf(Step):
              "NSIC 是首轮 SCF 额外改进自洽性最差的轨道数。默认：EOL 串行为 (NW-NFIX)/4、MPI 为 4+(NW-NFIX)/4，"
              "含变分关联轨道时为 0；AL 为 2+(NW-NFIX)/4 (整数除法)。"),
         Check("mem", "使用内存版本 rmcdhf_mem", False, "角系数一次读入内存：更快，但更占内存"),
-        Text("levels", "各块要优化的能级", "1\n1", "每块一行", lines=3),
+        Text("levels", "各块要优化的能级", "1\n1", "每块一行；空行或 - 表示跳过", lines=3),
         Choice("weights", "能级权重", [("5", "标准 (EOL)"), ("1", "等权重"), ("9", "用户指定")]),
         Entry("uweights", "  用户权重", "", "选 9 时填写, 如 1,1,2"),
         Entry("vary", "变分轨道", "*", "如 *  或 3*  或 2s,2p*"),
@@ -2123,7 +2157,7 @@ class RMcdhf(Step):
 
     def stdin(self, v):
         self.validate(v)
-        levels = nonblank_lines(v["levels"])
+        levels = block_level_lines(v["levels"])
         # 非默认模式先关闭调试输出，并保留光速 / 网格、ACCY 的默认值。
         lines = (["n", "n", "n", "n"] if v.get("modify_nsic") else ["y"]) + levels
         if count_levels(levels) > 1:        # 只优化一个能级时 rmcdhf 不询问权重
@@ -2133,6 +2167,7 @@ class RMcdhf(Step):
         return answers(lines + [v["vary"], v["spec"], v["nscf"]] + self.other_defaults(v))
 
     def validate(self, v):
+        super().validate(v)
         if v.get("modify_nsic") and not re.fullmatch(r"[0-9]+", str(v.get("nsic", "0")).strip()):
             raise ValueError(T("NSIC 必须是非负整数"))
 
@@ -2157,7 +2192,10 @@ class RMcdhf(Step):
         return f"{self.program(v)} -> {s}" if s else self.program(v)
 
     def inputs(self, v, run=None):
-        return ["isodata", "rcsf.inp", "rwfn.inp"] + angular_files(run)
+        return ["isodata", self.level_csf(v), "rwfn.inp"] + angular_files(run)
+
+    def level_csf(self, v):
+        return "rcsf.inp"
 
     def outputs(self, v, run=None):
         state = v["save"].strip()
@@ -2212,7 +2250,7 @@ class RSave(Step):
         return [v["state"].strip() + ".m"]
 
 
-class RCi(Step):
+class RCi(BlockLevelsStep):
     output_fields = ("state",)
     key = name = prog = "rci"
     mpi = True
@@ -2228,12 +2266,13 @@ class RCi(Step):
         Check("sms", "特殊质量移动 (SMS)", False),
         Check("se", "估计自能 (Self-energy)", True),
         Entry("nqed", "  自能计算的最大 n (≤8)", "4"),
-        Text("levels", "各块计算的能级", "1\n1", "每块一行", lines=3),
+        Text("levels", "各块计算的能级", "1\n1", "每块一行；空行或 - 表示跳过", lines=3),
     ] + zero_first_fields("odd2.c") + [
         Entry("log", "输出日志文件", "outodd_rci"),
     ]
 
     def validate(self, v):
+        super().validate(v)
         state_name(v["state"], 127, "rci")            # rci92.f90: NAME*128
 
     def stdin(self, v):
@@ -2250,7 +2289,7 @@ class RCi(Step):
         lines += [yn(v["vp"]), yn(v["nms"]), yn(v["sms"]), yn(v["se"])]
         if v["se"]:
             lines.append(v["nqed"])
-        return answers(lines + nonblank_lines(v["levels"]))
+        return answers(lines + block_level_lines(v["levels"]))
 
     def pre(self, v):
         src, dst = v["copyfrom"].strip(), v["state"].strip()
@@ -2262,8 +2301,11 @@ class RCi(Step):
         return f"rci {v['state']}"
 
     def inputs(self, v, run=None):
-        return ["isodata"] + [v["state"].strip() + ext for ext in (".c", ".w")] + (
+        return ["isodata", self.level_csf(v), v["state"].strip() + ".w"] + (
             [v["zero"].strip()] if v.get("zf") else [])
+
+    def level_csf(self, v):
+        return v["state"].strip() + ".c"
 
     def outputs(self, v, run=None):
         return [v["state"].strip() + ".cm"]
@@ -2850,6 +2892,53 @@ STEPS = [RNucleus(), RcsfGenerate(), RcsfInteract(), RcsfSplit(), RcsfZeroFirst(
          RTableLevels(), RTabTrans1(), RTabTrans2(),
          RBioTransform(), RTransition(), Custom()]
 
+_BLOCK_LEVEL_STEPS = {step.key: step for step in STEPS if isinstance(step, BlockLevelsStep)}
+
+
+def check_block_levels(path, levels):
+    """用 CSF 索引的块元数据核对输入行数，不展开组态。"""
+    from grasp_index import csf_index
+
+    try:
+        blocks = csf_index(path)["blocks"]
+    except (OSError, ValueError) as e:
+        raise ValueError(T("无法读取 {name} 的对称块：{error}", name=path.name, error=str(e))) from e
+    total, rows = len(blocks), len(block_level_lines(levels))
+    if total == rows:
+        return
+    labels = [f"{n}:{''.join(block['jp'] or ['?'])}" for n, block in enumerate(blocks, 1)]
+    message = T("{name} 有 {total} 个对称块 ({blocks})，填写了 {rows} 行。",
+                name=path.name, total=total, blocks=", ".join(labels), rows=rows)
+    if rows < total:
+        why = T("缺少块 {blocks} 的回答。跳过末尾的块请用 -。", blocks=", ".join(labels[rows:]))
+    else:
+        why = T("多填了 {extra} 行。", extra=rows - total)
+    raise ValueError(message + (" " if LANG == "en" else "") + why)
+
+
+def check_job_block_levels(job, cwd):
+    key, values = job.get("step"), job.get("vals")
+    step = _BLOCK_LEVEL_STEPS.get(key) if isinstance(key, str) else None
+    if step is None or not isinstance(values, dict):
+        return
+    values = step.saved_values(values)
+    path = Path(cwd) / step.level_csf(values)
+    if path.is_file():
+        try:
+            check_block_levels(path, values["levels"])
+        except ValueError as e:
+            raise RuntimeError(str(e)) from e
+
+
+def refresh_block_input(job):
+    """由表单值重建块选择，避免使用旧记录中已删空行的输入。"""
+    key, values = job.get("step"), job.get("vals")
+    step = _BLOCK_LEVEL_STEPS.get(key) if isinstance(key, str) else None
+    if step is None or not isinstance(values, dict):
+        return job
+    return dict(job, stdin=step.stdin(step.saved_values(values)))
+
+
 # 界面左侧程序列表的功能分组 (每个程序恰好出现一次)
 STEP_GROUPS = [
     ("准备", ["rnucleus", "rcsfgenerate", "rcsfinteract", "rcsfsplit", "rcsfzerofirst"]),
@@ -2992,6 +3081,7 @@ def describe(job, mpi_prefix="", fallback=True):
 
     mpi_prefix 非空 (如 "mpirun -np 4") 时，有并行版本的程序写成 "<mpi_prefix> <prog>_mpi"。
     """
+    stdin = refresh_block_input(job)["stdin"]
     out = (program_fallbacks([job]) if fallback else []) + [action_sh(a) for a in job["pre"]]
     args = " ".join(shlex.quote(x) for x in job["args"])
     if mpi_prefix and job.get("mpi"):
@@ -3000,13 +3090,13 @@ def describe(job, mpi_prefix="", fallback=True):
         cmd = f"{shlex.quote(job['prog'])} {args}".rstrip()
     if job["log"]:
         cmd += f" > {shlex.quote(job['log'])}"
-    if any(ln.startswith(ICCUT + " ") for ln in job["stdin"].split("\n")):
+    if any(ln.startswith(ICCUT + " ") for ln in stdin.split("\n")):
         # 各块的 ICCUT 在运行时由零阶列表算出：不加引号的 here-document，其余各行转义
         lines = [f"$(awk '{ICCUT_AWK}' {shlex.quote(ln.split()[1])})" if ln.startswith(ICCUT + " ")
-                 else re.sub(r"([\\$`])", r"\\\1", ln) for ln in job["stdin"].split("\n")]
+                 else re.sub(r"([\\$`])", r"\\\1", ln) for ln in stdin.split("\n")]
         out.append(f"{cmd} <<EOF\n" + "\n".join(lines) + "EOF")
-    elif job["stdin"].strip():
-        out.append(f"{cmd} <<'EOF'\n{job['stdin']}EOF")
+    elif stdin.strip():
+        out.append(f"{cmd} <<'EOF'\n{stdin}EOF")
     else:
         out.append(cmd + " < /dev/null")
     out += [action_sh(a) for a in job["post"]]
@@ -3197,6 +3287,7 @@ class Runner:
         self.emit(f"\n===== {job['title']} =====\n", "head")
         for a in job["pre"]:
             self.do_action(a, cfg)
+        check_job_block_levels(job, cfg["cwd"])
         if job["prog"] in ("rmcdhf", "rmcdhf_mem"):
             err = check_mcp(cfg["cwd"], cfg["np"], cfg["mpitmp"])
             if err:
