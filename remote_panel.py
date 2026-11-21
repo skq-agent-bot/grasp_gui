@@ -334,7 +334,7 @@ class RemoteLevels(LevelPanel):
     def __init__(self, source, directory):
         self.remote_source, self.remote_directory = source, directory
         self.remote_generation, self.remote_closed, self.remote_rows = 0, False, []
-        super().__init__(directory)
+        super().__init__(directory, nist_comparison=False)
         self.tr_run.hide()
         self.tr_all.hide()
         self.tr_np.hide()
