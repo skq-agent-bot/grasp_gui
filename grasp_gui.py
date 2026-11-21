@@ -282,6 +282,7 @@ class MainWindow(QMainWindow):
         self.mcp_action.setCheckable(True)
         self.mcp_action.setChecked(core.load_config().get("mcp_enabled", False))
         self.mcp_action.toggled.connect(self.toggle_mcp)
+        settings_menu.addAction(T("关于 GRASP GUI…")).triggered.connect(self.about)
         wm = mb.addMenu(T("窗口"))
         for kind, title in self.TABS[1:]:
             wm.addAction(T("在新窗口中打开{t}", t=T(title))).triggered.connect(
@@ -299,6 +300,15 @@ class MainWindow(QMainWindow):
         win = connect_window(self)
         if win is not None:
             self.remote_windows.append(win)
+
+    def about(self):
+        from grasp_shells import snapshot
+
+        metadata, _ = snapshot()
+        text = ("GRASP GUI " + core.VERSION + "\n\n"
+                + T("壳层模型的离线数据 · 下载于 {date}", date=metadata["retrieved"]) + "\n"
+                + metadata["citation"])
+        QMessageBox.about(self, T("关于 GRASP GUI…"), text)
 
     def make_level_panel(self, d):
         p = level_panel(d, lambda: self.run.values())

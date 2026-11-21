@@ -41,7 +41,7 @@ from gui_common import button, fixed_font, hint_label, recent_menu, text_edit
 class CsfListsWidget(QWidget):
     """rcsfgenerate 的多个 CSF 列表，每个列表一个标签页。"""
 
-    def __init__(self):
+    def __init__(self, construct=None):
         super().__init__()
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 6, 0, 0)
@@ -49,6 +49,8 @@ class CsfListsWidget(QWidget):
         bar.addWidget(QLabel(T("CSF 列表:")))
         bar.addWidget(button("+ 添加列表", lambda: self.add_list(dict(core.CsfLists.EMPTY))))
         bar.addWidget(button("− 删除当前列表", self.del_list))
+        if construct is not None:
+            bar.addWidget(button("从壳层模型构造…", construct))
         bar.addStretch()
         lay.addLayout(bar)
         self.tabs = QTabWidget()
@@ -95,9 +97,10 @@ class CsfListsWidget(QWidget):
 class StepForm(QScrollArea):
     """根据 step.fields 生成的参数表单。"""
 
-    def __init__(self, step, bindir):
+    def __init__(self, step, bindir, element_hint=None):
         super().__init__()
         self.step = step
+        self.element_hint = element_hint
         self.setWidgetResizable(True)
         inner = QWidget()
         g = QGridLayout(inner)
@@ -117,7 +120,7 @@ class StepForm(QScrollArea):
                 g.addWidget(hint_label(f.hint), r, 2)
                 self.get[f.key], self.put[f.key] = w.isChecked, w.setChecked
             elif isinstance(f, core.CsfLists):
-                w = CsfListsWidget()
+                w = CsfListsWidget(self.build_from_shell_model)
                 g.addWidget(w, r, 0, 1, 3)
                 self.get[f.key], self.put[f.key] = w.value, w.set_value
             else:
@@ -162,6 +165,15 @@ class StepForm(QScrollArea):
 
     def values(self):
         return {k: get() for k, get in self.get.items()}
+
+    def build_from_shell_model(self):
+        from shell_model_panel import ShellModelDialog
+
+        dialog = ShellModelDialog(self, self.step, self.values(),
+                                  self.element_hint() if self.element_hint else "Li")
+        if dialog.exec() == QDialog.Accepted:
+            self.set_values(dialog.result_fields)
+        dialog.deleteLater()
 
     def set_values(self, d):
         fields = {f.key: f for f in self.step.fields if isinstance(f, core.Field)}
@@ -1127,7 +1139,7 @@ class CalcPanel(QWidget):
         self.copy_btn.clicked.connect(self.copy_group)
         gb.addWidget(self.copy_btn)
 
-        self.forms = [StepForm(step, self.run.bindir()) for step in core.STEPS]
+        self.forms = [StepForm(step, self.run.bindir(), self.nuclear_element) for step in core.STEPS]
         self.nav = StepNav(self.forms)
         self.nav.groups.setCornerWidget(corner, Qt.TopRightCorner)
         for f in self.group_forms():
@@ -1145,6 +1157,9 @@ class CalcPanel(QWidget):
         bar.addWidget(button("■ 停止", self.stop_run))
         lay.addLayout(bar)
         return w
+
+    def nuclear_element(self):
+        return next((form.get["z"]() for form in self.forms if form.step.key == "rnucleus"), "Li")
 
     def build_bottom(self):
         split = QSplitter(Qt.Horizontal)
