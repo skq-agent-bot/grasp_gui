@@ -1233,7 +1233,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "包括大文件": "Include large files",
     "大小": "Size",
     "大文件": "Large file",
-    ".w、.c、.cm、角系数等大文件通常不需要下载；能级、组成和波函数曲线可直接在远程窗口查看。": (
+    ".w、.c、.cm、角系数等大文件通常不需要下载；能级、组成和波函数曲线可直接在服务器工作区查看。": (
         "Large .w, .c, .cm and angular files usually need no download. View levels, compositions and "
         "wavefunctions remotely."),
     "正在读取文件清单…": "Reading file list…",
@@ -1601,6 +1601,15 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     " · 之后已清理（{time}）": " · Cleaned since then ({time})",
     "清理结果未知。将重新读取文件清单，请核对后再操作。":
         "Cleanup result is unknown. The file list will refresh. Check it before trying again.",
+    # 多工作区 (#52)
+    "本机：{name}": "Local: {name}",
+    "最近的服务器目录": "Recent server directories",
+    "服务器操作": "Server actions",
+    "已连接": "Connected",
+    "已断开": "Disconnected",
+    "打开远程工作区": "Open server workspace",
+    "传输仍在进行，关闭工作区将取消传输。是否取消并关闭？":
+        "A transfer is active. Cancel the transfer and close this workspace?",
     # 配置选项校验 (#69)
     "{field} 的值 {value} 不在可选范围内 ({options})":
         "Value {value} for {field} is not one of the supported options ({options})",

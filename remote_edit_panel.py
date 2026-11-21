@@ -76,6 +76,7 @@ class TargetDialog(ConnectDialog):
     def __init__(self, parent, local, link=None, configuration=None):
         super().__init__(parent)
         self.setWindowTitle(T("选择流程上传目标"))
+        self.recent.hide()
         self.create_button.hide()
         self.local, self.link = local, link
         self.configuration = configuration
@@ -295,7 +296,7 @@ class UploadDialog(TransferDialog):
         self.input_button = button("同时从本机上传输入文件…", self.choose_inputs)
         self.input_button.setVisible(remote_only)
         self.layout().insertWidget(4, self.input_button)
-        self.open_button = button("打开远程窗口", self.open_remote)
+        self.open_button = button("打开远程工作区", self.open_remote)
         self.open_button.setEnabled(False)
         self.open_button.setVisible(not remote_only)
         self.layout().addWidget(self.open_button)
@@ -556,6 +557,11 @@ class UploadDialog(TransferDialog):
         if self.remote_only or not self.completed or self.busy:
             return
         parent = self.panel.window()
+        if hasattr(parent, "open_remote_workspace"):
+            parent.open_remote_workspace(self.source, self.directory, refresh=True)
+            self.keep_source = True
+            self.done(QDialog.Accepted)
+            return
         for win in getattr(parent, "remote_windows", []):
             if (win.isVisible() and win.source.client.host == self.source.client.host and
                     win.directory == self.directory):

@@ -222,6 +222,7 @@ def test_modeless_transfer_keeps_windows_usable_and_parent_close_cancels(qapp, m
     monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "settings.json"))
     class Source(QObject):
         notice = Signal(str)
+        push = Signal(object)
         client = SimpleNamespace(host="fixture")
         def submit(self, *args):
             pass
