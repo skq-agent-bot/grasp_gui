@@ -821,6 +821,7 @@ class RemoteCalculation(QWidget):
     editRequested = Signal(str)
     created = Signal(str, bool)
     filesChanged = Signal()
+    draftChanged = Signal()
 
     def __init__(self, source, directory, run_after_load=False):
         super().__init__()
@@ -835,30 +836,28 @@ class RemoteCalculation(QWidget):
         self.runtime_state = None
         self.has_runtime_state = False
         self.watch_error = None
+        self.editor = None             # 服务器端可以写入且已有流程时：RemoteEditor
         self.build_view()
         self.source.push.connect(self.push)
         self.load()
 
+    def writable(self):
+        return ("workdir_write_v1" in getattr(self.source, "server", {}).get("capabilities", [])
+                and getattr(self.source, "key", None) is not None)
+
     def build_view(self):
+        if self.editor is not None:
+            self.build_edit_view()
+            return
         layout = renew_layout(self)
-        self.readonly_hint = QLabel(T("远程流程只读；可取出到本机编辑，再确认上传。"))
+        hint = T("远程流程只读；可取出到本机编辑，再确认上传。")
+        if "workdir_write_v1" not in getattr(self.source, "server", {}).get("capabilities", []):
+            hint += " " + T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。")
+        self.readonly_hint = QLabel(hint)
         layout.addWidget(self.readonly_hint)
         layout.addWidget(QLabel(T("服务器类型：{kind}", kind=T("Slurm 集群") if self.server_type == "slurm" else
                                  T("工作站"))))
-        bar = QHBoxLayout()
-        self.run_button = button("▶ 运行全部", lambda: self.prepare_run(1))
-        if self.server_type == "slurm":
-            self.run_button.setText(T("提交 Slurm 作业"))
-        bar.addWidget(self.run_button)
-        self.run_selected = button("▶ 从选中开始", lambda: self.prepare_selection("from"))
-        bar.addWidget(self.run_selected)
-        self.run_to = button("▶ 运行到选中", lambda: self.prepare_selection("to"))
-        self.run_range = button("▶ 运行选中的步骤", lambda: self.prepare_selection("selected"))
-        bar.addWidget(self.run_to)
-        bar.addWidget(self.run_range)
-        self.stop_button = button("■ 停止", self.stop)
-        self.stop_button.setEnabled(False)
-        bar.addWidget(self.stop_button)
+        bar = self.run_bar()
         bar.addWidget(button("刷新", self.load))
         self.edit_button = button("在本机编辑…", self.edit_local)
         self.edit_button.setEnabled("workdir_write_v1" in getattr(self.source, "server", {}).get("capabilities", []))
@@ -899,12 +898,120 @@ class RemoteCalculation(QWidget):
         layout.addWidget(self.clear_record)
         self.update_run_buttons()
 
+    def run_bar(self):
+        bar = QHBoxLayout()
+        self.run_button = button("▶ 运行全部", lambda: self.prepare_run(1))
+        if self.server_type == "slurm":
+            self.run_button.setText(T("提交 Slurm 作业"))
+        bar.addWidget(self.run_button)
+        self.run_selected = button("▶ 从选中开始", lambda: self.prepare_selection("from"))
+        bar.addWidget(self.run_selected)
+        self.run_to = button("▶ 运行到选中", lambda: self.prepare_selection("to"))
+        self.run_range = button("▶ 运行选中的步骤", lambda: self.prepare_selection("selected"))
+        bar.addWidget(self.run_to)
+        bar.addWidget(self.run_range)
+        self.stop_button = button("■ 停止", self.stop)
+        self.stop_button.setEnabled(False)
+        bar.addWidget(self.stop_button)
+        return bar
+
+    def build_edit_view(self):
+        """可以写入的服务器：与本机相同的程序页和流程编辑；修改先存为本机草稿。"""
+        editor = self.editor
+        layout = renew_layout(self)
+        self.readonly_hint = QLabel(T("修改先保存为本机草稿，点“保存到服务器…”后写入服务器。"))
+        layout.addWidget(self.readonly_hint)
+        layout.addWidget(QLabel(T("服务器类型：{kind}", kind=T("Slurm 集群") if self.server_type == "slurm" else
+                                 T("工作站"))))
+        bar = self.run_bar()
+        self.save_button = button("保存到服务器…", lambda: editor.save_to_server())
+        bar.addWidget(self.save_button)
+        draft = QToolButton()
+        draft.setText(T("草稿"))
+        draft.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(draft)
+        self.export_action = menu.addAction(T("导出草稿为配置…"))
+        self.export_action.triggered.connect(lambda: editor.export_draft())
+        menu.addAction(T("重新读取服务器流程 (放弃草稿)")).triggered.connect(lambda: editor.reload())
+        draft.setMenu(menu)
+        bar.addWidget(draft)
+        self.edit_button = button("在本机编辑…", self.edit_local)
+        bar.addWidget(self.edit_button)
+        self.clean_button = button("清空工作目录…", self.preview_clean)
+        self.update_clean_button()
+        bar.addWidget(self.clean_button)
+        self.state = QLabel()
+        self.state.setWordWrap(True)
+        bar.addWidget(self.state, 1)
+        layout.addLayout(bar)
+        self.create_button = button("在此新建计算…", self.create_calculation)
+        self.create_button.hide()
+        layout.addWidget(self.create_button)
+        forms, steps = editor.build()
+        self.steps = editor.plist
+        self.preview = editor.prev
+        self.details = QTabWidget()
+        self.output = QPlainTextEdit()
+        self.output.setReadOnly(True)
+        self.output.setMaximumBlockCount(core.MAX_OUT_LINES)
+        self.details.addTab(self.preview, T("输入预览"))
+        self.details.addTab(self.output, T("程序输出"))
+        bottom = QSplitter()
+        bottom.addWidget(steps)
+        bottom.addWidget(self.details)
+        self.split = QSplitter(Qt.Vertical)
+        self.split.addWidget(forms)
+        self.split.addWidget(bottom)
+        self.split.setStretchFactor(0, 3)
+        self.split.setStretchFactor(1, 2)
+        layout.addWidget(self.split, 1)
+        self.clear_record = button("我已核对，清除此作业记录…", self.clear_slurm_record)
+        self.clear_record.setVisible(False)
+        layout.addWidget(self.clear_record)
+        self.update_run_buttons()
+        self.update_draft_buttons()
+
+    def update_draft_buttons(self):
+        if self.editor is None:
+            return
+        dirty = self.editor.draft is not None and not self.editor.saving
+        self.save_button.setEnabled(dirty and self.editor.blocked is None)
+        self.export_action.setEnabled(self.editor.draft is not None)
+
+    def draft_changed(self):
+        self.update_draft_buttons()
+        self.draftChanged.emit()
+
+    def start_editing(self, value):
+        """第一次读到可写入的服务器流程时换成编辑界面，保留程序输出和运行状态。"""
+        if self.editor is None:
+            from remote_editor import RemoteEditor
+            text, show_create = self.output.toPlainText(), not self.create_button.isHidden()
+            self.editor = RemoteEditor(self, self.source.key)
+            self.editor.message.connect(self.source.notice.emit)
+            self.build_view()
+            self.output.setPlainText(text)
+            self.create_button.setVisible(show_create)
+            if self.has_runtime_state:
+                self.show_state(self.runtime_state)
+            if self.watch_error:
+                self.show_watch_error(self.watch_error)
+        self.editor.start(value)
+
     def rebuild(self):
-        row, selected = self.steps.currentRow(), [self.steps.row(item) for item in self.steps.selectedItems()]
+        if self.editor is not None:
+            fields, row = self.editor.fields(), self.steps.currentRow()
+            selected = [self.steps.row(item) for item in self.steps.selectedItems()]
+        else:
+            row, selected = self.steps.currentRow(), [self.steps.row(item) for item in self.steps.selectedItems()]
         text, tab, sizes = self.output.toPlainText(), self.details.currentIndex(), self.split.sizes()
         show_create = not self.create_button.isHidden()
         self.build_view()
-        self.fill_jobs(row)
+        if self.editor is not None:
+            self.editor.apply_fields(fields)
+            self.steps.setCurrentRow(row)
+        else:
+            self.fill_jobs(row)
         for i in range(self.steps.count()):
             self.steps.item(i).setSelected(i in selected)
         self.details.setCurrentIndex(tab)
@@ -936,10 +1043,18 @@ class RemoteCalculation(QWidget):
                 return
             self.jobs, self.revision = value["jobs"], value["revision"]
             self.create_button.setVisible(not self.jobs)
-            self.fill_jobs()
+            if self.editor is None:
+                self.fill_jobs()
+            if self.jobs and self.writable():
+                self.source.submit("get_pipeline", dict(directory=self.directory), edit_loaded)
             if self.run_after_load:
                 self.run_after_load = False
                 self.prepare_run(1)
+        def edit_loaded(value, error):
+            if error:
+                self.source.notice.emit(str(error))
+            else:
+                self.start_editing(value)
         self.source.submit("pipeline", dict(directory=self.directory), loaded)
 
         def watched(value, error):
@@ -1089,11 +1204,23 @@ class RemoteCalculation(QWidget):
                 hint = str(e)
             if mode in ("to", "selected") and not self.has_run_range():
                 hint = T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。")
-            button.setEnabled(self.can_run and not self.cleaning and not hint)
+            saving = self.editor is not None and self.editor.saving
+            button.setEnabled(self.can_run and not self.cleaning and not saving and not hint)
             button.setToolTip(hint)
         self.update_clean_button()
 
+    def save_first(self, retry):
+        """服务器按自己的流程运行：有草稿时先保存到服务器，成功后再沿用运行确认。"""
+        if self.editor is None or self.editor.draft is None:
+            return False
+        if QMessageBox.question(self, T("远程运行"), T("流程有未保存到服务器的修改，需要先保存。现在保存吗？"),
+                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
+            self.editor.save_to_server(lambda ok: ok and retry())
+        return True
+
     def prepare_selection(self, mode):
+        if self.save_first(lambda: self.prepare_selection(mode)):
+            return
         try:
             first, last = summary.selected_run_range(
                 len(self.jobs), [i.row() for i in self.steps.selectedIndexes()], mode)
@@ -1104,6 +1231,8 @@ class RemoteCalculation(QWidget):
 
     def prepare_run(self, start, end=None):
         if not self.jobs or not self.revision or start < 1 or self.submitting or self.cleaning:
+            return
+        if self.save_first(lambda: self.prepare_run(start, end)):
             return
         if end is not None and not self.has_run_range():
             QMessageBox.warning(self, T("远程运行"), T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
@@ -1244,6 +1373,7 @@ class RemoteViewer(QMainWindow):
 class RemoteWorkspace(QWidget):
     TABS = (("calc", "计算"), ("wfn", "径向波函数"), ("levels", "能级图"))
     push = Signal(object)
+    draftChanged = Signal()
 
     def __init__(self, source, directory, parent=None, run_after_load=False):
         super().__init__(parent)
@@ -1253,6 +1383,7 @@ class RemoteWorkspace(QWidget):
         self.closed = False
         self.keep_source = False
         source.setParent(self)
+        self.key = workspace_key(source, directory)
         source.push.connect(self.push)
         if hasattr(source, "connectionChanged"):
             source.connectionChanged.connect(self.update_connection)
@@ -1260,6 +1391,7 @@ class RemoteWorkspace(QWidget):
         source.notice.connect(self.status.showMessage)
         self.calc = RemoteCalculation(self, directory, run_after_load)
         self.calc.created.connect(lambda path, run: QTimer.singleShot(0, lambda: self.open_created(path, run)))
+        self.calc.draftChanged.connect(self.draftChanged)
         if parent and hasattr(parent, "open_path"):
             def open_local(path):
                 if hasattr(parent, "workspaces"):
@@ -1323,6 +1455,8 @@ class RemoteWorkspace(QWidget):
         bar.addWidget(name, 1)
         self.connection = QLabel()
         bar.addWidget(self.connection)
+        self.reconnect_button = button("重新连接", self.source.reconnect)
+        bar.addWidget(self.reconnect_button)
         self.update_connection()
         operations = QToolButton()
         operations.setText(T("服务器操作"))
@@ -1355,8 +1489,27 @@ class RemoteWorkspace(QWidget):
         layout.addWidget(self.status)
 
     def update_connection(self):
-        state = T("已连接") if getattr(self.client, "connected", True) else T("已断开")
-        self.connection.setText(f"{self.server_label()} · {state}")
+        connected = getattr(self.client, "connected", True)
+        self.connection.setText(f"{self.server_label()} · {T('已连接') if connected else T('已断开')}")
+        self.reconnect_button.setVisible(not connected)
+        editor = self.calc.editor
+        if connected and editor is not None and editor.draft and editor.draft.get("pending") and not editor.saving:
+            editor.reconcile()
+
+    def has_draft(self):
+        return self.calc.editor is not None and self.calc.editor.draft is not None
+
+    def resolve_draft(self, choice, done):
+        """关闭时处理草稿：save 保存到服务器，discard 放弃，keep 保留。done(可以关闭)。"""
+        editor = self.calc.editor
+        if not self.has_draft() or choice == "keep" or editor.saving:
+            # 等待回答的写入保留待核对状态，下次打开时核对。
+            done(True)
+        elif choice == "discard":
+            editor.discard()
+            done(True)
+        else:
+            editor.save_to_server(done)
 
     def server_label(self):
         return T("Slurm 集群") if self.server_type == "slurm" else T("工作站")

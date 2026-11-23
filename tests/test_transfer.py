@@ -234,6 +234,8 @@ def test_modeless_transfer_keeps_windows_usable_and_parent_close_cancels(qapp, m
         message = Signal(str)
         created = Signal(str, bool)
         filesChanged = Signal()
+        draftChanged = Signal()
+        editor = None
         def __init__(self, *args):
             super().__init__()
         def shutdown(self):
