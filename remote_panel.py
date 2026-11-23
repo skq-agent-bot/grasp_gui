@@ -1564,27 +1564,18 @@ class RemoteWorkspace(QWidget):
         if self.closed:
             return
         parent = self.owner
-        if parent and hasattr(parent, "open_remote_workspace"):
-            if self.calc.jobs:
-                if workspace_key(self.source, directory) in parent.remote_workspaces:
-                    parent.open_remote_workspace(self.source, directory, refresh=True, run_after_load=run)
-                else:
-                    try:
-                        source = self.source.fork()
-                    except (OSError, ValueError) as error:
-                        self.status.showMessage(str(error))
-                        return
-                    parent.open_remote_workspace(source, directory, run_after_load=run)
-            elif self.may_close():
-                parent.open_remote_workspace(self.source, directory, run_after_load=run, replace=self)
-            return
-        win = RemoteWindow(self.source, directory, parent, run_after_load=run)
-        self.created_window = win
-        if parent and hasattr(parent, "remote_windows"):
-            parent.remote_windows.append(win)
-        self.keep_source = True
-        win.show()
-        self.close()
+        if self.calc.jobs:
+            if workspace_key(self.source, directory) in parent.remote_workspaces:
+                parent.open_remote_workspace(self.source, directory, refresh=True, run_after_load=run)
+            else:
+                try:
+                    source = self.source.fork()
+                except (OSError, ValueError) as error:
+                    self.status.showMessage(str(error))
+                    return
+                parent.open_remote_workspace(source, directory, run_after_load=run)
+        elif self.may_close():
+            parent.open_remote_workspace(self.source, directory, run_after_load=run, replace=self)
 
     def open_view(self, kind):
         if kind not in ("wfn", "levels"):
@@ -1634,24 +1625,8 @@ class RemoteWorkspace(QWidget):
             self.source.close()
 
 
-class RemoteWindow(RemoteWorkspace):
-    """兼容尚未迁入主窗口的旧窗口入口。"""
-    def __init__(self, source, directory, parent=None, run_after_load=False):
-        super().__init__(source, directory, parent, run_after_load)
-        self.setWindowFlags(Qt.Window)
-        self.resize(1350, 900)
-
-    def closeEvent(self, event):
-        self.shutdown()
-        event.accept()
-
-
 def connect_window(parent):
     dialog = ConnectDialog(parent)
     if dialog.exec() != QDialog.Accepted:
         return None
-    if hasattr(parent, "open_remote_workspace"):
-        return parent.open_remote_workspace(dialog.source, dialog.directory, run_after_load=dialog.run_after_load)
-    win = RemoteWindow(dialog.source, dialog.directory, parent, run_after_load=dialog.run_after_load)
-    win.show()
-    return win
+    return parent.open_remote_workspace(dialog.source, dialog.directory, run_after_load=dialog.run_after_load)

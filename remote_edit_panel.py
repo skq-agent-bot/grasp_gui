@@ -16,7 +16,7 @@ import grasp_summary as summary
 import grasp_transfer as transfer
 from grasp_core import T
 from gui_common import button
-from remote_panel import ConnectDialog, RemoteWindow, Source
+from remote_panel import ConnectDialog, Source
 from transfer_panel import TransferDialog
 
 
@@ -556,31 +556,8 @@ class UploadDialog(TransferDialog):
     def open_remote(self):
         if self.remote_only or not self.completed or self.busy:
             return
-        parent = self.panel.window()
-        if hasattr(parent, "open_remote_workspace"):
-            parent.open_remote_workspace(self.source, self.directory, refresh=True)
-            self.keep_source = True
-            self.done(QDialog.Accepted)
-            return
-        for win in getattr(parent, "remote_windows", []):
-            if (win.isVisible() and win.source.client.host == self.source.client.host and
-                    win.directory == self.directory):
-                win.calc.load()
-                win.waves.scan()
-                win.levels.scan()
-                win.showNormal()
-                win.raise_()
-                win.activateWindow()
-                if win.source is self.source:
-                    self.keep_source = True
-                    self.source.setParent(win)
-                self.done(QDialog.Accepted)
-                return
-        win = RemoteWindow(self.source, self.directory, parent)
+        self.panel.window().open_remote_workspace(self.source, self.directory, refresh=True)
         self.keep_source = True
-        if hasattr(parent, "remote_windows"):
-            parent.remote_windows.append(win)
-        win.show()
         self.done(QDialog.Accepted)
 
     def failed_upload(self, message):

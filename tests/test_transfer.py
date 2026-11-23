@@ -224,6 +224,7 @@ def test_modeless_transfer_keeps_windows_usable_and_parent_close_cancels(qapp, m
         notice = Signal(str)
         push = Signal(object)
         client = SimpleNamespace(host="fixture")
+        workspace_identity = "user@fixture:22"
         def submit(self, *args):
             pass
         def reconnect(self):
@@ -249,9 +250,9 @@ def test_modeless_transfer_keeps_windows_usable_and_parent_close_cancels(qapp, m
     invoked, cancelled = [], []
     action.triggered.connect(lambda: invoked.append(True))
     source = Source()
-    win = remote_panel.RemoteWindow(source, "/server", main)
+    win = remote_panel.RemoteWorkspace(source, "/server", main)
+    main.setCentralWidget(win)
     main.show()
-    win.show()
     try:
         win.open_transfer()
         dialog = win.transfer_dialogs[0]
@@ -270,10 +271,10 @@ def test_modeless_transfer_keeps_windows_usable_and_parent_close_cancels(qapp, m
         idle = win.transfer_dialogs[-1]
         idle.reject()
         assert win.transfer_dialogs == [dialog]
-        win.close()
+        win.shutdown()
         assert cancelled == [True] and not win.transfer_dialogs and source.closed
     finally:
-        win.close()
+        win.shutdown()
         main.close()
         main.deleteLater()
         qapp.sendPostedEvents(None, QEvent.DeferredDelete)
