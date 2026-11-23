@@ -24,6 +24,61 @@ Ctrl+PgUp/PgDn 切换工作区，Ctrl+1–3 切换当前工作区页面，Ctrl+4
 
 [English screenshot](images/en_server_workspaces.png) / [中文截图](images/zh_server_workspaces.png)。
 
+### Editing in a server workspace / 在服务器工作区中编辑
+
+With a server advertising `workdir_write_v1`, the Calculation page of a server workspace uses the same program
+pages, pipeline list and input preview as the Local workspace. Missing inputs are checked by the server
+(**Check input files** calls `preview_upload`). No new request was added and the protocol number is unchanged:
+reading uses `get_pipeline` and writing uses `update_workdir`. Older servers stay read-only with an
+**Install / update server build…** hint.
+
+Edits are saved as a local draft, and the tab shows **●**. Drafts live in
+`~/.config/grasp_gui/drafts/<digest>.json` (also on macOS). The directory is 0700 and each file is 0600,
+written by atomic replacement. `digest` is the SHA-256 of the compact JSON `["user@host:port", "/absolute/path"]`,
+the same identity that deduplicates tabs. Format (version 1):
+
+| Field | Meaning |
+|---|---|
+| `version` | `1` |
+| `host`, `directory` | Normalised connection identity and the absolute path returned by the server |
+| `base_revision`, `base_fingerprint` | Server revision and configuration fingerprint when editing started |
+| `configuration` | Shared configuration with the edited pipeline and attached files |
+| `fingerprint` | Fingerprint of `configuration` (same algorithm as Edit locally) |
+| `updated` | Time the draft was last saved |
+| `pending` | Optional: `{"revision", "fingerprint"}` of a write whose result is not yet confirmed |
+
+An unknown version or malformed file is reported and left untouched; the pipeline stays read-only until it is
+removed. **Save to server…** sends `preview_upload` and shows the changes. Custom commands need their own
+confirmation, and the final question (naming host and path) defaults to No. The client then calls
+`update_workdir(directory, base_revision, configuration)`. On success the draft is removed and the revision updated.
+A changed revision or an active background run or Slurm job is refused and the draft kept. The Draft menu offers
+**Reload server pipeline (discard draft)** (default No) and **Export draft as configuration…**; there is no
+forced overwrite. If the reply is lost, the client reads `get_pipeline` instead of resending. If the server
+fingerprint equals the pending one, the write happened and the draft is removed. If the revision and
+`base_fingerprint` are unchanged, it did not happen and saving can be confirmed again. Anything else is reported
+as a conflict with the draft kept. A pending draft found on reopening is checked the same way. Running asks you
+to save the draft first, then continues with the normal workstation or Slurm confirmation. Closing a tab or
+quitting asks per workspace: Save to server, Keep draft (default) or Discard draft.
+
+支持 `workdir_write_v1` 的服务器上，服务器工作区的计算页使用与本机相同的程序页、流程列表和输入预览；缺少的输入由服务器
+检查 (“检查输入文件”调用 `preview_upload`)。读取用 `get_pipeline`，写入用 `update_workdir`，不新增请求，也不改协议号。
+旧服务器端只读，并提示用“安装 / 更新服务器版…”更新。
+
+修改保存为本机草稿，标签显示 ●。草稿位于 `~/.config/grasp_gui/drafts/<digest>.json` (macOS 也一样)，目录 0700、
+文件 0600，原子替换写入；`digest` 是紧凑 JSON `["user@host:port", "/绝对路径"]` 的 SHA-256，与标签去重用同一个标识。
+字段见上表 (version 1)。版本号不认识或格式有误时提示并保留原文件，不覆盖也不删除，在此之前流程只读。
+
+“保存到服务器…”先用 `preview_upload` 预览差异，自定义命令单独确认，最终确认写明主机和路径、默认为“否”，然后调用
+`update_workdir(directory, base_revision, configuration)`；成功后删除草稿并更新修订号。修订号改变、后台运行或 Slurm
+作业进行中时服务器拒绝写入，草稿保留；“草稿”菜单提供“重新读取服务器流程 (放弃草稿)” (默认否) 和“导出草稿为配置…”，
+不提供强制覆盖。失去回答时不重发，读取 `get_pipeline` 核对：服务器指纹等于待确认写入的指纹，说明已写入，删除草稿；
+修订号和 `base_fingerprint` 都未变，说明未执行，可再次确认保存；其他情况按冲突处理并保留草稿。重新打开时发现待确认草稿
+也按同样方式核对。运行前先要求保存草稿，再进入原有的工作站或 Slurm 运行确认。关闭标签或退出程序时逐个选择
+“保存到服务器 / 保留草稿 / 放弃草稿”，默认保留草稿。断线后草稿保留，标签显示“重新连接”，重新连接后可以保存。
+
+Screenshots / 截图：[English](images/en_server_workspace_edit.png) / [中文](images/zh_server_workspace_edit.png)；
+drafts on close / 关闭时的草稿：[English](images/en_server_drafts_dialog.png) / [中文](images/zh_server_drafts_dialog.png)。
+
 ### Server type / 服务器类型
 
 Choose **Workstation (工作站)** or **Slurm cluster (Slurm 集群)** in the connection dialog. The choice is saved
@@ -300,8 +355,8 @@ This evidence precedes the confirmation/entry-visibility review fixes; repeat ag
 
 ### Local editing and upload / 在本机编辑并上传
 
-The Calculation page in a server workspace shows a read-only pipeline. To edit a copy, use **Edit locally…**
-and continue in the Local workspace. This requires a server advertising
+To edit an offline copy instead of the server workspace, use **Edit locally…** and continue in the Local
+workspace; both ways remain available. This requires a server advertising
 `capabilities: ["workdir_write_v1"]`. Missing capability disables the edit button and gives an explicit
 Install / update server message before any upload request. Protocol/GREETING remain 1; `server_types` is unchanged.
 
@@ -463,7 +518,7 @@ OpenSSH 的 `confirm` 提示仍用默认“否”的确认框；`none` (如 FIDO
 
 ### 查看与计算
 
-服务器工作区顶部和独立查看器标题显示“服务器 host:/path”。计算页流程、参数、输入预览只读；可以运行全部、从选中步骤运行、
+服务器工作区顶部和独立查看器标题显示“服务器 host:/path”。旧服务器端的计算页流程、参数、输入预览只读 (编辑见上文)；可以运行全部、从选中步骤运行、
 停止和查看日志。含自定义命令时必须在桌面确认；服务器在启动时再次核对目录记录的修订号。
 能级图先显示能量，再补 jj/LSJ 主要组成和已算跃迁；需要更多组成时点“读取更多组成” (最多 500 项)。
 拖动能级只选择已算跃迁，不在这里另建跃迁计算。图上标记仅保留在当前窗口。
