@@ -1432,7 +1432,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "Server handshake failed; check the executable path and install or update the GRASP GUI server",
     "服务器未开启 lingering，不能使用用户 scope": "Lingering is disabled on the server; a user scope cannot be used",
     "服务器上的工作目录": "Working directory on server",
-    "服务器 {h} · 工作目录 {p}": "Server {h} · Working directory {p}",
+    "服务器上的工作目录 {h}:{p}": "Working directory on server {h}:{p}",
     "GRASP GUI 服务器版 (程序路径)": "GRASP GUI server (program path)",
     "计算的输入和结果所在的目录，例如 ~/calc/Fe_XVII":
         "Directory containing calculation inputs and results, for example ~/calc/Fe_XVII",

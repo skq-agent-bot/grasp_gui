@@ -1644,7 +1644,7 @@ class RemoteWorkspace(QWidget):
 
     def build(self, index=0):
         layout = renew_layout(self)
-        self.label = T("服务器 {h} · 工作目录 {p}", h=self.client.host, p=self.directory)
+        self.label = T("服务器上的工作目录 {h}:{p}", h=self.client.host, p=self.directory)
         self.setWindowTitle(self.label)
         bar = QHBoxLayout()
         name = QLabel(self.label)
