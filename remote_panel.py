@@ -101,21 +101,29 @@ class Source(QObject):
         generation = self.grasp_generation
         base = self.server.get("grasp_check")
         self.grasp_check = base
-        self.graspCheckChanged.emit()
-        if not isinstance(base, dict) or base.get("source") == "env":
+        if not isinstance(base, dict):
+            self.graspCheckChanged.emit()
             return
         profiles = core.load_config().get("remote_hosts", {})
         identity = getattr(self.client, "identity", None)
         profile = profiles.get(identity, profiles.get(self.client.host, {}))
-        selected = profile.get("run", {}).get("bindir", "").strip()
-        if not selected or selected == base.get("directory"):
+        selected = profile.get("run", {}).get("bindir")
+        if selected is None or selected == "":
+            if selected == "":
+                self.grasp_check = base.get("empty_bindir", base)
+            self.graspCheckChanged.emit()
             return
+
+        self.grasp_check = dict(base, checking=selected)
+        self.graspCheckChanged.emit()
 
         def checked(reply, error):
             if generation != self.grasp_generation:
                 return
             if error:
                 self.grasp_check = dict(base, directory="", source=None, invalid=selected)
+            elif reply["directory"] == base.get("directory"):
+                self.grasp_check = dict(base, source="saved")
             else:
                 files = {row["name"] for row in reply["files"] if not row["directory"]}
                 on_path = set(base.get("path_programs", []))
@@ -125,7 +133,10 @@ class Source(QObject):
                                             set(names) - files - on_path), programs={})
             self.graspCheckChanged.emit()
 
-        self.submit("list_dir", dict(directory=selected), checked)
+        if isinstance(selected, str) and selected.startswith(("/", "~")):
+            self.submit("list_dir", dict(directory=selected), checked)
+        else:
+            checked(None, ValueError(selected))
 
     def reconnect(self):
         old = self.client
@@ -153,6 +164,8 @@ def grasp_check_text(source, server_type):
     report = getattr(source, "grasp_check", None)
     if GRASP_CHECK not in source.server.get("capabilities", []) or not isinstance(report, dict):
         return T("GRASP GUI 服务器版较旧，无法自动检查 GRASP，请更新。"), False
+    if report.get("checking"):
+        return T("正在检查保存的 GRASP 程序目录：{path}", path=report["checking"]), False
     path = report.get("directory", "")
     if path:
         origin = {
@@ -222,12 +235,12 @@ class ConnectDialog(QDialog):
         form.addRow(T("服务器类型"), self.server_type)
         hint = QLabel(T("请先选择服务器类型；集群登录节点不宜直接运行计算。"))
         hint.setWordWrap(True)
+        form.addRow(hint)
         form.addRow(T("服务器上的工作目录"), self.path)
         form.addRow(self.recent)
         form.addRow(hint_label("计算的输入和结果所在的目录，例如 ~/calc/Fe_XVII"))
         form.addRow(T("GRASP GUI 服务器版 (程序路径)"), self.program)
         form.addRow(hint_label("服务器上的 grasp_gui 程序；留空时自动查找 ~/.local/bin/grasp_gui 和 PATH"))
-        form.addRow(hint)
         layout.addLayout(form)
         bar = QHBoxLayout()
         self.connect_button = button("连接 / 刷新", self.connect_server)
@@ -914,9 +927,6 @@ class ServerRunDialog(QDialog):
         if self.modern:
             saved = ssh.host_profile(source.client).get("run", {})
             values.update(saved)
-            report = source.server.get("grasp_check") or {}
-            if report.get("source") == "env":
-                values["bindir"] = report["directory"]
         self.settings = RunSettings(values, remote=True)
         self.settings.setEnabled(self.modern)
         layout.addWidget(self.settings)

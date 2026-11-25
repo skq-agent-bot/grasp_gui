@@ -146,7 +146,8 @@ If a file transfer is active, closing the tab asks whether to cancel it and defa
 
 Workstation runs always open **Server run settings**, including runs after creation/upload and selected ranges.
 The shared RunSettings fields show the server's GRASP programs (bin directory), process count, mpirun, MPI_TMP and nice.
-The default programs directory follows a usable server `GRASP_BINDIR`, then saved settings, then `PATH`.
+An explicit programs directory saved on the desktop for this host takes precedence over server `GRASP_BINDIR`
+and the directory of `rmcdhf` on `PATH`. The dialog preserves the saved field, including a blank value.
 Checks run on opening, on **Check**,
 and automatically before confirmation if values changed. Missing programs (including MPI variants/launcher)
 and input preflight are shown; missing programs default to Cancel but allow explicit continuation.
@@ -210,7 +211,8 @@ Ctrl+PgUp / Ctrl+PgDn 切换工作区，Ctrl+1–3 切换当前工作区的页�
 关闭服务器标签会关闭这些查看器和连接，后台计算继续。传输中关闭时询问是否取消传输，默认否。完整协议、缓存/重连限制见 [REMOTE.md](REMOTE.md)。
 
 工作站每次运行（含新建后运行、上传后运行和选定范围）先显示“服务器运行设置”，复用本机的路径、进程数、
-mpirun、MPI_TMP 和 nice 控件；该主机在桌面保存过的值优先，否则用服务器默认值。打开时、点“检查”时，
+mpirun、MPI_TMP 和 nice 控件。优先使用桌面为该主机保存的非空程序目录，再查 `GRASP_BINDIR` 和 `PATH`；
+对话框原样显示已保存的字段。打开时、点“检查”时，
 以及修改后确认前均在服务器检查，显示缺少的程序（包括 MPI 程序和启动器）和输入预检。缺少程序时默认取消，
 仍可明确继续。确认只保存桌面端的该主机偏好；“服务器操作 → 服务器运行设置…”可单独检查、保存而不启动。
 旧服务器只读显示并提示更新，运行请求不增加参数；Slurm 仍用资源设置对话框。

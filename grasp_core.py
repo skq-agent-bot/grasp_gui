@@ -1209,7 +1209,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "此目录没有工作目录记录。仍要查看并选择待删除内容吗？": "This directory has no working-directory record. Still inspect and select items to delete?",
     # 无界面的服务器入口
     "这是服务器版，不能打开窗口；请使用桌面版或旧系统版。": (
-        "This is the server build and cannot open windows. Use the desktop or legacy build."),
+        "This is the GRASP GUI server and cannot open windows. Use the desktop or legacy build."),
     "服务器版命令：remote、mcp、check、script、steps、reference、_run；--version 显示程序和协议版本。": (
         "Server commands: remote, mcp, check, script, steps, reference, _run; "
         "--version shows the application and protocol versions."),
@@ -1262,21 +1262,22 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "传输失败，请查看 SSH 连接状态": "Transfer failed; check the SSH connection",
     "已按所选规则处理 {n} 个文件": "Processed {n} files using the selected policy",
     "可安装捆绑的 GRASP GUI 服务器版，或在此设置已有程序的完整路径。": (
-        "Install the bundled server, or enter the absolute path of an existing executable here."),
+        "Install the bundled GRASP GUI server, or enter the absolute path of an existing executable here."),
     "GRASP GUI 服务器版较旧": "Older GRASP GUI server version",
     # 捆绑服务器版的显式安装
     "本构建不含 GRASP GUI 服务器版": "This build does not include the GRASP GUI server package",
     "服务器压缩包校验失败": "Server archive checksum failed",
     "服务器压缩包包含不安全的路径或文件类型": "Server archive contains unsafe paths or file types",
     "GRASP GUI 服务器版版本记录无效": "Invalid GRASP GUI server version record",
-    "捆绑服务器版的版本或协议与桌面版不一致": "Bundled server version or protocol does not match this desktop build",
+    "捆绑服务器版的版本或协议与桌面版不一致":
+        "The bundled GRASP GUI server version or protocol does not match this desktop build",
     "GRASP GUI 服务器版安装目录必须是完整路径或 ~/ 路径": "GRASP GUI server installation directory must be an absolute or ~/ path",
-    "无法识别服务器安装检查结果": "Cannot read server installation checks",
+    "无法识别服务器安装检查结果": "Cannot read the GRASP GUI server installation checks",
     "服务器需要 glibc 2.17 或更新版本": "Server requires glibc 2.17 or newer",
-    "GRASP GUI 服务器版安装目录空间不足": "Not enough space in the server installation directory",
+    "GRASP GUI 服务器版安装目录空间不足": "Not enough space in the GRASP GUI server installation directory",
     "安装已取消": "Installation cancelled",
-    "服务器安装请求超时": "Server installation request timed out",
-    "服务器安装失败": "Server installation failed",
+    "服务器安装请求超时": "GRASP GUI server installation request timed out",
+    "服务器安装失败": "GRASP GUI server installation failed",
     "从服务器移除": "Remove from server",
     "从服务器移除…": "Remove from server…",
     "安装 / 更新 GRASP GUI 服务器版": "Install / update GRASP GUI server",
@@ -1312,7 +1313,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "The local directory contains other data. Choose another directory."),
     "上传到服务器…": "Upload to server…",
     "GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。": (
-        "This server build lacks remote editing. Use Install / update GRASP GUI server… to update it."),
+        "This GRASP GUI server version lacks remote editing. Use Install / update GRASP GUI server… to update it."),
     "在本机编辑…": "Edit locally…",
     "本机工作目录": "Local working directory",
     "选择流程上传目标": "Choose pipeline upload target",
@@ -1367,7 +1368,8 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "请选择服务器类型": "Choose the server type",
     "主机设置已更改，请重新连接": "The host has changed. Connect again",
     "服务器类型：{kind}": "Server type: {kind}",
-    "GRASP GUI 服务器版尚不支持 Slurm，请先更新。": "The server does not support Slurm yet. Update the GRASP GUI server first.",
+    "GRASP GUI 服务器版尚不支持 Slurm，请先更新。":
+        "This GRASP GUI server version does not support Slurm. Update it first.",
     "提交 Slurm 作业": "Submit Slurm job",
     "正在提交 Slurm 作业…": "Submitting Slurm job…",
     "提交": "Submit",
@@ -1450,6 +1452,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "未找到 GRASP 程序。SSH 非交互启动看不到仅为交互终端设置的变量。":
         "GRASP programs were not found. Non-interactive SSH cannot see variables set only for interactive shells.",
     "保存的程序目录不可用：{path}": "The saved programs directory is unavailable: {path}",
+    "正在检查保存的 GRASP 程序目录：{path}": "Checking the saved GRASP programs directory: {path}",
     "此检查仅代表 Slurm 登录节点。": "This check applies to the Slurm login node only.",
     "设置…": "Settings…",
     "工作目录尚无流程。已检查程序目录。":
@@ -1579,7 +1582,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "The GRASP programs (bin directory) must be an existing absolute path on the server, or empty.",
     "服务器运行设置仅用于工作站模式。": "Server run settings apply only to workstation mode.",
     "GRASP GUI 服务器版较旧，设置只读；请用“安装 / 更新 GRASP GUI 服务器版…”更新后再修改。":
-        "Settings are read-only on this older server; use Install / update GRASP GUI server… before editing.",
+        "Settings are read-only with this GRASP GUI server version. Use Install / update GRASP GUI server… first.",
     "设置已改变，请检查；确认前会自动检查。": "Settings changed. Check them; confirmation also checks automatically.",
     "正在检查服务器运行设置…": "Checking server run settings…",
     "确认运行": "Confirm run",

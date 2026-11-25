@@ -9,18 +9,21 @@
 ## GRASP check / GRASP 程序检查
 
 The connection dialog and server workspace show the programs directory discovered by the GRASP GUI server,
-its source and missing common serial/MPI programs. Automatic settings prefer a usable `GRASP_BINDIR`, then
-saved settings, then the directory of `rmcdhf` on `PATH`. For a different path saved on the desktop, the check
-shows which program files could not be found there or on `PATH`. The run preflight checks executability.
+its source and missing common serial/MPI programs. A nonempty path saved on the desktop for this host takes
+precedence over `GRASP_BINDIR` and the directory of `rmcdhf` on `PATH`. The check shows which program files
+could not be found there or on `PATH`. The run preflight checks executability. When a workstation has no
+desktop override yet, the form and the check use the server's run-plan defaults. Saving a blank programs
+path uses server environment discovery.
 If no programs are found, **Settings…** opens server run settings. The diagnostic includes the actual
 `GRASP_BINDIR` and `PATH` because non-interactive SSH cannot see variables set only for interactive shells.
 Reconnect to repeat the check. Saving server run settings updates the display. Older GRASP GUI servers
 show an update hint. On Slurm the check describes only the login node. A submitted job or a systemd user scope
 may have a different environment.
 
-连接对话框和服务器工作区显示服务器版发现的程序目录、来源和缺失的常用串行及 MPI 程序。自动选择优先使用可用的
-`GRASP_BINDIR`，其次是已保存的设置，然后是 `PATH` 中 `rmcdhf` 所在的目录。本机为该主机另存程序目录时，检查会列出
-该目录和 `PATH` 中未找到的程序文件。运行预检会核对可执行性。未找到 GRASP 时，点“设置…”打开服务器运行设置。
+连接对话框和服务器工作区显示服务器版发现的程序目录、来源和缺失的常用串行及 MPI 程序。优先使用桌面为该主机保存的
+非空程序目录，再查 `GRASP_BINDIR` 和 `PATH` 中 `rmcdhf` 所在的目录。检查会列出该目录和 `PATH` 中未找到的程序文件，
+运行预检会核对可执行性。工作站尚无桌面设置时，界面和检查采用服务器运行计划的默认值。保存空路径时使用服务器环境查找。
+未找到 GRASP 时，点“设置…”打开服务器运行设置。
 提示会列出实际的 `GRASP_BINDIR` 和 `PATH`，便于排查仅在交互终端中设置的变量。重新连接和保存运行设置时更新显示，
 旧版服务器显示更新提示。Slurm 的结果只代表登录节点，提交的作业和 systemd 用户 scope 可能有不同的环境。
 

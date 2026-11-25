@@ -51,6 +51,10 @@ def test_hello_reports_same_directory_as_run_plan(tmp_path, monkeypatch, source)
     assert len(report["programs"]) == 12
     assert report["programs"]["rmcdhf"] is bool(source)
     assert report["programs"]["rci_mpi"] is (source == "env")
+    if source == "saved":
+        # Explicitly clearing the desktop field uses the server environment.
+        automatic = operations.run_plan(str(calc), run_settings={})["run_settings"]["bindir"]
+        assert report["empty_bindir"]["directory"] == automatic == str(path_bin)
 
 
 @pytest.mark.gui
@@ -93,8 +97,63 @@ def test_grasp_check_refreshes_from_settings_and_reconnects(qapp, tmp_path, monk
         env = dict(report, source="env", directory="/from-env", programs=dict(rmcdhf=True))
         client.events.put(dict(event="connected", capabilities=[remote.GRASP_CHECK], grasp_check=env))
         source.poll()
+        method, args, future = requests[-1]
+        assert (method, args) == ("list_dir", {"directory": "~/grasp/bin"})
+        assert not future.done()
+        future.set_result(dict(directory="/home/research/grasp/bin",
+                               files=[dict(name="rmcdhf", directory=False)]))
+        source.poll()
+        assert "/home/research/grasp/bin (settings saved for this host)" in grasp_check_text(source, "workstation")[0]
+        core.save_config(remote_hosts={"fixture": dict(run=dict(bindir=""))})
+        source.refresh_grasp_check()
         assert "/from-env (from GRASP_BINDIR)" in grasp_check_text(source, "workstation")[0]
-        assert len(requests) == 1
+        assert len(requests) == 2
+    finally:
+        source.close()
+
+
+@pytest.mark.gui
+def test_saved_bindir_overrides_environment_in_status_and_run_plan(qapp, tmp_path, monkeypatch):
+    from remote_panel import ServerRunDialog, Source, grasp_check_text
+
+    env_bin, saved_bin = tmp_path / "env", tmp_path / "saved"
+    install_program(env_bin, "rmcdhf")
+    install_program(saved_bin, "rnucleus")
+    monkeypatch.setenv("GRASP_BINDIR", str(env_bin))
+    monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "settings.json"))
+    monkeypatch.setattr(core, "LANG", "en")
+    core.save_config(np=1, remote_hosts={"fixture": dict(run=dict(bindir=str(saved_bin)))})
+    calc = tmp_path / "calc"
+    install(calc, [job("rnucleus")])
+    operations = remote.Operations()
+    report = operations.hello(remote.PROTOCOL)
+    assert report["grasp_check"]["directory"] == str(env_bin)
+
+    def request(method, args, cached=False):
+        future = Future()
+        future.request_id = 1
+        future.set_result(getattr(operations, method)(**args))
+        return future
+
+    client = SimpleNamespace(host="fixture", events=Queue(), request=request, close=lambda **kw: None)
+    source = Source(client)
+    try:
+        client.events.put(dict(event="connected", **report))
+        source.poll()
+        status, _ = grasp_check_text(source, "workstation")
+        dialog = ServerRunDialog(None, source, str(calc), operations.run_plan(str(calc)), {}, run=False)
+        try:
+            assert dialog.settings.bindir() == str(saved_bin)
+            dialog.check()
+            source.poll()
+            actual = dialog.plan["run_settings"]["bindir"]
+            assert actual == str(saved_bin.resolve())
+            assert f"{actual} (settings saved for this host)" in status
+            dialog.confirm()
+            saved, = core.load_config()["remote_hosts"].values()
+            assert saved["run"]["bindir"] == str(saved_bin)
+        finally:
+            dialog.close()
     finally:
         source.close()
 

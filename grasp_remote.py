@@ -69,8 +69,8 @@ GRASP_CHECK = "grasp_check_v1"
 GRASP_PROGRAMS = ("rnucleus", "rcsfgenerate", "rangular", "rwfnestimate", "rmcdhf", "rci")
 
 
-def grasp_check():
-    directory, source = core.bindir_selection()
+def grasp_check(*, use_saved=True):
+    directory, source = core.bindir_selection(use_saved=use_saved)
     names = [name + suffix for suffix in ("", "_mpi") for name in GRASP_PROGRAMS]
     programs = {name: bool(core.program_path(directory, name)) for name in names}
     return dict(directory=directory if source else "", source=source, programs=programs,
@@ -96,8 +96,12 @@ class Operations(service.Service):
             raise ValueError(T("远程协议不兼容，请更新 GRASP GUI 服务器版"))
         executable = os.environ.get("GRASP_GUI_REMOTE_EXECUTABLE") or (
             sys.executable if getattr(sys, "frozen", False) else sys.argv[0])
+        check = grasp_check()
+        if check["source"] == "saved":
+            # 桌面显式提交空路径时，运行不会读取服务器本机保存的目录。
+            check["empty_bindir"] = grasp_check(use_saved=False)
         return dict(protocol=PROTOCOL, version=core.VERSION, executable=os.path.abspath(executable),
-                    home=str(Path.home()), server_types=["workstation", "slurm"], grasp_check=grasp_check(),
+                    home=str(Path.home()), server_types=["workstation", "slurm"], grasp_check=check,
                     capabilities=["workdir_write_v1", "run_range_v1", "run_settings_v1", "workdir_clean_v1",
                                   GRASP_CHECK])
 
