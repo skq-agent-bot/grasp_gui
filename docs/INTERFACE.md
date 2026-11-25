@@ -158,7 +158,7 @@ unchanged. Slurm continues to use its resource dialog. [中文截图](images/zh_
 
 If saved host settings become invalid, upload previews warn and check against server defaults instead, so a moved
 bin directory does not block uploading. Run confirmation still validates settings strictly. An empty bin field
-continues to mean PATH; the server supplies a nonempty default before handing settings to the run process.
+uses automatic discovery on the server for both the run check and startup.
 
 For Slurm, **Submit Slurm job (提交 Slurm 作业)** reviews resource settings and asks for default-No confirmation.
 The state shows the job ID and scheduler state; pending/running/unknown jobs disable submission. Stop uses
@@ -217,7 +217,7 @@ mpirun、MPI_TMP 和 nice 控件。优先使用桌面为该主机保存的非空
 仍可明确继续。确认只保存桌面端的该主机偏好；“服务器操作 → 服务器运行设置…”可单独检查、保存而不启动。
 旧服务器只读显示并提示更新，运行请求不增加参数；Slurm 仍用资源设置对话框。
 按主机保存的运行设置失效时，上传预览提示原因并改用服务器默认值检查，不阻断上传；运行时仍严格校验。
-bin 留空仍表示 PATH，服务器只在交给运行进程前补上非空默认目录。
+bin 留空表示自动查找，服务器预检和启动使用相同的目录解析规则。
 上传警告截图：[中文](images/zh_upload_run_settings_warning.png) / [English](images/en_upload_run_settings_warning.png)。
 
 The workspace's **Server actions** menu offers **Download to this computer…**, **Upload from this computer…**

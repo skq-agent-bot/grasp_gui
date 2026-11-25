@@ -12,8 +12,8 @@ The connection dialog and server workspace show the programs directory discovere
 its source and missing common serial/MPI programs. A nonempty path saved on the desktop for this host takes
 precedence over `GRASP_BINDIR` and the directory of `rmcdhf` on `PATH`. The check shows which program files
 could not be found there or on `PATH`. The run preflight checks executability. When a workstation has no
-desktop override yet, the form and the check use the server's run-plan defaults. Saving a blank programs
-path uses server environment discovery.
+desktop override yet, the form and the check use the server's run-plan defaults. A blank programs path
+automatically checks `GRASP_BINDIR`, the directory of `rmcdhf` on `PATH`, and then the installation tree.
 If no programs are found, **Settings…** opens server run settings. The diagnostic includes the actual
 `GRASP_BINDIR` and `PATH` because non-interactive SSH cannot see variables set only for interactive shells.
 Reconnect to repeat the check. Saving server run settings updates the display. Older GRASP GUI servers
@@ -22,7 +22,8 @@ may have a different environment.
 
 连接对话框和服务器工作区显示服务器版发现的程序目录、来源和缺失的常用串行及 MPI 程序。优先使用桌面为该主机保存的
 非空程序目录，再查 `GRASP_BINDIR` 和 `PATH` 中 `rmcdhf` 所在的目录。检查会列出该目录和 `PATH` 中未找到的程序文件，
-运行预检会核对可执行性。工作站尚无桌面设置时，界面和检查采用服务器运行计划的默认值。保存空路径时使用服务器环境查找。
+运行预检会核对可执行性。工作站尚无桌面设置时，界面和检查采用服务器运行计划的默认值。保存空路径时自动依次查找
+`GRASP_BINDIR`、`PATH` 中 `rmcdhf` 所在的目录和安装树。
 未找到 GRASP 时，点“设置…”打开服务器运行设置。
 提示会列出实际的 `GRASP_BINDIR` 和 `PATH`，便于排查仅在交互终端中设置的变量。重新连接和保存运行设置时更新显示，
 旧版服务器显示更新提示。Slurm 的结果只代表登录节点，提交的作业和 systemd 用户 scope 可能有不同的环境。
@@ -185,13 +186,14 @@ inspection does not persist a default process count. Explicit settings use defau
 reading saved server preferences, and travel through the existing background request. `run_plan` adds optional
 `missing_programs` and `checked` metadata. Preview uploads use saved desktop host settings when supported.
 Invalid saved settings fall back to server defaults for upload checks, with optional `run_settings_warning`
-shown in the preview and confirmation. Actual run checks remain strict. Empty bin fields stay empty in forms;
-immediately before starting, the server substitutes its nonempty default bin without reading saved preferences.
+shown in the preview and confirmation. Actual run checks remain strict. The bin field can stay empty in the
+form. The server uses automatic discovery during preflight and startup, without reading server preferences
+for that explicitly blank field.
 No server preferences, shared configuration, workdir record or background request formats change.
 
 | Field | Server validation |
 |---|---|
-| `bindir` | Empty (use PATH), or an existing absolute server directory; `~` is expanded on the server |
+| `bindir` | Empty (automatic discovery), or an existing absolute server directory. The server expands `~`. |
 | `np` | Integer 1–100000; booleans are rejected |
 | `mpirun`, `mpitmp` | Strings of at most 4096 characters, without control characters or newlines |
 | `nice` | Boolean |
@@ -210,7 +212,7 @@ path, or arrange the required library paths in the server's noninteractive login
 工作区的“服务器操作 → 服务器运行设置…”可针对已载入的流程检查、保存而不运行。旧服务器只读显示、提示更新，
 不发送新参数；Slurm 和服务器 MCP 不变。远程预检不保存首次默认进程数，显式设置也不读写服务器偏好。
 上传预览遇到失效的主机设置时改用服务器默认值检查，返回可选 `run_settings_warning`，在预览和确认中显示；
-实际运行保持严格校验。表单留空表示 PATH，启动交接前补非空默认目录，避免 PATH 中出现代表当前目录的空项。
+实际运行保持严格校验。表单留空表示自动查找，预检与启动都使用服务器环境解析目录。
 不提供 `module load` / `source` 等环境准备命令；可填绝对 mpirun 路径，或在非交互登录环境中配置库路径。
 
 Screenshots / 截图：[中文](images/zh_server_run_settings.png) / [English](images/en_server_run_settings.png).

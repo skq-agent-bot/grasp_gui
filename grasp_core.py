@@ -1809,7 +1809,7 @@ def saved_run_settings(*, persist=True):
     cfg = load_config()
     bindir, mpirun = default_bindir(), cfg.get("mpirun", "mpirun")
     if not persist and not os.path.isdir(bindir):
-        bindir = ""  # 远程表单留空表示 PATH，不把不存在的默认目录作为显式设置传回来。
+        bindir = ""  # 远程表单留空表示自动查找，避免把不存在的默认目录作为显式设置传回来。
     if "np" not in cfg:
         cfg["np"] = default_mpi_np(bindir, mpirun)
         if persist:

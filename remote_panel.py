@@ -104,10 +104,7 @@ class Source(QObject):
         if not isinstance(base, dict):
             self.graspCheckChanged.emit()
             return
-        profiles = core.load_config().get("remote_hosts", {})
-        identity = getattr(self.client, "identity", None)
-        profile = profiles.get(identity, profiles.get(self.client.host, {}))
-        selected = profile.get("run", {}).get("bindir")
+        selected = ssh.host_profile(self.client).get("run", {}).get("bindir")
         if selected is None or selected == "":
             if selected == "":
                 self.grasp_check = base.get("empty_bindir", base)

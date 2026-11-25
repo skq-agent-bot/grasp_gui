@@ -98,7 +98,7 @@ class Operations(service.Service):
             sys.executable if getattr(sys, "frozen", False) else sys.argv[0])
         check = grasp_check()
         if check["source"] == "saved":
-            # 桌面显式提交空路径时，运行不会读取服务器本机保存的目录。
+            # 远程表单留空时的自动查找，与 checked_run_settings 使用同一规则。
             check["empty_bindir"] = grasp_check(use_saved=False)
         return dict(protocol=PROTOCOL, version=core.VERSION, executable=os.path.abspath(executable),
                     home=str(Path.home()), server_types=["workstation", "slurm"], grasp_check=check,
@@ -334,7 +334,7 @@ class Operations(service.Service):
             operation = service.Service("/", allow_custom=allow_custom)
             settings = dict(plan["run_settings"])
             if not settings["bindir"]:
-                # 表单留空表示 PATH；不能让运行进程的 PATH 以空项（当前目录）开头。
+                # 服务器默认设置无法定位目录时，交给运行进程前再按环境自动查找。
                 settings["bindir"] = core.default_bindir(use_saved=False)
             script_options = {}
             if run_settings is not None:

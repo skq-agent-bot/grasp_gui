@@ -11,8 +11,9 @@ import pytest
 import grasp_config as config
 import grasp_core as core
 import grasp_remote as remote
+import grasp_ssh as ssh
 from test_remote_edit_ssh import call, energies, peer, target, wait_done  # noqa: F401
-from test_remote_run_settings import install, job
+from test_remote_run_settings import install, job, launches  # noqa: F401
 
 
 def install_program(directory, name):
@@ -53,7 +54,7 @@ def test_hello_reports_same_directory_as_run_plan(tmp_path, monkeypatch, source)
     assert report["programs"]["rci_mpi"] is (source == "env")
     if source == "saved":
         # Explicitly clearing the desktop field uses the server environment.
-        automatic = operations.run_plan(str(calc), run_settings={})["run_settings"]["bindir"]
+        automatic = operations.run_plan(str(calc), run_settings={"bindir": ""})["run_settings"]["bindir"]
         assert report["empty_bindir"]["directory"] == automatic == str(path_bin)
 
 
@@ -113,18 +114,28 @@ def test_grasp_check_refreshes_from_settings_and_reconnects(qapp, tmp_path, monk
 
 
 @pytest.mark.gui
-def test_saved_bindir_overrides_environment_in_status_and_run_plan(qapp, tmp_path, monkeypatch):
+@pytest.mark.parametrize("blank", [False, True])
+def test_status_run_plan_and_launch_agree_with_saved_bindir(qapp, tmp_path, monkeypatch, launches, blank):
     from remote_panel import ServerRunDialog, Source, grasp_check_text
 
-    env_bin, saved_bin = tmp_path / "env", tmp_path / "saved"
+    env_bin, saved_bin, path_bin = [tmp_path / name for name in ("env", "saved", "path")]
     install_program(env_bin, "rmcdhf")
+    install_program(env_bin, "rnucleus")
     install_program(saved_bin, "rnucleus")
+    install_program(saved_bin, "rmcdhf")
+    install_program(path_bin, "rmcdhf")
     monkeypatch.setenv("GRASP_BINDIR", str(env_bin))
+    monkeypatch.setenv("PATH", str(path_bin))
     monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "settings.json"))
     monkeypatch.setattr(core, "LANG", "en")
-    core.save_config(np=1, remote_hosts={"fixture": dict(run=dict(bindir=str(saved_bin)))})
+    client = SimpleNamespace(host="fixture", identity="researcher@server:2200", events=Queue(), close=lambda **kw: None)
+    saved_bindir = "" if blank else str(saved_bin)
+    expected = str((env_bin if blank else saved_bin).resolve())
+    origin = "from GRASP_BINDIR" if blank else "settings saved for this host"
+    core.save_config(np=1)
+    ssh.save_host_profile(client, run=dict(bindir=saved_bindir, np=1))
     calc = tmp_path / "calc"
-    install(calc, [job("rnucleus")])
+    revision = install(calc, [job("rnucleus")])
     operations = remote.Operations()
     report = operations.hello(remote.PROTOCOL)
     assert report["grasp_check"]["directory"] == str(env_bin)
@@ -135,7 +146,7 @@ def test_saved_bindir_overrides_environment_in_status_and_run_plan(qapp, tmp_pat
         future.set_result(getattr(operations, method)(**args))
         return future
 
-    client = SimpleNamespace(host="fixture", events=Queue(), request=request, close=lambda **kw: None)
+    client.request = request
     source = Source(client)
     try:
         client.events.put(dict(event="connected", **report))
@@ -143,15 +154,17 @@ def test_saved_bindir_overrides_environment_in_status_and_run_plan(qapp, tmp_pat
         status, _ = grasp_check_text(source, "workstation")
         dialog = ServerRunDialog(None, source, str(calc), operations.run_plan(str(calc)), {}, run=False)
         try:
-            assert dialog.settings.bindir() == str(saved_bin)
+            assert dialog.settings.bindir() == saved_bindir
             dialog.check()
             source.poll()
             actual = dialog.plan["run_settings"]["bindir"]
-            assert actual == str(saved_bin.resolve())
-            assert f"{actual} (settings saved for this host)" in status
+            assert actual == expected
+            assert f"{actual} ({origin})" in status
             dialog.confirm()
-            saved, = core.load_config()["remote_hosts"].values()
-            assert saved["run"]["bindir"] == str(saved_bin)
+            assert ssh.host_profile(client)["run"]["bindir"] == saved_bindir
+            operations.run(str(calc), revision, accept_logout=True, run_settings=dialog.settings.values())
+            assert launches[0][1]["bindir"] == actual
+            assert core.program_path(launches[0][1]["bindir"], "rmcdhf") == str(Path(expected) / "rmcdhf")
         finally:
             dialog.close()
     finally:
@@ -162,9 +175,9 @@ def test_saved_bindir_overrides_environment_in_status_and_run_plan(qapp, tmp_pat
 @pytest.mark.gui
 @pytest.mark.skipif(os.environ.get("GRASP_REMOTE_EDIT_TEST") != "1" or not os.environ.get("GRASP_SSH_TEST_HOST"),
                     reason="dedicated GRASP check SSH fixture not configured")
-def test_real_ssh_shows_default_grasp_and_runs_example1(peer, qapp, tmp_path, monkeypatch,
-                                                       accept_server_run_dialog):
-    from remote_panel import Source
+def test_real_ssh_blank_bindir_uses_discovered_grasp_for_example1(peer, qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+    from remote_panel import ServerRunDialog, Source
     from test_gui import spin, window
 
     monkeypatch.setattr(core, "CONFIG_FILE", str(tmp_path / "settings.json"))
@@ -172,20 +185,43 @@ def test_real_ssh_shows_default_grasp_and_runs_example1(peer, qapp, tmp_path, mo
     cfg, _ = config.load(Path(__file__).resolve().parents[1] / "demos/example1.json")
     directory = target()
     call(peer, "create_workdir", directory, configuration=cfg)
-    plan = call(peer, "run_plan", directory)
+    ssh.save_host_profile(peer, run=dict(bindir="", np=1))
+    plan = call(peer, "run_plan", directory, run_settings={"bindir": "", "np": 1})
     source = Source(peer)
     main = window(tmp_path)
+    submitted = []
+    original_request = peer.request
+
+    def request(method, args=None, **kwargs):
+        if method == "run":
+            submitted.append(args["run_settings"]["bindir"])
+        return original_request(method, args, **kwargs)
+
+    def accept(dialog):
+        values = dialog.settings.values()
+        assert values["bindir"] == ""
+        dialog.plan = call(peer, "run_plan", directory, run_settings=values)
+        assert dialog.plan["run_settings"]["bindir"] == source.grasp_check["directory"]
+        assert not dialog.plan["missing_programs"]
+        dialog.checked_values = values
+        dialog.confirm()
+        return QDialog.Accepted
+
+    monkeypatch.setattr(peer, "request", request)
+    monkeypatch.setattr(ServerRunDialog, "exec", accept)
     try:
         workspace = main.open_remote_workspace(source, directory)
         spin(qapp, lambda: source.grasp_check is not None and workspace.calc.run_button.isEnabled())
         assert source.grasp_check["source"] == "env"
         assert source.grasp_check["directory"] == plan["run_settings"]["bindir"]
         assert "from GRASP_BINDIR" in workspace.grasp_status.text()
-        assert "remote_hosts" not in core.load_config()
+        if os.environ.get("GRASP_SSH_BINDIR_ONLY") == "1":
+            assert "rmcdhf" not in source.grasp_check["path_programs"]
+        assert ssh.host_profile(peer)["run"]["bindir"] == ""
         workspace.calc.run_button.click()
         spin(qapp, lambda: (workspace.calc.runtime_state or {}).get("status") == "ok", timeout=90)
         wait_done(peer, directory)
-        assert accept_server_run_dialog
+        assert submitted == [""] and ssh.host_profile(peer)["run"]["bindir"] == ""
         for reference in cfg["reference"]:
             assert energies(peer, directory, reference["file"]) == pytest.approx(reference["energies"], abs=1e-7)
     finally:
