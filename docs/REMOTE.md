@@ -7,6 +7,43 @@
 不使用 X11、TCP/agent 转发、反向隧道或监听端口；不自动检查更新或上传程序。
 Slurm 类型通过服务器已有的 Slurm 命令访问集群调度/记账服务，不访问互联网。
 
+### Local files / 本机保存的文件
+
+Preferences live in `~/.config/grasp_gui.json` on Linux and macOS. `remote_hosts` stores settings by the
+effective SSH user, host and port, including aliases, program and installation paths, the last directory,
+server type, run settings and transfer preferences. The first connection using an old alias migrates its
+settings. If a connection already has settings, it keeps them and adds the alias. `remote_recent` lists
+recent server directories, and `remote_copies` links editable local copies to their server directories.
+If an alias is redirected to a previously unconfigured host, a program path inherited from the old
+host is cleared so the GRASP GUI server can be discovered automatically.
+A damaged preferences file is renamed to `grasp_gui.json.broken-YYYYmmdd-HHMMSS` and defaults are used.
+The desktop shows its backup path and reports write failures in the status bar. An unreadable file stays in place.
+
+| Path | Contents |
+|---|---|
+| `~/.config/grasp_gui/drafts/` | Unsaved server edits. Keep these files to restore drafts. |
+| `~/.config/grasp_gui/session-locks/` | Locks used while saving settings or work records. |
+| `~/.cache/grasp_gui/ssh/`, `remote/`, `index/` | SSH controls, cached remote results and analysis indexes. These can be rebuilt after closing the application. |
+| `~/grasp_calcs/remote/` | Default location for downloaded files and editable copies. May contain user data. |
+
+GRASP GUI stores no passwords. OpenSSH manages `known_hosts`.
+
+Linux 和 macOS 的设置均保存到 `~/.config/grasp_gui.json`。`remote_hosts` 按生效的 SSH 用户、主机和端口保存
+别名、程序及安装路径、上次目录、服务器类型、运行和传输设置。第一次用旧别名连接时迁移该条目。标识下已有设置时保留
+已有设置，并加入别名。`remote_recent` 保存最近服务器目录，`remote_copies` 关联可编辑的本机副本与服务器目录。
+别名改指向没有设置的新主机时，会清空从旧主机预填的程序路径，按默认规则查找服务器版。
+设置文件损坏时将原件改名为 `grasp_gui.json.broken-YYYYmmdd-HHMMSS`，再使用默认设置。桌面会提示备份位置。
+保存失败时在状态栏提示。暂时读不了的文件保留原位。
+
+| 路径 | 内容 |
+|---|---|
+| `~/.config/grasp_gui/drafts/` | 尚未保存到服务器的草稿，恢复草稿需要这些文件。 |
+| `~/.config/grasp_gui/session-locks/` | 保存设置或工作记录时使用的锁。 |
+| `~/.cache/grasp_gui/ssh/`、`remote/`、`index/` | SSH 控制、远程结果和分析索引缓存，退出程序后可删除重建。 |
+| `~/grasp_calcs/remote/` | 下载文件和可编辑副本的默认位置，可能包含用户数据。 |
+
+GRASP GUI 不保存密码。`known_hosts` 由 OpenSSH 管理。
+
 ### Server workspaces / 服务器工作区
 
 **File → Connect to server…** opens the selected directory as a tab in the main window. A tab is reused when

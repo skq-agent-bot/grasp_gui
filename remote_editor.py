@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
                                QHBoxLayout, QLabel, QListWidget, QMessageBox, QPlainTextEdit, QVBoxLayout, QWidget)
 
 import grasp_config as config
-import grasp_core as core
 import grasp_drafts as drafts
 import grasp_ssh as ssh
 import grasp_summary as summary
@@ -218,7 +217,7 @@ class RemoteEditor(PipelineEditor):
         source = self.calc.source
         if (getattr(source, "server_type", "workstation") == "workstation" and
                 "run_settings_v1" in getattr(source, "server", {}).get("capabilities", [])):
-            saved = core.load_config().get("remote_hosts", {}).get(source.client.host, {}).get("run")
+            saved = ssh.host_profile(source.client).get("run")
             if saved is not None:
                 args["run_settings"] = saved
         return args

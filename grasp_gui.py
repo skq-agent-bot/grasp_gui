@@ -11,6 +11,7 @@ GRASP 图形界面 (Qt / PySide6)。主窗口上方是工作目录和运行设�
 """
 
 import os
+import queue
 import sys
 
 if __name__ == "__main__":
@@ -111,7 +112,7 @@ fix_fontconfig()
 if core.IS_LINUX:
     os.environ.setdefault("XKB_LOG_LEVEL", "critical")
 
-from PySide6.QtCore import QByteArray, QEvent, QObject, QPointF, Qt  # noqa: E402
+from PySide6.QtCore import QByteArray, QEvent, QObject, QPointF, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPainter,  # noqa: E402
                            QPalette, QShortcut)
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit,  # noqa: E402
@@ -823,17 +824,23 @@ class WindowStyle(QObject):
 
 def main():
     args = sys.argv[1:]
+    import grasp_config
+    lang = None
     if "--lang" in args and args.index("--lang") + 1 < len(args):
-        i = args.index("--lang")
-        core.set_lang(args[i + 1])
+        index = args.index("--lang")
+        lang = args[index + 1]
+        del args[index:index + 2]
+    notices = queue.SimpleQueue()
+    if not args or (args[0] not in grasp_config.COMMANDS and args[0] not in ("-h", "--help")):
+        core.config_notice = lambda kind, text, values: notices.put((kind, text, values))
+    if lang is not None:
+        core.set_lang(lang)
         core.save_config(lang=core.LANG)
-        del args[i:i + 2]
     else:
         core.set_lang(core.load_config().get("lang", "zh"))
     if args[:1] in (["-h"], ["--help"]):
         print(T(USAGE))
         return
-    import grasp_config
     if args[:1] and args[0] in grasp_config.COMMANDS:      # 共享配置的命令行工具，不打开窗口
         sys.exit(grasp_config.cli(args))
     start = start_window(args)
@@ -848,6 +855,18 @@ def main():
     app.window_style = WindowStyle(app, frames=app.platformName().startswith("wayland"))
     win = MainWindow(workdir, tab)
     win.show()
+
+    def show_config_notices():
+        while not notices.empty():
+            kind, text, values = notices.get_nowait()
+            if kind == "broken":
+                QMessageBox.warning(win, T("本机设置"), T(text, **values))
+            else:
+                win.statusBar().showMessage(T(text, **values), 10000)
+
+    settings_timer = QTimer(win)
+    settings_timer.timeout.connect(show_config_notices)
+    settings_timer.start(200)
     if path:
         win.open_path(path)
     rc = app.exec()
