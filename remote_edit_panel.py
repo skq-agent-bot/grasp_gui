@@ -16,7 +16,7 @@ import grasp_summary as summary
 import grasp_transfer as transfer
 from grasp_core import T
 from gui_common import button
-from remote_panel import ConnectDialog, Source
+from remote_panel import ConnectDialog
 from transfer_panel import TransferDialog
 
 
@@ -125,11 +125,10 @@ class TargetDialog(ConnectDialog):
             self.existing_directory = None
         if self.source is None:
             try:
-                self.source = Source(ssh.Client(host, program), self)
+                self.source = self.open_source(host, program)
             except (OSError, ValueError) as error:
                 self.status.setText(str(error))
                 return
-            self.source.notice.connect(self.status.setText)
         self.directory = None
         self.use.setEnabled(False)
         self.new_button.setEnabled(False)
@@ -141,6 +140,8 @@ class TargetDialog(ConnectDialog):
         self.source.submit("list_dir", dict(directory=self.path.text().strip()), received)
 
     def loaded(self, value, error):
+        if self.apply_connected_profile():
+            return
         if not error:
             self.show_target(value, False)
             return
@@ -430,7 +431,7 @@ class UploadDialog(TransferDialog):
         args = dict(directory=self.directory, configuration=self.configuration, revision=self.revision, uploads=names)
         if (getattr(self.source, "server_type", "workstation") == "workstation" and
                 "run_settings_v1" in getattr(self.source, "server", {}).get("capabilities", [])):
-            saved = core.load_config().get("remote_hosts", {}).get(self.source.client.host, {}).get("run")
+            saved = ssh.host_profile(self.source.client).get("run")
             if saved is not None:
                 args["run_settings"] = saved
         self.source.submit("preview_upload", args, received)

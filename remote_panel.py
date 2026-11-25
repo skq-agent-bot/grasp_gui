@@ -133,12 +133,13 @@ class ConnectDialog(QDialog):
         self.resize(780, 620)
         self.source, self.directory, self.entries = None, None, []
         self.run_after_load = False
+        self.profile_message = ""
         layout = QVBoxLayout(self)
         form = QFormLayout()
         self.host = QComboBox()
         self.host.setEditable(True)
-        profiles = core.load_config().get("remote_hosts", {})
-        self.host.addItems(list(dict.fromkeys([*profiles, *ssh.hosts()])))
+        aliases = [alias for key, entry in ssh.host_profiles().items() for alias in ssh.profile_aliases(key, entry)]
+        self.host.addItems(list(dict.fromkeys([*aliases, *ssh.hosts()])))
         self.program = QLineEdit()
         self.program.setPlaceholderText(T("自动尝试 ~/.local/bin/grasp_gui 和 PATH；也可填完整路径"))
         self.path = QLineEdit("~")
@@ -183,6 +184,9 @@ class ConnectDialog(QDialog):
         if self.bundle_error:
             self.status.setText(self.status.text() + "\n" + self.bundle_error)
         layout.addWidget(self.status)
+        self.profile_status = QLabel()
+        self.profile_status.setWordWrap(True)
+        layout.addWidget(self.profile_status)
         bar = QHBoxLayout()
         self.create_button = button("在此新建计算…", self.create_calculation)
         self.create_button.setEnabled(False)
@@ -225,23 +229,71 @@ class ConnectDialog(QDialog):
         self.use.setEnabled(False)
         self.create_button.setEnabled(False)
         dialog = InstallDialog(source.client, self, remove)
-        saved = core.load_config().get("remote_hosts", {}).get(source.client.host, {})
+        if getattr(source.client, "identity_ready", True):
+            saved = ssh.host_profile(source.client)
+        else:
+            saved = ssh.profile_for_alias(source.client.host)[1]
         dialog.root.setText(saved.get("install_root", dialog.root.text()))
         if dialog.exec() == QDialog.Accepted:
             self.program.setText(dialog.installed_path or "")
-            profiles = core.load_config().get("remote_hosts", {})
-            profile = profiles.setdefault(source.client.host, {})
-            profile["program"] = dialog.installed_path or ""
-            profile["install_root"] = dialog.root.text().strip()
-            core.save_config(remote_hosts=profiles)
+            ssh.save_host_profile(source.client, program=dialog.installed_path or "",
+                                  install_root=dialog.root.text().strip())
             if dialog.installed_path:
                 self.connect_server()
 
     def profile(self, host):
-        saved = core.load_config().get("remote_hosts", {}).get(host, {})
+        self.profile_key, saved = ssh.profile_for_alias(host.strip())
+        self.profile_message = ""
+        self.profile_status.clear()
         self.server_type.setCurrentIndex(self.server_type.findData(saved.get("server_type", "")))
-        self.program.setText(saved.get("program", ""))
-        self.path.setText(saved.get("directory", "~"))
+        self.profile_program = saved.get("program", "")
+        self.profile_directory = saved.get("directory", "~")
+        self.program.setText(self.profile_program)
+        self.path.setText(self.profile_directory)
+        if self.source and self.source.client.host != host.strip():
+            self.use.setEnabled(False)
+            self.create_button.setEnabled(False)
+            self.connect_button.setEnabled(True)
+
+    def open_source(self, host, program):
+        if program == self.profile_program:
+            source = Source(ssh.Client(host, program, profile_key=self.profile_key), self)
+        else:
+            source = Source(ssh.Client(host, program), self)
+        source.notice.connect(self.status.setText)
+        return source
+
+    def apply_connected_profile(self):
+        source = self.source
+        if not source or not source.server or source.client.host != self.host.currentText().strip():
+            return False
+        identity = ssh.identity(source.client)
+        saved = ssh.host_profiles().get(identity)
+        if ssh.migrate_host_profile(source.client):
+            message = T("旧服务器设置已合并到 {host}。", host=identity)
+            self.profile_message = message
+            self.profile_status.setText(message)
+            parent = self.parentWidget()
+            if hasattr(parent, "statusBar"):
+                parent.statusBar().showMessage(message)
+        if self.profile_key == identity or not isinstance(saved, dict):
+            return False
+        selected = self.path.text()
+        self.profile_key = identity
+        self.profile_program = saved.get("program", "")
+        self.program.setText(source.client.program)
+        self.server_type.setCurrentIndex(self.server_type.findData(saved.get("server_type", "")))
+        directory = saved.get("directory", "~")
+        use_saved = selected == self.profile_directory and not getattr(self, "link", None)
+        self.profile_directory = directory
+        self.profile_message = "\n".join(filter(None, (
+            self.profile_message, T("此别名指向 {host}，已使用该主机保存的设置。", host=identity))))
+        self.profile_status.setText(self.profile_message)
+        if use_saved and selected != directory:
+            self.path.setText(directory)
+            self.connect_server()
+            return True
+        return False
 
     def connect_server(self):
         host, program = self.host.currentText().strip(), self.program.text().strip()
@@ -251,18 +303,25 @@ class ConnectDialog(QDialog):
             self.source = None
         if self.source is None:
             try:
-                self.source = Source(ssh.Client(host, program), self)
+                self.source = self.open_source(host, program)
             except (OSError, ValueError) as e:
                 self.status.setText(str(e))
                 return
-            self.source.notice.connect(self.status.setText)
         self.use.setEnabled(False)
         self.create_button.setEnabled(False)
         self.connect_button.setEnabled(False)
         self.status.setText(T("正在从 {h} 读取…", h=host))
-        self.source.submit("list_dir", dict(directory=self.path.text()), self.loaded)
+        source = self.source
+
+        def received(value, error):
+            if source is self.source and host == self.host.currentText().strip():
+                self.loaded(value, error)
+
+        source.submit("list_dir", dict(directory=self.path.text()), received)
 
     def loaded(self, value, error):
+        if self.apply_connected_profile():
+            return
         self.connect_button.setEnabled(True)
         if error:
             self.status.setText(str(error))
@@ -342,12 +401,10 @@ class ConnectDialog(QDialog):
     def accept(self):
         if not self.valid_connection():
             return
-        profiles = core.load_config().get("remote_hosts", {})
-        profiles.setdefault(self.source.client.host, {}).update(
+        ssh.save_host_profile(self.source.client,
             program=self.source.server.get("executable", "") or self.program.text().strip(), directory=self.directory,
             server_type=self.server_type.currentData())
         self.source.server_type = self.server_type.currentData()
-        core.save_config(remote_hosts=profiles)
         super().accept()
 
     def reject(self):
@@ -729,7 +786,7 @@ class ServerRunDialog(QDialog):
         values = dict(bindir="", np=1, mpirun="mpirun", mpitmp="tmp_mpi", nice=True)
         values.update(plan.get("run_settings", {}))
         if self.modern:
-            saved = core.load_config().get("remote_hosts", {}).get(source.client.host, {}).get("run", {})
+            saved = ssh.host_profile(source.client).get("run", {})
             values.update(saved)
         self.settings = RunSettings(values, remote=True)
         self.settings.setEnabled(self.modern)
@@ -811,9 +868,7 @@ class ServerRunDialog(QDialog):
             self.check(accept=True)
             return
         if self.modern:
-            profiles = core.load_config().get("remote_hosts", {})
-            profiles.setdefault(self.source.client.host, {})["run"] = self.settings.values()
-            core.save_config(remote_hosts=profiles)
+            ssh.save_host_profile(self.source.client, run=self.settings.values())
         self.accept()
 
 
@@ -1263,7 +1318,7 @@ class RemoteCalculation(QWidget):
                 return
             if self.server_type == "slurm":
                 from calc_panel import SlurmDialog
-                saved = core.load_config().get("remote_hosts", {}).get(self.source.client.host, {})
+                saved = ssh.host_profile(self.source.client)
                 settings = dict(plan["slurm"], **saved.get("slurm", {}))
                 dialog = SlurmDialog(self, settings, submit=True, span=span)
                 if dialog.exec() != QDialog.Accepted:
@@ -1274,9 +1329,7 @@ class RemoteCalculation(QWidget):
                         "\n" + summary.range_text(*span),
                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
                     return
-                profiles = core.load_config().get("remote_hosts", {})
-                profiles.setdefault(self.source.client.host, {})["slurm"] = settings
-                core.save_config(remote_hosts=profiles)
+                ssh.save_host_profile(self.source.client, slurm=settings)
                 self.submitting = True
                 self.show_state(None)
                 args = dict(directory=self.directory, revision=self.revision, start=start,

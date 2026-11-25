@@ -95,6 +95,9 @@ MCP 打开时，打开该来源的计算会在输出区显示来源；关闭时�
 server executable (default discovery or full path), directory, Connect/refresh, Parent directory, file metadata,
 and Use this directory. Double-click directories to browse. Host-specific executable/directory preferences persist;
 credentials do not.
+Aliases for the same effective SSH user, host and port share settings. If an alias resolves to a different
+saved host, the connection dialog applies that host's settings and shows its connection identity.
+[Connection identity (English)](images/en_server_profile_identity.png) / [连接标识](images/zh_server_profile_identity.png).
 **Server type (服务器类型)** selects Workstation (existing background execution) or Slurm cluster (batch submission,
 scheduler state and cancellation); it is saved per host. Unclassified profiles require an explicit choice; the dialog
 explains that login nodes should not run calculations directly. Slurm needs
@@ -178,7 +181,10 @@ Old servers without `workdir_write_v1` show an update instruction and receive no
 路径不匹配的有效记录不属于当前目录，不影响副本使用。新连接提示说明集群登录节点不宜直接运行计算。
 
 “连接服务器”对话框可选 SSH 别名或手输 user@host、设置程序完整路径、浏览目录；成功使用目录后保存每台主机的
-程序位置与目录，不保存密码。连接失败显示原始诊断和手动安装提示。主窗口保留一个不可关闭的本机工作区，已打开的服务器目录
+程序位置与目录，不保存密码。连接失败显示原始诊断和手动安装提示。
+连接标识（SSH 用户、主机和端口）相同的别名共用主机设置。别名实际指向另一个已保存的主机时，
+连接对话框采用那个主机的设置，并显示生效的连接标识。
+主窗口保留一个不可关闭的本机工作区，已打开的服务器目录
 各占一个标签。服务器标签顶部显示完整路径、服务器类型和连接状态。SSH 别名解析到同一用户、主机和端口时，同一目录复用标签。
 Ctrl+PgUp / Ctrl+PgDn 切换工作区，Ctrl+1–3 切换当前工作区的页面，Ctrl+4 在本机打开收敛页。服务器工作区激活时，
 本机目录、导入导出和参数菜单禁用。切换语言或字号会保留工作区、连接、读取和传输。启动时恢复本机页面，最近使用的服务器目录

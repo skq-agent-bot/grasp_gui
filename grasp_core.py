@@ -9,6 +9,7 @@ GRASP 图形界面的核心逻辑（与界面库无关）：
 
 import codecs
 import csv
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -102,6 +103,15 @@ SLURM_DEFAULTS = dict(job="grasp", partition="", nodes="1", ntasks="32", time="2
 LANG = "zh"
 
 EN = {
+    # 本机设置
+    "本机设置": "Local settings",
+    "设置文件损坏，原文件已保留在 {path}。已恢复默认设置。":
+        "The settings file was damaged and kept at {path}. Default settings have been restored.",
+    "设置文件未能读取：{reason}": "Could not read the settings file: {reason}",
+    "设置未能保存：{reason}": "Could not save settings: {reason}",
+    "此别名指向 {host}，已使用该主机保存的设置。":
+        "This alias points to {host}. The settings saved for that host are in use.",
+    "旧服务器设置已合并到 {host}。": "The previous server settings were merged into {host}.",
     # 直接导入服务器 (#48)
     "在此新建计算…": "Create calculation here…",
     "配置将直接写入服务器上的新建或空目录；程序和输入由服务器检查。不会创建本机工作目录。":
@@ -1693,11 +1703,67 @@ def set_lang(lang):
     LANG = lang if lang in ("zh", "en") else "zh"
 
 
-def load_config():
+class _InvalidConfig(ValueError):
+    pass
+
+
+config_notice = None
+_config_notices = set()
+_config_notice_lock = threading.Lock()
+
+
+def _report_config(key, text, **values):
+    with _config_notice_lock:
+        event = (CONFIG_FILE, key, text, tuple(values.items()))
+        if event in _config_notices:
+            return
+        _config_notices.add(event)
+    if config_notice is None:
+        print(" ".join(T(text, **values).splitlines()), file=sys.stderr)
+    else:
+        config_notice(key, text, values)
+
+
+def _read_config():
     try:
-        with open(CONFIG_FILE) as f:
-            return json.load(f)
-    except (OSError, ValueError):
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (ValueError, RecursionError) as error:
+        raise _InvalidConfig from error
+    if not isinstance(cfg, dict):
+        raise _InvalidConfig
+    return cfg
+
+
+def _read_config_locked():
+    try:
+        return _read_config()
+    except _InvalidConfig:
+        path = Path(CONFIG_FILE)
+        name = path.name + datetime.now().strftime(".broken-%Y%m%d-%H%M%S")
+        backup = path.with_name(name)
+        suffix = 0
+        while os.path.lexists(backup):
+            suffix += 1
+            backup = path.with_name(f"{name}-{suffix}")
+        path.rename(backup)
+        _report_config("broken", "设置文件损坏，原文件已保留在 {path}。已恢复默认设置。", path=str(backup))
+        return {}
+
+
+def load_config():
+    import grasp_session
+    try:
+        try:
+            return _read_config()
+        except _InvalidConfig:
+            # 获取锁后复读，另一个进程可能已保留原件并写入新配置。
+            with grasp_session.locked(CONFIG_FILE):
+                return _read_config_locked()
+    except OSError as error:
+        _report_config("read", "设置文件未能读取：{reason}", reason=error.strerror or str(error))
         return {}
 
 
@@ -1729,15 +1795,35 @@ def user_process_count(cfg, key):
     return key in cfg and cfg.get(key + "_user", True) is not False
 
 
-def save_config(**kw):
+def _edit_config(edit):
     import grasp_session
     try:
         with grasp_session.locked(CONFIG_FILE):
-            cfg = load_config()
-            cfg.update(kw)
+            cfg = _read_config_locked()
+            if edit(cfg) is False:
+                return False
             grasp_session.atomic(os.path.realpath(CONFIG_FILE), json.dumps(cfg).encode("utf-8"))
-    except OSError:
-        pass
+            return True
+    except OSError as error:
+        _report_config("write", "设置未能保存：{reason}", reason=error.strerror or str(error))
+        return False
+
+
+def save_config(**kw):
+    _edit_config(lambda cfg: cfg.update(kw))
+
+
+def update_config(key, edit):
+    """在同一个锁内修改嵌套字典；回调返回 False 时不写入。"""
+    def update(cfg):
+        entries = cfg.get(key)
+        if not isinstance(entries, dict):
+            entries = {}
+        if edit(entries) is False:
+            return False
+        cfg[key] = entries
+
+    return _edit_config(update)
 
 
 def default_bindir(*, use_saved=True):
