@@ -148,6 +148,35 @@ def test_switch_uses_existing_draft_choices(desk, answers, monkeypatch, choice):
     assert (drafts.load(KEY) is not None) == (choice == "keep")
 
 
+@pytest.mark.parametrize("success", (True, False))
+def test_switch_waits_for_a_save_already_in_progress(desk, answers, monkeypatch, success):
+    from remote_editor import DraftsDialog
+
+    workspace, source = open_editable(desk)
+    edit(workspace)
+    answers.replies.append(QtWidgets.QMessageBox.Yes)
+    workspace.calc.save_button.click()
+    source.respond("preview_upload", preview())
+
+    def choose(dialog):
+        box = dialog.choices[0][1]
+        box.setCurrentIndex(box.findData("save"))
+        return QtWidgets.QDialog.Accepted
+
+    monkeypatch.setattr(DraftsDialog, "exec", choose)
+    workspace.request_directory("/srv/b")
+    source.respond("list_dir", listing("/srv/b"))
+    assert desk.active_remote() is workspace and workspace.switching_directory
+    assert sum(method == "update_workdir" for method, _, _ in source.pending) == 1
+    if success:
+        source.respond("update_workdir", dict(revision="r2", warnings=[]))
+        assert desk.active_remote().directory == "/srv/b" and drafts.load(KEY) is None
+    else:
+        source.pending.pop()[2](None, ValueError("write failed"))
+        assert desk.active_remote() is workspace and not workspace.switching_directory
+        assert drafts.load(KEY) is not None
+
+
 def test_active_transfer_defaults_to_staying(desk, monkeypatch):
     workspace = desk.open_remote_workspace(Source("fixture"), "/srv/a")
     workspace.transfer_dialogs.append(SimpleNamespace(busy=True))

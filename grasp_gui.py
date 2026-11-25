@@ -491,7 +491,7 @@ class MainWindow(QMainWindow):
                 done(False)
                 return
             choice = dialog.selected()[0][1]
-        workspace.resolve_draft(choice, done)
+        workspace.resolve_draft(choice, done, wait_for_save=switching)
 
     def resolve_drafts(self):
         """退出前处理各服务器工作区的草稿；需要等待保存时返回 False，保存全部成功后再次关闭窗口。"""

@@ -1907,10 +1907,12 @@ class RemoteWorkspace(QWidget):
     def has_draft(self):
         return self.calc.editor is not None and self.calc.editor.draft is not None
 
-    def resolve_draft(self, choice, done):
+    def resolve_draft(self, choice, done, *, wait_for_save=False):
         """关闭时处理草稿：save 保存到服务器，discard 放弃，keep 保留。done(可以关闭)。"""
         editor = self.calc.editor
-        if not self.has_draft() or choice == "keep" or editor.saving:
+        if self.has_draft() and choice == "save" and wait_for_save:
+            editor.save_to_server(done, wait=True)
+        elif not self.has_draft() or choice == "keep" or editor.saving:
             # 等待回答的写入保留待核对状态，下次打开时核对。
             done(True)
         elif choice == "discard":
