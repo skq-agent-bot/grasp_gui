@@ -355,7 +355,7 @@ class MainWindow(QMainWindow):
         self.workspaces.setTabToolTip(index, f"{workspace.label}\n{workspace.server_label()}")
 
     def open_remote_workspace(self, source, directory, *, refresh=False, run_after_load=False, replace=None):
-        from remote_panel import RemoteWorkspace, workspace_key
+        from remote_panel import RemoteWorkspace, remote_recent_entries, workspace_key
 
         key = workspace_key(source, directory)
         workspace = self.remote_workspaces.get(key)
@@ -377,9 +377,11 @@ class MainWindow(QMainWindow):
         elif all(item.source is not source for item in self.remote_workspaces.values()):
             source.close()
         self.workspaces.setCurrentWidget(workspace)
-        recent = core.load_config().get("remote_recent", [])
-        item = [workspace.client.host, workspace.directory]
-        core.save_config(remote_recent=[item] + [entry for entry in recent if entry != item][:11])
+        identity, directory = key
+        aliases = {workspace.client.host, source.client.host}
+        recent = [(host, path, saved) for host, path, saved in remote_recent_entries()
+                  if path != directory or (saved != identity if saved else host not in aliases)]
+        core.save_config(remote_recent=[(workspace.client.host, directory, identity), *recent[:11]])
         return workspace
 
     def active_remote(self):

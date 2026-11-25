@@ -110,6 +110,22 @@ class Source(QObject):
         return source
 
 
+def remote_recent_entries():
+    """旧条目只有别名和目录，新条目同时保存已解析的连接标识。"""
+    entries = core.load_config().get("remote_recent")
+    if not isinstance(entries, list):
+        return []
+    result = []
+    for item in entries:
+        if not isinstance(item, list) or len(item) not in (2, 3):
+            continue
+        host, directory = item[:2]
+        identity = item[2] if len(item) == 3 else None
+        if isinstance(host, str) and isinstance(directory, str) and (identity is None or isinstance(identity, str)):
+            result.append((host, directory, identity))
+    return result
+
+
 class ConnectDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -128,7 +144,7 @@ class ConnectDialog(QDialog):
         self.path = QLineEdit("~")
         self.recent = QComboBox()
         self.recent.addItem(T("最近的服务器目录"), None)
-        for host, directory in core.load_config().get("remote_recent", []):
+        for host, directory, _ in remote_recent_entries():
             self.recent.addItem(f"{host}:{directory}", (host, directory))
         self.recent.activated.connect(self.select_recent)
         self.server_type = QComboBox()
@@ -1214,7 +1230,8 @@ def workspace_key(source, directory):
     """目录取服务器返回的绝对路径，连接标识也供草稿使用。"""
     identity = getattr(source, "workspace_identity", None)
     if identity is None:
-        source.workspace_identity = identity = ssh.connection_identity(source.client)
+        identity = getattr(source.client, "identity", None) or ssh.connection_identity(source.client, resolve=False)
+        source.workspace_identity = identity
     return identity, posixpath.normpath(directory)
 
 
@@ -1270,6 +1287,10 @@ class RemoteWorkspace(QWidget):
     @property
     def server(self):
         return getattr(self.source, "server", {})
+
+    @property
+    def notice(self):
+        return self.source.notice
 
     @property
     def server_type(self):

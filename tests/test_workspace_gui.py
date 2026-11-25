@@ -67,7 +67,7 @@ def desk(qapp, tmp_path, monkeypatch):
 def test_tabs_deduplicate_routes_and_restore_only_local(desk, qapp, monkeypatch):
     from remote_panel import ConnectDialog
 
-    a, alias, b = Source("alpha"), Source("other-alias"), Source("alpha", "alice@fixture:22")
+    a, alias, b = Source("alpha"), Source("other-alias"), Source("alice@alpha", "alice@fixture:22")
     first = desk.open_remote_workspace(a, "/srv/a")
     second = desk.open_remote_workspace(b, "/srv/a")
     assert first is not second and desk.workspaces.count() == 3
@@ -99,7 +99,7 @@ def test_tabs_deduplicate_routes_and_restore_only_local(desk, qapp, monkeypatch)
     calls = []
     monkeypatch.setattr(ConnectDialog, "connect_server", lambda self: calls.append(self.path.text()))
     prompt = ConnectDialog(desk)
-    assert prompt.recent.count() == 2 and calls == []
+    assert prompt.recent.count() == 3 and calls == []
     prompt.select_recent(1)
     assert calls == ["/srv/a"]
     prompt.reject()
@@ -110,6 +110,36 @@ def test_tabs_deduplicate_routes_and_restore_only_local(desk, qapp, monkeypatch)
     finally:
         reopened.close()
         reopened.deleteLater()
+
+
+def test_recent_server_directories_accept_legacy_entries_and_deduplicate_aliases(desk, monkeypatch):
+    from remote_panel import ConnectDialog
+
+    core.save_config(remote_recent=[["old", "/srv/a"], ["later", "/srv/b"], "bad", ["one"], 7,
+                                   ["alias", 4], ["alias", "/srv", 2]])
+    first = Source("old")
+    workspace = desk.open_remote_workspace(first, "/srv/a")
+    desk.close_remote_tab(desk.workspaces.indexOf(workspace))
+    other = Source("new")
+    other.workspace_identity = None
+    other.client.identity = "user@fixture:22"
+    monkeypatch.setattr(ssh, "connection_identity", lambda *a, **kw: pytest.fail("resolution ran from the GUI"))
+    desk.open_remote_workspace(other, "/srv/./a")
+    history = core.load_config()["remote_recent"]
+    assert history == [["new", "/srv/a", "user@fixture:22"], ["later", "/srv/b", None]]
+    dialog = ConnectDialog(desk)
+    try:
+        assert [dialog.recent.itemText(i) for i in range(1, dialog.recent.count())] == ["new:/srv/a", "later:/srv/b"]
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
+    core.save_config(remote_recent="bad")
+    dialog = ConnectDialog(desk)
+    try:
+        assert dialog.recent.count() == 1
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
 
 
 def test_workspace_shortcuts_take_priority_over_focused_widgets(desk, qapp):
@@ -162,6 +192,39 @@ def test_server_actions_and_created_or_uploaded_directories(desk, tmp_path, monk
     assert desk.active_remote() is created and upload.closes == 1 and transport.closes == 0
     assert not any(name == "run" for name, _, _ in transport.pending)
     dialog.deleteLater()
+
+
+def test_server_workspace_cleanup_refreshes_pipeline_and_state(desk, tmp_path, monkeypatch):
+    from calc_panel import ClearDialog
+
+    step = config.STEPS["rnucleus"]
+    cfg = dict(format=config.FORMAT, version=config.VERSION, jobs=[dict(step=step.key, vals=step.defaults())])
+    server = tmp_path / "server"
+    config.install(cfg, str(server))
+    (server / "isodata").write_text("generated")
+    operation = remote.Operations()
+    transport = Source("fixture")
+    transport.server["capabilities"].append("workdir_clean_v1")
+    workspace = desk.open_remote_workspace(transport, str(server))
+    transport.respond("pipeline", operation.pipeline)
+    transport.respond("watch", dict(text="before cleaning", state=None))
+    assert workspace.calc.clean_button.isEnabled()
+
+    def confirm(dialog):
+        assert dialog.selected_names() == {"isodata"}
+        dialog.accept()
+        return dialog.result()
+
+    monkeypatch.setattr(ClearDialog, "exec", confirm)
+    monkeypatch.setattr(QtWidgets.QMessageBox, "question", lambda *args: QtWidgets.QMessageBox.Yes)
+    workspace.calc.preview_clean()
+    transport.respond("preview_clean", operation.preview_clean)
+    transport.respond("clean_workdir", operation.clean_workdir)
+    assert workspace.statusBar().currentMessage() == core.T("清理完成")
+    transport.respond("pipeline", operation.pipeline)
+    transport.respond("watch", dict(text="after cleaning", state=None))
+    assert workspace.calc.output.toPlainText() == "after cleaning"
+    assert workspace.calc.steps.count() == 1 and not (server / "isodata").exists()
 
 
 def test_rebuild_replaces_controls_and_delivers_pending_results(desk, tmp_path, qapp, monkeypatch):
