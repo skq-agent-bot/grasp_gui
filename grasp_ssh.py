@@ -172,7 +172,7 @@ def startup(program=""):
     if "\x00" in program or "\n" in program:
         raise ValueError("invalid server executable")
     if program and not program.startswith(("/", "~/")):
-        raise ValueError(T("服务器端程序请填写完整路径或 ~/ 路径"))
+        raise ValueError(T("GRASP GUI 服务器版程序路径请填写完整路径或 ~/ 路径"))
     if program.startswith("~/"):
         select = 'p="$HOME"/' + shlex.quote(program[2:])
     elif program:
@@ -316,7 +316,7 @@ class Client:
                     break
                 if not seen:
                     if raw.startswith(b"GRASP_GUI_REMOTE ") and raw.rstrip() != protocol.GREETING.encode():
-                        raise ValueError(T("远程协议不兼容，请更新服务器端程序"))
+                        raise ValueError(T("远程协议不兼容，请更新 GRASP GUI 服务器版"))
                     if raw.rstrip() == protocol.GREETING.encode():
                         seen = True
                         self.incoming.put((generation, dict(event="greeting")))
@@ -374,7 +374,7 @@ class Client:
                     code = None
                 error = ServerUnavailable if value["event"] == "eof" and code not in (None, 255) else ConnectionError
                 raise error(self.diagnostics or value.get("text") or
-                            T("服务器握手失败，请检查程序路径并安装或更新服务器端"))
+                            T("服务器握手失败，请检查程序路径并安装或更新 GRASP GUI 服务器版"))
         else:
             raise TimeoutError(T("SSH 登录或服务器握手超时"))
         while not self.closed.is_set() and time.monotonic() < deadline:
@@ -386,7 +386,7 @@ class Client:
                 continue
             if value.get("id") == 0:
                 if "error" in value or value.get("result", {}).get("protocol") != protocol.PROTOCOL:
-                    raise ConnectionError(value.get("error", T("远程协议不兼容，请更新服务器端程序")))
+                    raise ConnectionError(value.get("error", T("远程协议不兼容，请更新 GRASP GUI 服务器版")))
                 self.rtt = time.monotonic() - started
                 if not self.custom_cache:
                     canonical = value["result"]["executable"]

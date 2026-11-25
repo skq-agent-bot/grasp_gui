@@ -16,12 +16,13 @@ import grasp_config as config
 import grasp_install as install
 import grasp_core as core
 import grasp_mix as mix
+from grasp_remote import GRASP_CHECK
 import grasp_ssh as ssh
 import grasp_summary as summary
 import grasp_trans as transitions
 import grasp_wfn as wfn
 from grasp_core import T
-from gui_common import RunSettings, button, renew_layout
+from gui_common import RunSettings, button, hint_label, renew_layout
 from level_panel import LevelPanel
 from wfn_panel import WfnPanel
 
@@ -30,12 +31,15 @@ class Source(QObject):
     notice = Signal(str)
     push = Signal(object)
     connectionChanged = Signal()
+    graspCheckChanged = Signal()
 
     def __init__(self, client, parent=None):
         super().__init__(parent)
         self.client, self.waiting = client, {}
         self.rtt = 0.0
         self.server = {}
+        self.grasp_check = None
+        self.grasp_generation = 0
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(40)
@@ -69,6 +73,7 @@ class Source(QObject):
                     if kind == "connected":
                         self.server = event
                         self.connectionChanged.emit()
+                        self.refresh_grasp_check()
                     self.rtt = event.get("rtt", 0)
                     self.notice.emit(T("服务器 {h} 延迟 {n} ms", h=self.client.host, n=round(self.rtt * 1000)))
         except queue.Empty:
@@ -91,6 +96,45 @@ class Source(QObject):
         self.client.close(wait=False)
         self.waiting.clear()
 
+    def refresh_grasp_check(self):
+        self.grasp_generation += 1
+        generation = self.grasp_generation
+        base = self.server.get("grasp_check")
+        self.grasp_check = base
+        if not isinstance(base, dict):
+            self.graspCheckChanged.emit()
+            return
+        selected = ssh.host_profile(self.client).get("run", {}).get("bindir")
+        if selected is None or selected == "":
+            if selected == "":
+                self.grasp_check = base.get("empty_bindir", base)
+            self.graspCheckChanged.emit()
+            return
+
+        self.grasp_check = dict(base, checking=selected)
+        self.graspCheckChanged.emit()
+
+        def checked(reply, error):
+            if generation != self.grasp_generation:
+                return
+            if error:
+                self.grasp_check = dict(base, directory="", source=None, invalid=selected)
+            elif reply["directory"] == base.get("directory"):
+                self.grasp_check = dict(base, source="saved")
+            else:
+                files = {row["name"] for row in reply["files"] if not row["directory"]}
+                on_path = set(base.get("path_programs", []))
+                names = base.get("programs", {})
+                self.grasp_check = dict(base, directory=reply["directory"], source="saved",
+                                        missing_files=[] if reply.get("truncated") else sorted(
+                                            set(names) - files - on_path), programs={})
+            self.graspCheckChanged.emit()
+
+        if isinstance(selected, str) and selected.startswith(("/", "~")):
+            self.submit("list_dir", dict(directory=selected), checked)
+        else:
+            checked(None, ValueError(selected))
+
     def reconnect(self):
         old = self.client
         if not old.closed.is_set():
@@ -105,9 +149,42 @@ class Source(QObject):
         old = self.client
         source = Source(ssh.Client(old.host, old.program, old.ssh, old.options, old.cache, old.command_override))
         source.server = self.server
+        source.grasp_check = self.grasp_check
         source.server_type = getattr(self, "server_type", "workstation")
         source.workspace_identity = getattr(self, "workspace_identity", None)
         return source
+
+
+def grasp_check_text(source, server_type):
+    if source is None or not getattr(source, "server", {}):
+        return "", False
+    report = getattr(source, "grasp_check", None)
+    if GRASP_CHECK not in source.server.get("capabilities", []) or not isinstance(report, dict):
+        return T("GRASP GUI 服务器版较旧，无法自动检查 GRASP，请更新。"), False
+    if report.get("checking"):
+        return T("正在检查保存的 GRASP 程序目录：{path}", path=report["checking"]), False
+    path = report.get("directory", "")
+    if path:
+        origin = {
+            "env": T("来自 GRASP_BINDIR"),
+            "path": T("来自 PATH"),
+            "saved": T("此主机保存的设置"),
+            "tree": T("来自安装树"),
+        }.get(report.get("source"), "")
+        text = T("GRASP：{path} ({origin})", path=path, origin=origin)
+    else:
+        text = T("未找到 GRASP 程序。SSH 非交互启动看不到仅为交互终端设置的变量。")
+        if report.get("invalid"):
+            text += "\n" + T("保存的程序目录不可用：{path}", path=report["invalid"])
+        text += "\n" + "GRASP_BINDIR=" + report.get("bindir_env", "") + "\nPATH=" + report.get("path_env", "")
+    if report.get("programs"):
+        missing = [name for name, available in report["programs"].items() if not available]
+        text += "\n" + T("服务器缺少程序：{names}", names=", ".join(missing) or "—")
+    elif report.get("missing_files"):
+        text += "\n" + T("未找到程序文件：{names}", names=", ".join(report["missing_files"]))
+    if server_type == "slurm":
+        text += "\n" + T("此检查仅代表 Slurm 登录节点。")
+    return text, not path or report.get("programs", {}).get("rmcdhf") is False
 
 
 def remote_recent_entries():
@@ -141,10 +218,9 @@ class ConnectDialog(QDialog):
         aliases = [alias for key, entry in ssh.host_profiles().items() for alias in ssh.profile_aliases(key, entry)]
         self.host.addItems(list(dict.fromkeys([*aliases, *ssh.hosts()])))
         self.program = QLineEdit()
-        self.program.setPlaceholderText(T("自动尝试 ~/.local/bin/grasp_gui 和 PATH；也可填完整路径"))
         self.path = QLineEdit("~")
         self.recent = QComboBox()
-        self.recent.addItem(T("最近的服务器目录"), None)
+        self.recent.addItem(T("最近的工作目录"), None)
         for host, directory, _ in remote_recent_entries():
             self.recent.addItem(f"{host}:{directory}", (host, directory))
         self.recent.activated.connect(self.select_recent)
@@ -157,9 +233,11 @@ class ConnectDialog(QDialog):
         hint = QLabel(T("请先选择服务器类型；集群登录节点不宜直接运行计算。"))
         hint.setWordWrap(True)
         form.addRow(hint)
-        form.addRow(T("服务器端程序"), self.program)
-        form.addRow(T("服务器目录"), self.path)
+        form.addRow(T("服务器上的工作目录"), self.path)
         form.addRow(self.recent)
+        form.addRow(hint_label("计算的输入和结果所在的目录，例如 ~/calc/Fe_XVII"))
+        form.addRow(T("GRASP GUI 服务器版 (程序路径)"), self.program)
+        form.addRow(hint_label("服务器上的 grasp_gui 程序；留空时自动查找 ~/.local/bin/grasp_gui 和 PATH"))
         layout.addLayout(form)
         bar = QHBoxLayout()
         self.connect_button = button("连接 / 刷新", self.connect_server)
@@ -170,7 +248,7 @@ class ConnectDialog(QDialog):
             self.package = install.bundle()
         except (OSError, ValueError) as error:
             self.bundle_error = str(error)
-        self.install_button = button("安装 / 更新服务器版…", self.install_server)
+        self.install_button = button("安装 / 更新 GRASP GUI 服务器版…", self.install_server)
         self.install_button.setEnabled(self.package is not None)
         self.install_button.setToolTip(self.bundle_error)
         bar.addWidget(self.install_button)
@@ -183,6 +261,16 @@ class ConnectDialog(QDialog):
         self.status.setWordWrap(True)
         if self.bundle_error:
             self.status.setText(self.status.text() + "\n" + self.bundle_error)
+        grasp_bar = QHBoxLayout()
+        self.grasp_status = QLabel()
+        self.grasp_status.setTextFormat(Qt.PlainText)
+        self.grasp_status.setWordWrap(True)
+        self.grasp_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        grasp_bar.addWidget(self.grasp_status, 1)
+        self.grasp_settings = button("设置…", lambda: show_server_run_settings(self, self.source, self.directory))
+        self.grasp_settings.hide()
+        grasp_bar.addWidget(self.grasp_settings)
+        layout.addLayout(grasp_bar)
         layout.addWidget(self.status)
         self.profile_status = QLabel()
         self.profile_status.setWordWrap(True)
@@ -192,13 +280,23 @@ class ConnectDialog(QDialog):
         self.create_button.setEnabled(False)
         bar.addWidget(self.create_button)
         bar.addStretch()
-        self.use = button("使用此目录", self.accept)
+        self.use = button("打开此工作目录", self.accept)
         self.use.setEnabled(False)
         bar.addWidget(self.use)
         bar.addWidget(button("取消", self.reject))
         layout.addLayout(bar)
         self.host.currentTextChanged.connect(self.profile)
+        self.host.currentTextChanged.connect(self.show_grasp_check)
+        self.server_type.currentIndexChanged.connect(self.show_grasp_check)
         self.profile(self.host.currentText())
+
+    def show_grasp_check(self, *_):
+        source = self.source
+        if source and source.client.host != self.host.currentText().strip():
+            source = None
+        text, settings = grasp_check_text(source, self.server_type.currentData())
+        self.grasp_status.setText(text)
+        self.grasp_settings.setVisible(bool(settings and self.directory))
 
     def select_recent(self, index):
         item = self.recent.itemData(index)
@@ -334,15 +432,21 @@ class ConnectDialog(QDialog):
         if self.apply_connected_profile():
             return
         self.connect_button.setEnabled(True)
+        if self.source is not getattr(self, "grasp_source", None):
+            self.grasp_source = self.source
+            changed = getattr(self.source, "graspCheckChanged", None)
+            if changed is not None:
+                changed.connect(self.show_grasp_check)
+        self.show_grasp_check()
         if error:
             self.status.setText(str(error))
             if not isinstance(error, ssh.ServerUnavailable) or self.package is None:
                 return
-            self.status.setText(str(error) + "\n" + T("可安装捆绑服务器版，或在此设置已有程序的完整路径。"))
+            self.status.setText(str(error) + "\n" + T("可安装捆绑的 GRASP GUI 服务器版，或在此设置已有程序的完整路径。"))
             box = QMessageBox(self)
-            box.setWindowTitle(T("服务器端不可用"))
+            box.setWindowTitle(T("GRASP GUI 服务器版不可用"))
             box.setText(str(error))
-            upload = box.addButton(T("安装 / 更新服务器版…"), QMessageBox.ActionRole)
+            upload = box.addButton(T("安装 / 更新 GRASP GUI 服务器版…"), QMessageBox.ActionRole)
             existing = box.addButton(T("使用已有的路径"), QMessageBox.ActionRole)
             cancel = box.addButton(T("取消"), QMessageBox.RejectRole)
             box.setDefaultButton(cancel)
@@ -364,12 +468,13 @@ class ConnectDialog(QDialog):
             self.files.addItem(item)
         self.use.setEnabled(True)
         self.create_button.setEnabled(True)
+        self.show_grasp_check()
         version = self.source.server.get("version", core.VERSION)
         self.status.setText(T("服务器 {h}:{p}", h=self.source.client.host, p=self.directory))
         if (self.package is not None and install.older_version(version, core.VERSION)
                 and getattr(self, "offered_version", None) != version):
             self.offered_version = version
-            if QMessageBox.question(self, T("服务器版本较旧"),
+            if QMessageBox.question(self, T("GRASP GUI 服务器版较旧"),
                     T("服务器 {v}，桌面 {d}；协议兼容，可继续使用。现在安装捆绑版本吗？", v=version, d=core.VERSION),
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
                 self.install_server()
@@ -395,7 +500,7 @@ class ConnectDialog(QDialog):
             self.status.setText(T("主机设置已更改，请重新连接"))
             return False
         if self.server_type.currentData() == "slurm" and "slurm" not in self.source.server.get("server_types", []):
-            self.status.setText(T("服务器端尚不支持 Slurm，请先更新服务器端程序。"))
+            self.status.setText(T("GRASP GUI 服务器版尚不支持 Slurm，请先更新。"))
             return False
         return True
 
@@ -765,7 +870,7 @@ class RemoteWaves(WfnPanel):
         super().redraw(reset=reset)
 
     def add_file(self):
-        self.status(T("远程文件请在服务器目录中选择"))
+        self.status(T("远程文件请在服务器上的工作目录中选择"))
 
     def fill_table(self, selected):
         super().fill_table(selected)
@@ -777,6 +882,26 @@ class RemoteWaves(WfnPanel):
     def shutdown(self):
         self.remote_closed = True
         super().shutdown()
+
+
+def show_server_run_settings(parent, source, directory):
+    if source is None or not directory:
+        return
+
+    def received(plan, error):
+        if error:
+            no_record = "此目录没有工作目录记录"
+            supports_check = GRASP_CHECK in source.server.get("capabilities", [])
+            if not supports_check or str(error) not in (no_record, core.EN[no_record]):
+                QMessageBox.warning(parent, T("服务器运行设置"), str(error))
+                return
+            report = source.server.get("grasp_check") or {}
+            plan = dict(revision=None, run_settings=dict(bindir=report.get("directory", "")))
+        dialog = ServerRunDialog(parent, source, directory, plan, {}, run=False)
+        dialog.exec()
+        dialog.deleteLater()
+
+    source.submit("run_plan", dict(directory=directory), received)
 
 
 class ServerRunDialog(QDialog):
@@ -824,7 +949,7 @@ class ServerRunDialog(QDialog):
             QTimer.singleShot(0, self.check)
         else:
             self.show_report(plan)
-            self.report.appendPlainText(T("服务器端版本较旧，设置只读；请用“安装 / 更新服务器版…”更新后再修改。"))
+            self.report.appendPlainText(T("GRASP GUI 服务器版较旧，设置只读；请用“安装 / 更新 GRASP GUI 服务器版…”更新后再修改。"))
 
     def finish(self, _):
         self.closed = True
@@ -843,6 +968,8 @@ class ServerRunDialog(QDialog):
         checked = plan.get("checked")
         if checked is not None:
             lines.append(summary.check_text(checked) if checked["issues"] else T("输入预检通过。"))
+        elif plan.get("revision") is None:
+            lines.append(T("工作目录尚无流程。已检查程序目录。"))
         self.report.setPlainText("\n\n".join(lines))
         self.ok.setDefault(not missing)
         self.cancel.setDefault(bool(missing))
@@ -871,8 +998,17 @@ class ServerRunDialog(QDialog):
                 if plan.get("missing_programs") or plan.get("checked", {}).get("issues"):
                     return
                 self.confirm()
-        args = dict(directory=self.directory, run_settings=values, **self.range_args)
-        self.source.submit("run_plan", args, received)
+        if self.plan.get("revision") is None and not self.run:
+            path = values["bindir"].strip()
+            if path and not path.startswith(("/", "~/")):
+                received(None, ValueError(T("GRASP 程序目录 (bin) 必须是服务器上存在的绝对路径，或留空。")))
+            elif path:
+                self.source.submit("list_dir", dict(directory=path), lambda result, error: received(self.plan, error))
+            else:
+                received(self.plan, None)
+        else:
+            args = dict(directory=self.directory, run_settings=values, **self.range_args)
+            self.source.submit("run_plan", args, received)
 
     def confirm(self):
         if self.modern and self.checked_values != self.settings.values():
@@ -881,6 +1017,9 @@ class ServerRunDialog(QDialog):
         if self.modern:
             ssh.save_host_profile(self.source.client, run=self.settings.values())
         self.accept()
+        refresh = getattr(self.source, "refresh_grasp_check", None)
+        if self.modern and refresh is not None:
+            refresh()
 
 
 class RemoteCalculation(QWidget):
@@ -918,7 +1057,7 @@ class RemoteCalculation(QWidget):
         layout = renew_layout(self)
         hint = T("远程流程只读；可取出到本机编辑，再确认上传。")
         if "workdir_write_v1" not in getattr(self.source, "server", {}).get("capabilities", []):
-            hint += " " + T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。")
+            hint += " " + T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。")
         self.readonly_hint = QLabel(hint)
         layout.addWidget(self.readonly_hint)
         layout.addWidget(QLabel(T("服务器类型：{kind}", kind=T("Slurm 集群") if self.server_type == "slurm" else
@@ -928,7 +1067,7 @@ class RemoteCalculation(QWidget):
         self.edit_button = button("在本机编辑…", self.edit_local)
         self.edit_button.setEnabled("workdir_write_v1" in getattr(self.source, "server", {}).get("capabilities", []))
         if not self.edit_button.isEnabled():
-            self.edit_button.setToolTip(T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
+            self.edit_button.setToolTip(T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。"))
         bar.addWidget(self.edit_button)
         self.clean_button = button("清空工作目录…", self.preview_clean)
         self.update_clean_button()
@@ -1211,7 +1350,7 @@ class RemoteCalculation(QWidget):
     def update_clean_button(self):
         supported = "workdir_clean_v1" in getattr(self.source, "server", {}).get("capabilities", [])
         self.clean_button.setEnabled(supported and self.can_run and bool(self.revision) and not self.cleaning)
-        self.clean_button.setToolTip("" if supported else T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
+        self.clean_button.setToolTip("" if supported else T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。"))
 
     def preview_clean(self, *, recovering=False):
         from calc_panel import ClearDialog, clean_result
@@ -1269,7 +1408,7 @@ class RemoteCalculation(QWidget):
             except ValueError as e:
                 hint = str(e)
             if mode in ("to", "selected") and not self.has_run_range():
-                hint = T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。")
+                hint = T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。")
             saving = self.editor is not None and self.editor.saving
             button.setEnabled(self.can_run and not self.cleaning and not saving and not hint)
             button.setToolTip(hint)
@@ -1301,7 +1440,7 @@ class RemoteCalculation(QWidget):
         if self.save_first(lambda: self.prepare_run(start, end)):
             return
         if end is not None and not self.has_run_range():
-            QMessageBox.warning(self, T("远程运行"), T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
+            QMessageBox.warning(self, T("远程运行"), T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。"))
             return
         try:
             first, last = summary.run_bounds(len(self.jobs), start, end)
@@ -1311,7 +1450,7 @@ class RemoteCalculation(QWidget):
         span = (first + 1, last, len(self.jobs))
         range_args = dict(start=start, end=last) if self.has_run_range() else {}
         if self.server_type == "slurm" and "slurm" not in getattr(self.source, "server", {}).get("server_types", []):
-            QMessageBox.warning(self, T("远程运行"), T("服务器端尚不支持 Slurm，请先更新服务器端程序。"))
+            QMessageBox.warning(self, T("远程运行"), T("GRASP GUI 服务器版尚不支持 Slurm，请先更新。"))
             return
 
         def planned(plan, error):
@@ -1336,7 +1475,7 @@ class RemoteCalculation(QWidget):
                     return
                 settings = dialog.settings()
                 if QMessageBox.question(self, T("提交 Slurm 作业"),
-                        T("将在服务器目录 {p} 提交 Slurm 作业，是否确认？", p=self.directory) +
+                        T("将在服务器上的工作目录 {p} 提交 Slurm 作业，是否确认？", p=self.directory) +
                         "\n" + summary.range_text(*span),
                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
                     return
@@ -1387,14 +1526,7 @@ class RemoteCalculation(QWidget):
         self.source.submit("run_plan", args, planned)
 
     def edit_run_settings(self):
-        def received(plan, error):
-            if error:
-                QMessageBox.warning(self, T("服务器运行设置"), str(error))
-                return
-            dialog = ServerRunDialog(self, self.source, self.directory, plan, {}, run=False)
-            dialog.exec()
-            dialog.deleteLater()
-        self.source.submit("run_plan", dict(directory=self.directory), received)
+        show_server_run_settings(self, self.source, self.directory)
 
     def copy_script(self, value, error):
         if not error:
@@ -1451,6 +1583,9 @@ class RemoteWorkspace(QWidget):
         source.push.connect(self.push)
         if hasattr(source, "connectionChanged"):
             source.connectionChanged.connect(self.update_connection)
+            source.connectionChanged.connect(self.show_grasp_check)
+        if hasattr(source, "graspCheckChanged"):
+            source.graspCheckChanged.connect(self.show_grasp_check)
         self.status = QStatusBar(self)
         source.notice.connect(self.status.showMessage)
         self.calc = RemoteCalculation(self, directory, run_after_load)
@@ -1506,12 +1641,17 @@ class RemoteWorkspace(QWidget):
     def cancel(self, request):
         self.source.cancel(request)
 
+    def refresh_grasp_check(self):
+        refresh = getattr(self.source, "refresh_grasp_check", None)
+        if refresh is not None:
+            refresh()
+
     def statusBar(self):
         return self.status
 
     def build(self, index=0):
         layout = renew_layout(self)
-        self.label = T("服务器 {h}:{p}", h=self.client.host, p=self.directory)
+        self.label = T("服务器上的工作目录 {h}:{p}", h=self.client.host, p=self.directory)
         self.setWindowTitle(self.label)
         bar = QHBoxLayout()
         name = QLabel(self.label)
@@ -1539,6 +1679,16 @@ class RemoteWorkspace(QWidget):
         operations.setMenu(menu)
         bar.addWidget(operations)
         layout.addLayout(bar)
+        grasp_bar = QHBoxLayout()
+        self.grasp_status = QLabel()
+        self.grasp_status.setTextFormat(Qt.PlainText)
+        self.grasp_status.setWordWrap(True)
+        self.grasp_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        grasp_bar.addWidget(self.grasp_status, 1)
+        self.grasp_settings = button("设置…", lambda: self.calc.edit_run_settings())
+        grasp_bar.addWidget(self.grasp_settings)
+        layout.addLayout(grasp_bar)
+        self.show_grasp_check()
         self.tabs = QTabWidget()
         for widget, (_, title) in zip((self.calc, self.waves, self.levels), self.TABS):
             self.tabs.addTab(widget, T(title))
@@ -1602,6 +1752,14 @@ class RemoteWorkspace(QWidget):
         self.levels.scan()
         for _, panel in self.detached:
             panel.scan()
+
+    def show_grasp_check(self):
+        if self.closed or not hasattr(self, "grasp_status"):
+            return
+        connected = getattr(self.client, "connected", True)
+        text, settings = grasp_check_text(self.source, self.server_type)
+        self.grasp_status.setText(text if connected else "")
+        self.grasp_settings.setVisible(settings and connected)
 
     def open_transfer(self, upload=False, folder=False):
         from PySide6.QtWidgets import QFileDialog

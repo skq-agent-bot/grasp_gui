@@ -47,7 +47,7 @@ class RemoteEditor(PipelineEditor):
         bar = QHBoxLayout()
         bar.addWidget(button("预览输入", self.preview))
         check = button("检查输入文件", self.check_inputs)
-        check.setToolTip(T("由服务器按服务器目录检查流程。"))
+        check.setToolTip(T("由服务器按服务器上的工作目录检查流程。"))
         bar.addWidget(check)
         self.add_button = button("加入流程 ↓", self.add_to_pipeline)
         bar.addWidget(self.add_button)
@@ -125,7 +125,7 @@ class RemoteEditor(PipelineEditor):
             self.show_draft()
             self.reconcile(value=dict(revision=self.base["revision"], config=self.base["config"]))
             return
-        text = T("此服务器目录有 {time} 保存的草稿。", time=saved["updated"])
+        text = T("此服务器上的工作目录有 {time} 保存的草稿。", time=saved["updated"])
         if saved["base_revision"] != self.base["revision"]:
             text += "\n" + T("服务器流程在此之后已改变；恢复后保存会被拒绝，可导出草稿。")
         box = QMessageBox(QMessageBox.Question, T("恢复草稿"), text, parent=self.calc)
