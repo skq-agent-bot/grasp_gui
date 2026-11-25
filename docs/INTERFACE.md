@@ -112,7 +112,17 @@ opens Convergence in the Local workspace. Local directory, import, export and pa
 while a server workspace is active. Changing the language or font size keeps open workspaces, connections,
 reads and transfers. At startup only the saved Local page opens. Open a recent server directory explicitly
 from the connection dialog.
-Calculation is read-only: select a pipeline step to inspect parameters/input, run all/from selection, stop, refresh,
+With a server that supports writing (`workdir_write_v1`), the Calculation page uses the same program pages, pipeline
+list and input preview as the Local workspace. **Check input files** asks the server to check its directory. Edits are
+kept as a local draft, and the tab shows **●** while a draft exists. **Save to server…** previews the changes,
+confirms custom commands separately and asks a final question that defaults to No. If the server pipeline changed or
+a calculation is running, saving is refused and the draft is kept. The **Draft** menu can export it as a
+configuration or reload the server pipeline (discarding the draft). There is no forced overwrite. A lost reply is
+never resent: the client reads the server pipeline and compares revisions and fingerprints. Running asks you to
+save the draft first. When reopening a directory with a draft, choose **Restore draft** or **Discard draft**.
+Closing a tab, or quitting with drafts, asks for each one: **Save to server**, **Keep draft** (default) or
+**Discard draft**. A disconnected tab keeps its draft and shows **Reconnect**. Older servers stay read-only with
+an update hint. You can select a pipeline step to inspect parameters/input, run all/from selection, stop, refresh,
 and follow pushed logs. Custom commands require confirmation. Logging-out policies may require choosing user scope,
 Slurm export or explicit normal startup. Radial and level tabs reuse the existing viewers with remote data;
 levels/compositions and coarse/fine curves appear progressively. Hover, selection, zoom and pan use cached data.
@@ -172,8 +182,13 @@ Old servers without `workdir_write_v1` show an update instruction and receive no
 各占一个标签。服务器标签顶部显示完整路径、服务器类型和连接状态。SSH 别名解析到同一用户、主机和端口时，同一目录复用标签。
 Ctrl+PgUp / Ctrl+PgDn 切换工作区，Ctrl+1–3 切换当前工作区的页面，Ctrl+4 在本机打开收敛页。服务器工作区激活时，
 本机目录、导入导出和参数菜单禁用。切换语言或字号会保留工作区、连接、读取和传输。启动时恢复本机页面，最近使用的服务器目录
-可通过连接对话框手动打开。服务器工作区及独立查看器显示服务器来源，计算流程
-只读，参数和输入预览不能编辑；可运行、停止和跟踪日志，自定义命令须确认。会受退出登录清理影响时默认取消，
+可通过连接对话框手动打开。服务器工作区及独立查看器显示服务器来源。服务器支持写入 (`workdir_write_v1`) 时，计算页使用与本机相同的
+程序页、流程列表和输入预览，“检查输入文件”由服务器按服务器目录检查。修改先保存为本机草稿，有草稿时标签显示 ●。
+“保存到服务器…”先预览差异，自定义命令单独确认，最终确认默认为“否”。服务器流程已改变或有计算正在运行时拒绝写入，
+草稿保留；“草稿”菜单可导出草稿为配置或重新读取服务器流程 (放弃草稿)，不提供强制覆盖。失去回答时不重发，读取服务器流程
+按修订号和指纹核对。运行前先要求保存草稿。重新打开有草稿的目录时选择“恢复草稿 / 放弃草稿”；关闭标签或退出程序时逐个选择
+“保存到服务器 / 保留草稿 / 放弃草稿”，默认保留草稿。断线时草稿保留，标签显示“重新连接”。旧服务器端只读并提示更新。
+可运行、停止和跟踪日志，自定义命令须确认。会受退出登录清理影响时默认取消，
 用户可选 scope、导出 Slurm 或明确照常启动。能级/组成、粗/细曲线渐进显示；选中、悬停、缩放和平移使用缓存，
 “读取更多组成”才补取数据。远程跃迁页只读已有结果，图上标记不写文件。“窗口”菜单可开共享连接的查看器，“服务器操作”菜单可重新连接。
 远程“结果摘要…”由服务器读流程、状态并生成文本；勾选/能级数改变后重新请求，复制与本机保存沿用同一对话框。
@@ -948,7 +963,7 @@ Screenshots / 界面截图（本地协议替身，不连接真实 SSH）：
 | Nonempty without a record / 非空且无记录 | [拒绝说明](images/zh_upload_nonempty.png) | [Refusal](images/en_upload_nonempty.png) |
 | No input files / 不传输入 | [只写流程](images/zh_upload_pipeline_only.png) | [Pipeline only](images/en_upload_pipeline_only.png) |
 | Update preview / 更新预览 | [更新](images/zh_upload_update.png) | [Update](images/en_upload_update.png) |
-| Completion / 完成后 | [打开远程窗口](images/zh_upload_complete.png) | [Open remote window](images/en_upload_complete.png) |
+| Completion / 完成后 | [打开远程工作区](images/zh_upload_complete.png) | [Open server workspace](images/en_upload_complete.png) |
 
 ## Convergence panel / 收敛面板
 

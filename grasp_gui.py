@@ -114,7 +114,7 @@ if core.IS_LINUX:
 from PySide6.QtCore import QByteArray, QEvent, QObject, QPointF, Qt  # noqa: E402
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPainter,  # noqa: E402
                            QPalette, QShortcut)
-from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit,  # noqa: E402
+from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit,  # noqa: E402
                                QMainWindow, QMessageBox, QSplitter, QSplitterHandle, QTabBar, QTabWidget, QToolButton,
                                QVBoxLayout, QWidget)
 
@@ -177,6 +177,7 @@ class MainWindow(QMainWindow):
         self.run = None
         self.calc = None
         self.remote_workspaces = {}
+        self.drafts_resolved = False
         self.panels = {}           # 已创建的查看器面板：种类 -> 面板 (第一次切换到该标签页时创建)
         self.pending = {}          # 重新创建面板后要恢复的勾选文件：种类 -> [路径]
         gc.PANEL_FACTORIES.update(wfn=wfn_panel, levels=self.make_level_panel, convergence=convergence_panel)
@@ -348,11 +349,18 @@ class MainWindow(QMainWindow):
         return T("本机：{name}", name=os.path.basename(self.cur_workdir) or self.cur_workdir)
 
     def add_remote_tab(self, workspace):
+        index = self.workspaces.addTab(workspace, "")
+        self.workspaces.setTabToolTip(index, f"{workspace.label}\n{workspace.server_label()}")
+        self.update_remote_title(workspace)
+
+    def update_remote_title(self, workspace):
         from pathlib import PurePosixPath
 
-        title = PurePosixPath(workspace.directory).name or workspace.directory
-        index = self.workspaces.addTab(workspace, f"{workspace.client.host}:{title}")
-        self.workspaces.setTabToolTip(index, f"{workspace.label}\n{workspace.server_label()}")
+        index = self.workspaces.indexOf(workspace)
+        if index > 0:
+            title = PurePosixPath(workspace.directory).name or workspace.directory
+            mark = "● " if workspace.has_draft() else ""
+            self.workspaces.setTabText(index, f"{mark}{workspace.client.host}:{title}")
 
     def open_remote_workspace(self, source, directory, *, refresh=False, run_after_load=False, replace=None):
         from remote_panel import RemoteWorkspace, remote_recent_entries, workspace_key
@@ -361,6 +369,7 @@ class MainWindow(QMainWindow):
         workspace = self.remote_workspaces.get(key)
         if workspace is None:
             workspace = RemoteWorkspace(source, key[1], self, run_after_load)
+            workspace.draftChanged.connect(lambda: self.update_remote_title(workspace))
             self.remote_workspaces[key] = workspace
             self.add_remote_tab(workspace)
             if len(self.remote_workspaces) == 1:
@@ -428,8 +437,53 @@ class MainWindow(QMainWindow):
     def close_remote_tab(self, index):
         if index > 0:
             workspace = self.workspaces.widget(index)
-            if workspace.may_close():
-                self.remove_remote_workspace(workspace)
+            if not workspace.may_close():
+                return
+            choice = "keep"
+            if workspace.has_draft():
+                from remote_editor import DraftsDialog
+                dialog = DraftsDialog(self, [workspace])
+                if dialog.exec() != QDialog.Accepted:
+                    return
+                choice = dialog.selected()[0][1]
+
+            def resolved(ok):
+                if ok and workspace in self.remote_workspaces.values():
+                    self.remove_remote_workspace(workspace)
+            workspace.resolve_draft(choice, resolved)
+
+    def resolve_drafts(self):
+        """退出前处理各服务器工作区的草稿；需要等待保存时返回 False，保存全部成功后再次关闭窗口。"""
+        if self.drafts_resolved:
+            self.drafts_resolved = False
+            return True
+        waiting = [workspace for workspace in self.remote_workspaces.values() if workspace.has_draft()]
+        if not waiting:
+            return True
+        from remote_editor import DraftsDialog
+        dialog = DraftsDialog(self, waiting)
+        if dialog.exec() != QDialog.Accepted:
+            return False
+        saves = []
+        for workspace, choice in dialog.selected():
+            if choice == "save":
+                saves.append(workspace)
+            else:
+                workspace.resolve_draft(choice, lambda ok: None)
+        if not saves:
+            return True
+
+        def next_save(ok=True):
+            if not ok:
+                self.statusBar().showMessage(T("有服务器流程没有保存，程序没有退出。"))
+                return
+            if saves:
+                saves.pop(0).resolve_draft("save", next_save)
+                return
+            self.drafts_resolved = True
+            self.close()
+        next_save()
+        return False
 
     def remove_remote_workspace(self, workspace):
         from remote_panel import workspace_key
@@ -499,6 +553,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         if any(not workspace.may_close() for workspace in self.remote_workspaces.values()):
+            event.ignore()
+            return
+        if not self.resolve_drafts():
             event.ignore()
             return
         panels = list(self.panels.values()) + [w.panel for w in gc.PANEL_WINDOWS]
