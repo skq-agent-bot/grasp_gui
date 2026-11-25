@@ -49,6 +49,8 @@ def test_typed_path_replaces_directory_in_place_and_cancels_old_reads(desk, qapp
     workspace.show_tab("wfn")
     viewer = workspace.open_view("levels")
     old_requests = dict(source.requests)
+    write_results = []
+    write_request = workspace.submit("update_workdir", dict(directory="/srv/a"), lambda *args: write_results.append(args))
     workspace.directory_edit.setText("bad")
     workspace.directory_edit.returnPressed.emit()
     method, args, received = source.pending.pop()
@@ -67,6 +69,9 @@ def test_typed_path_replaces_directory_in_place_and_cancels_old_reads(desk, qapp
     assert opened.source is source and source.parent() is opened and source.closes == source.reconnects == 0
     assert desk.workspaces.indexOf(opened) == 1 and desk.workspaces.indexOf(other) == 2
     assert workspace.closed and set(old_requests) <= source.cancelled and not viewer.isVisible()
+    assert write_request not in source.cancelled
+    source.respond("update_workdir", dict(revision="r2"), directory="/srv/a")
+    assert write_results == []
     for method, _, callback in old_requests.values():
         if method == "watch":
             callback(dict(text="old log", state=None), None)
@@ -83,6 +88,8 @@ def test_browser_siblings_recent_and_existing_tab(desk, monkeypatch):
     workspace = desk.open_remote_workspace(source, "/srv/a")
 
     def browse(dialog):
+        assert dialog.windowTitle() == "Browse working directory on server"
+        assert dialog.use.text() == "Open this working directory"
         source.respond("list_dir", listing("/srv/a"), directory="/srv/a")
         dialog.up.click()
         source.respond("list_dir", listing("/srv", "a", "b"), directory="/srv")
@@ -108,6 +115,7 @@ def test_browser_siblings_recent_and_existing_tab(desk, monkeypatch):
     existing = desk.open_remote_workspace(alias, "/srv/a")
     desk.workspaces.setCurrentWidget(current)
     current.load_recent()
+    assert current.recent_menu.actions()[-1].text() == "Clear recent working directories for this host"
     [item for item in current.recent_menu.actions() if item.text() == "/srv/a"][0].trigger()
     source.respond("list_dir", listing("/srv/a"), directory="/srv/a")
     assert desk.active_remote() is existing and not current.closed and current.directory_edit.text() == "/srv/c"

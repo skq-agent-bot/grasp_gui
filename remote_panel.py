@@ -16,7 +16,7 @@ import grasp_config as config
 import grasp_install as install
 import grasp_core as core
 import grasp_mix as mix
-from grasp_remote import GRASP_CHECK
+from grasp_remote import GRASP_CHECK, MUTATIONS
 import grasp_ssh as ssh
 import grasp_summary as summary
 import grasp_trans as transitions
@@ -254,7 +254,7 @@ class BrowseServerDirectory(QDialog):
         layout.addWidget(self.status)
         row = QHBoxLayout()
         row.addStretch()
-        self.use = button("打开选定的工作目录", self.accept)
+        self.use = button("打开此工作目录", self.accept)
         row.addWidget(self.use)
         row.addWidget(button("取消", self.reject))
         layout.addLayout(row)
@@ -1642,7 +1642,6 @@ class RemoteViewer(QMainWindow):
 
 class RemoteWorkspace(QWidget):
     TABS = (("calc", "计算"), ("wfn", "径向波函数"), ("levels", "能级图"))
-    WRITE_REQUESTS = {"run", "stop", "clean_workdir", "clear_slurm_record", "create_workdir", "update_workdir"}
     push = Signal(object)
     draftChanged = Signal()
 
@@ -1723,7 +1722,7 @@ class RemoteWorkspace(QWidget):
                 callback(*values)
 
         request = self.source.submit(method, args, received, **options)
-        if pending and request is not None and method not in self.WRITE_REQUESTS:
+        if pending and request is not None and method not in MUTATIONS:
             self.read_requests.add(request)
         return request
 
@@ -1744,7 +1743,7 @@ class RemoteWorkspace(QWidget):
         self.label = T("服务器上的工作目录 {h}:{p}", h=self.client.host, p=self.directory)
         self.setWindowTitle(self.label)
         bar = QHBoxLayout()
-        name = QLabel(T("服务器 {h}", h=self.client.host))
+        name = QLabel(T("服务器上的工作目录（{h}）", h=self.client.host))
         name.setTextInteractionFlags(Qt.TextSelectableByMouse)
         bar.addWidget(name)
         self.build_directory_bar(bar)
@@ -1804,7 +1803,7 @@ class RemoteWorkspace(QWidget):
 
     def build_directory_bar(self, bar):
         self.directory_edit = QLineEdit(self.directory)
-        self.directory_edit.setAccessibleName(T("工作目录"))
+        self.directory_edit.setAccessibleName(T("服务器上的工作目录"))
         self.directory_edit.returnPressed.connect(lambda: self.request_directory(self.directory_edit.text()))
         self.browse_button = button("浏览…", self.browse_directory)
         self.siblings_button, self.recent_button = QToolButton(), QToolButton()
@@ -1898,7 +1897,7 @@ class RemoteWorkspace(QWidget):
             action.triggered.connect(lambda checked=False, directory=path: self.request_directory(directory))
         if paths:
             menu.addSeparator()
-        menu.addAction(T("清除此主机的最近目录")).triggered.connect(self.clear_recent)
+        menu.addAction(T("清除此主机最近的工作目录")).triggered.connect(self.clear_recent)
 
     def clear_recent(self):
         entries = [entry for entry in remote_recent_entries() if not self.recent_matches(entry[0], entry[2])]
@@ -2018,7 +2017,7 @@ class RemoteWorkspace(QWidget):
         creation = getattr(self.calc, "import_dialog", None)
         if not any(dialog.busy for dialog in self.transfer_dialogs) and not (creation and creation.busy):
             return True
-        prompt = (T("传输仍在进行，切换目录将取消传输。是否取消传输并切换？") if switching else
+        prompt = (T("切换工作目录将取消正在进行的传输。是否继续？") if switching else
                   T("传输仍在进行，关闭工作区将取消传输。是否取消并关闭？"))
         return QMessageBox.question(self, T("取消传输"), prompt,
                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes

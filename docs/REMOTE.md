@@ -82,7 +82,7 @@ in either workspace, with Ctrl+4 for Convergence in the Local workspace. Languag
 open tabs, sessions and in-progress reads and transfers. To reconnect after restarting the application,
 choose a saved directory in the connection dialogue.
 
-Use the working directory bar inside a server tab to switch without opening another SSH session. Enter a path,
+Use the **Working directory on server** bar inside a server tab to switch without opening another SSH session. Enter a path,
 choose **Browse…**, open **Siblings** to list the parent directory, or open **Recent** for this host. The server
 resolves paths. If the target is already open, its tab becomes active. A switch keeps the selected page, closes
 the previous directory's extra viewers and cancels its pending reads. Active transfers require confirmation.
@@ -93,7 +93,7 @@ Drafts use the same Save, Keep or Discard choices as tab closure. A server calcu
 Ctrl+PgUp/PgDn 切换工作区，Ctrl+1–3 切换当前工作区页面，Ctrl+4 打开本机收敛页。切换语言或字号时保留标签、会话、
 进行中的读取和传输。重启应用后，可从连接对话框手动打开最近使用的服务器上的工作目录。
 
-服务器标签内的工作目录栏可以直接切换，沿用 SSH 会话。可以输入路径，点“浏览…”，从“同级”选择上一级的子目录，
+服务器标签内的“服务器上的工作目录”栏可以直接切换，沿用 SSH 会话。可以输入路径，点“浏览…”，从“同级”选择上一级的子目录，
 或从“最近”打开这台主机用过的目录。路径由服务器解析。目标已有标签时激活它。切换后保留当前页，关闭旧目录的独立
 查看器并取消未完成的读取。传输进行中须确认，草稿沿用关闭标签时的保存、保留或放弃选项。服务器上的计算继续运行。
 
