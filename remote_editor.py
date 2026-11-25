@@ -36,6 +36,7 @@ class RemoteEditor(PipelineEditor):
         self.draft = None          # 与草稿文件一致；没有修改时为 None
         self.blocked = None        # 草稿文件无法读取时的说明；此时不编辑，以免覆盖原文件
         self.saving = False
+        self.save_waiters = []
 
     # ---- 界面 ----
     def build(self):
@@ -239,19 +240,29 @@ class RemoteEditor(PipelineEditor):
             QMessageBox.information(self.calc, T("检查输入文件"), text)
         self.calc.source.submit("preview_upload", self.preview_args(cfg, revision), checked)
 
-    def save_to_server(self, done=None):
+    def save_to_server(self, done=None, *, wait=False):
         """预览差异 → 自定义命令单独确认 → 最终确认 (默认“否”) → update_workdir。done(成功与否)。"""
-        finish = done or (lambda ok: None)
+        completed = done or (lambda ok: None)
         if self.draft is None:
-            finish(True)
+            completed(True)
             return
         if self.saving:
-            finish(False)
+            if wait and done is not None:
+                self.save_waiters.append(done)
+            else:
+                completed(False)
             return
         if self.draft.get("pending"):
             self.reconcile()
-            finish(False)
+            completed(False)
             return
+
+        def finish(ok):
+            waiting, self.save_waiters = self.save_waiters, []
+            completed(ok)
+            for callback in waiting:
+                callback(ok)
+
         title = T("保存到服务器")
         cfg = self.checked_configuration(title)
         if cfg is None:

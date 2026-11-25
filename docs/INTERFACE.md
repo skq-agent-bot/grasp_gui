@@ -113,6 +113,10 @@ is missing, **Settings…** opens server run settings. Slurm reports describe th
 
 The main window has one permanent **Local** workspace followed by the server directories you open.
 Each server tab displays the full directory, server type and connection state above its three pages.
+Enter a path in **Working directory on server**, or choose **Browse…**, **Siblings**, or **Recent**. The tab keeps
+its SSH session and current page. Switching uses the same draft and transfer prompts as closing a tab.
+An already open target is activated without changing the current directory of the original tab.
+[Directory bar (English)](images/en_server_directory_switch.png) / [目录栏](images/zh_server_directory_switch.png).
 Aliases that resolve to the same SSH user, host and port reuse an open tab for that directory.
 **Ctrl+PgUp / Ctrl+PgDn** switch workspaces. **Ctrl+1–3** switch pages in the active workspace, and **Ctrl+4**
 opens Convergence in the Local workspace. Local directory, import, export and parameter commands are disabled
@@ -192,6 +196,9 @@ Old servers without `workdir_write_v1` show an update instruction and receive no
 连接对话框采用那个主机的设置，并显示生效的连接标识。
 主窗口保留一个不可关闭的本机工作区，已打开的服务器目录
 各占一个标签。服务器标签顶部显示完整路径、服务器类型和连接状态。SSH 别名解析到同一用户、主机和端口时，同一目录复用标签。
+在“服务器上的工作目录”栏输入路径，或用“浏览…”、“同级”、“最近”切换工作目录。切换沿用连接并保留当前页，
+草稿和传输按关闭标签时的规则确认。
+目标已经打开时激活对应标签，原标签仍在原目录。
 Ctrl+PgUp / Ctrl+PgDn 切换工作区，Ctrl+1–3 切换当前工作区的页面，Ctrl+4 在本机打开收敛页。服务器工作区激活时，
 本机目录、导入导出和参数菜单禁用。切换语言或字号会保留工作区、连接、读取和传输。启动时恢复本机页面，最近使用的服务器上的工作目录
 可通过连接对话框手动打开。服务器工作区及独立查看器显示服务器来源。服务器支持写入 (`workdir_write_v1`) 时，计算页使用与本机相同的
