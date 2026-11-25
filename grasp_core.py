@@ -1717,6 +1717,16 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "Missing answers for blocks {blocks}. Use - to skip a final block.",
     "多填了 {extra} 行。": "Remove {extra} extra lines.",
     "无法读取 {name} 的对称块：{error}": "Cannot read symmetry blocks from {name}: {error}",
+    # 在服务器标签中切换工作目录
+    "浏览服务器上的工作目录": "Browse working directory on server",
+    "打开选定的工作目录": "Open selected working directory",
+    "同级": "Siblings",
+    "服务器 {h}": "Server {h}",
+    "读取中…": "Loading…",
+    "只显示前 {n} 项": "Showing only the first {n} entries",
+    "清除此主机的最近目录": "Clear recent directories for this host",
+    "传输仍在进行，切换目录将取消传输。是否取消传输并切换？":
+        "Switching directories cancels the active transfer. Cancel the transfer and switch?",
 }
 
 

@@ -349,8 +349,8 @@ class MainWindow(QMainWindow):
     def local_workspace_title(self):
         return T("本机：{name}", name=os.path.basename(self.cur_workdir) or self.cur_workdir)
 
-    def add_remote_tab(self, workspace):
-        index = self.workspaces.addTab(workspace, "")
+    def add_remote_tab(self, workspace, index=-1):
+        index = self.workspaces.insertTab(index, workspace, "")
         self.workspaces.setTabToolTip(index, f"{workspace.label}\n{workspace.server_label()}")
         self.update_remote_title(workspace)
 
@@ -364,7 +364,7 @@ class MainWindow(QMainWindow):
             self.workspaces.setTabText(index, f"{mark}{workspace.client.host}:{title}")
 
     def open_remote_workspace(self, source, directory, *, refresh=False, run_after_load=False, replace=None):
-        from remote_panel import RemoteWorkspace, remote_recent_entries, workspace_key
+        from remote_panel import RemoteWorkspace, workspace_key
 
         key = workspace_key(source, directory)
         workspace = self.remote_workspaces.get(key)
@@ -372,7 +372,10 @@ class MainWindow(QMainWindow):
             workspace = RemoteWorkspace(source, key[1], self, run_after_load)
             workspace.draftChanged.connect(lambda: self.update_remote_title(workspace))
             self.remote_workspaces[key] = workspace
-            self.add_remote_tab(workspace)
+            index = self.workspaces.indexOf(replace) if replace is not None else -1
+            if index > 0:
+                workspace.tabs.setCurrentIndex(replace.tabs.currentIndex())
+            self.add_remote_tab(workspace, index)
             if len(self.remote_workspaces) == 1:
                 QApplication.instance().installEventFilter(self)
                 for shortcut in self.workspace_shortcuts:
@@ -387,12 +390,45 @@ class MainWindow(QMainWindow):
         elif all(item.source is not source for item in self.remote_workspaces.values()):
             source.close()
         self.workspaces.setCurrentWidget(workspace)
-        identity, directory = key
-        aliases = {workspace.client.host, source.client.host}
+        self.remember_remote_directory(workspace, source.client.host)
+        return workspace
+
+    def remember_remote_directory(self, workspace, alias):
+        from remote_panel import remote_recent_entries
+
+        identity, directory = workspace.key
+        aliases = {workspace.client.host, alias}
         recent = [(host, path, saved) for host, path, saved in remote_recent_entries()
                   if path != directory or (saved != identity if saved else host not in aliases)]
         core.save_config(remote_recent=[(workspace.client.host, directory, identity), *recent[:11]])
-        return workspace
+
+    def switch_remote_workspace(self, workspace, directory):
+        from remote_panel import workspace_key
+
+        key = workspace_key(workspace.source, directory)
+
+        def activate_existing():
+            existing = self.remote_workspaces.get(key)
+            if existing is None:
+                return False
+            workspace.set_directory_switching(False)
+            self.workspaces.setCurrentWidget(existing)
+            self.remember_remote_directory(existing, workspace.client.host)
+            return True
+
+        if activate_existing():
+            return
+
+        def resolved(ok):
+            if workspace.closed:
+                return
+            if not ok or not getattr(workspace.client, "connected", True):
+                workspace.set_directory_switching(False)
+                return
+            if not activate_existing():
+                self.open_remote_workspace(workspace.source, directory, replace=workspace)
+
+        self.leave_remote_directory(workspace, resolved, switching=True)
 
     def active_remote(self):
         return self.workspaces.currentWidget() if self.workspaces.currentIndex() > 0 else None
@@ -438,20 +474,24 @@ class MainWindow(QMainWindow):
     def close_remote_tab(self, index):
         if index > 0:
             workspace = self.workspaces.widget(index)
-            if not workspace.may_close():
-                return
-            choice = "keep"
-            if workspace.has_draft():
-                from remote_editor import DraftsDialog
-                dialog = DraftsDialog(self, [workspace])
-                if dialog.exec() != QDialog.Accepted:
-                    return
-                choice = dialog.selected()[0][1]
-
             def resolved(ok):
                 if ok and workspace in self.remote_workspaces.values():
                     self.remove_remote_workspace(workspace)
-            workspace.resolve_draft(choice, resolved)
+            self.leave_remote_directory(workspace, resolved)
+
+    def leave_remote_directory(self, workspace, done, *, switching=False):
+        if not workspace.may_close(switching=switching):
+            done(False)
+            return
+        choice = "keep"
+        if workspace.has_draft():
+            from remote_editor import DraftsDialog
+            dialog = DraftsDialog(self, [workspace])
+            if dialog.exec() != QDialog.Accepted:
+                done(False)
+                return
+            choice = dialog.selected()[0][1]
+        workspace.resolve_draft(choice, done)
 
     def resolve_drafts(self):
         """退出前处理各服务器工作区的草稿；需要等待保存时返回 False，保存全部成功后再次关闭窗口。"""

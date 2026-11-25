@@ -203,6 +203,89 @@ def remote_recent_entries():
     return result
 
 
+class ServerDirectoryList(QListWidget):
+    directoryRequested = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.directory = self.parent_path = None
+        self.itemDoubleClicked.connect(self.enter)
+
+    def show_directory(self, value):
+        self.directory, self.parent_path = value["directory"], value["parent"]
+        self.clear()
+        for row in value["files"]:
+            item = QListWidgetItem(("▸ " if row["directory"] else "  ") + row["name"])
+            item.setData(Qt.UserRole, row)
+            item.setToolTip(f"{row['type']} · {row['size']} bytes")
+            self.addItem(item)
+
+    def enter(self, item):
+        row = item.data(Qt.UserRole)
+        if row["directory"]:
+            self.directoryRequested.emit(str(PurePosixPath(self.directory) / row["name"]))
+
+    def parent_directory(self):
+        if self.parent_path:
+            self.directoryRequested.emit(self.parent_path)
+
+
+class BrowseServerDirectory(QDialog):
+    def __init__(self, workspace):
+        super().__init__(workspace)
+        self.setWindowTitle(T("浏览服务器上的工作目录"))
+        self.resize(720, 480)
+        self.workspace = workspace
+        self.generation = 0
+        self.finished.connect(self.finished_browsing)
+        layout = QVBoxLayout(self)
+        row = QHBoxLayout()
+        self.path = QLineEdit(workspace.directory)
+        self.path.returnPressed.connect(lambda: self.load(self.path.text()))
+        row.addWidget(self.path, 1)
+        self.up = button("上一级", lambda: self.files.parent_directory())
+        row.addWidget(self.up)
+        layout.addLayout(row)
+        self.files = ServerDirectoryList()
+        self.files.directoryRequested.connect(self.load)
+        layout.addWidget(self.files, 1)
+        self.status = QLabel()
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
+        row = QHBoxLayout()
+        row.addStretch()
+        self.use = button("打开选定的工作目录", self.accept)
+        row.addWidget(self.use)
+        row.addWidget(button("取消", self.reject))
+        layout.addLayout(row)
+        self.load(workspace.directory)
+
+    def finished_browsing(self, _):
+        self.generation += 1
+
+    def load(self, path):
+        self.generation += 1
+        generation = self.generation
+        self.use.setEnabled(False)
+        self.up.setEnabled(False)
+        self.status.setText(T("读取中…"))
+
+        def received(value, error):
+            if generation != self.generation:
+                return
+            if error:
+                self.status.setText(str(error))
+                self.path.setText(self.files.directory or self.workspace.directory)
+            else:
+                self.files.show_directory(value)
+                self.path.setText(self.files.directory)
+                self.status.setText("")
+            self.use.setEnabled(self.files.directory is not None)
+            self.up.setEnabled(self.files.directory is not None)
+
+        self.workspace.submit("list_dir", dict(directory=path), received)
+
+
 class ConnectDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -254,8 +337,8 @@ class ConnectDialog(QDialog):
         bar.addWidget(self.install_button)
         bar.addWidget(button("从服务器移除…", lambda: self.install_server(remove=True)))
         layout.addLayout(bar)
-        self.files = QListWidget()
-        self.files.itemDoubleClicked.connect(self.enter)
+        self.files = ServerDirectoryList()
+        self.files.directoryRequested.connect(self.browse_directory)
         layout.addWidget(self.files, 1)
         self.status = QLabel(T("密钥或 ssh-agent 优先；密码和验证码仅在 OpenSSH 输入框中输入，不保存。"))
         self.status.setWordWrap(True)
@@ -460,12 +543,7 @@ class ConnectDialog(QDialog):
         self.parent_path = value["parent"]
         self.entries = value["files"]
         self.path.setText(self.directory)
-        self.files.clear()
-        for row in self.entries:
-            item = QListWidgetItem(("▸ " if row["directory"] else "  ") + row["name"])
-            item.setData(Qt.UserRole, row)
-            item.setToolTip(f"{row['type']} · {row['size']} bytes")
-            self.files.addItem(item)
+        self.files.show_directory(value)
         self.use.setEnabled(True)
         self.create_button.setEnabled(True)
         self.show_grasp_check()
@@ -479,16 +557,12 @@ class ConnectDialog(QDialog):
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
                 self.install_server()
 
-    def enter(self, item):
-        row = item.data(Qt.UserRole)
-        if row["directory"]:
-            self.path.setText(str(PurePosixPath(self.directory) / row["name"]))
-            self.connect_server()
+    def browse_directory(self, path):
+        self.path.setText(path)
+        self.connect_server()
 
     def parent_directory(self):
-        if self.directory:
-            self.path.setText(self.parent_path)
-            self.connect_server()
+        self.files.parent_directory()
 
     def valid_connection(self):
         if not self.source or not self.directory:
@@ -1568,6 +1642,7 @@ class RemoteViewer(QMainWindow):
 
 class RemoteWorkspace(QWidget):
     TABS = (("calc", "计算"), ("wfn", "径向波函数"), ("levels", "能级图"))
+    WRITE_REQUESTS = {"run", "stop", "clean_workdir", "clear_slurm_record", "create_workdir", "update_workdir"}
     push = Signal(object)
     draftChanged = Signal()
 
@@ -1578,6 +1653,8 @@ class RemoteWorkspace(QWidget):
         self.owner = parent
         self.closed = False
         self.keep_source = False
+        self.switching_directory = False
+        self.read_requests = set()
         source.setParent(self)
         self.key = workspace_key(source, directory)
         source.push.connect(self.push)
@@ -1636,9 +1713,22 @@ class RemoteWorkspace(QWidget):
             return received
         if options.get("progress"):
             options["progress"] = deliver(options["progress"])
-        return self.source.submit(method, args, deliver(callback), **options)
+        request, pending = None, True
+
+        def received(*values):
+            nonlocal pending
+            pending = False
+            self.read_requests.discard(request)
+            if not self.closed:
+                callback(*values)
+
+        request = self.source.submit(method, args, received, **options)
+        if pending and request is not None and method not in self.WRITE_REQUESTS:
+            self.read_requests.add(request)
+        return request
 
     def cancel(self, request):
+        self.read_requests.discard(request)
         self.source.cancel(request)
 
     def refresh_grasp_check(self):
@@ -1654,9 +1744,10 @@ class RemoteWorkspace(QWidget):
         self.label = T("服务器上的工作目录 {h}:{p}", h=self.client.host, p=self.directory)
         self.setWindowTitle(self.label)
         bar = QHBoxLayout()
-        name = QLabel(self.label)
+        name = QLabel(T("服务器 {h}", h=self.client.host))
         name.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        bar.addWidget(name, 1)
+        bar.addWidget(name)
+        self.build_directory_bar(bar)
         self.connection = QLabel()
         bar.addWidget(self.connection)
         self.reconnect_button = button("重新连接", self.source.reconnect)
@@ -1706,9 +1797,112 @@ class RemoteWorkspace(QWidget):
         connected = getattr(self.client, "connected", True)
         self.connection.setText(f"{self.server_label()} · {T('已连接') if connected else T('已断开')}")
         self.reconnect_button.setVisible(not connected)
+        self.update_directory_controls()
         editor = self.calc.editor
         if connected and editor is not None and editor.draft and editor.draft.get("pending") and not editor.saving:
             editor.reconcile()
+
+    def build_directory_bar(self, bar):
+        self.directory_edit = QLineEdit(self.directory)
+        self.directory_edit.setAccessibleName(T("工作目录"))
+        self.directory_edit.returnPressed.connect(lambda: self.request_directory(self.directory_edit.text()))
+        self.browse_button = button("浏览…", self.browse_directory)
+        self.siblings_button, self.recent_button = QToolButton(), QToolButton()
+        self.siblings_menu, self.recent_menu = QMenu(self.siblings_button), QMenu(self.recent_button)
+        for control, menu, text, populate in (
+                (self.siblings_button, self.siblings_menu, "同级", self.load_siblings),
+                (self.recent_button, self.recent_menu, "最近", self.load_recent)):
+            control.setText(T(text))
+            control.setPopupMode(QToolButton.InstantPopup)
+            control.setMenu(menu)
+            menu.aboutToShow.connect(populate)
+        self.directory_controls = (self.directory_edit, self.browse_button, self.siblings_button, self.recent_button)
+        bar.addWidget(self.directory_edit, 1)
+        for control in self.directory_controls[1:]:
+            bar.addWidget(control)
+
+    def update_directory_controls(self):
+        enabled = getattr(self.client, "connected", True) and not self.switching_directory
+        for control in self.directory_controls:
+            control.setEnabled(enabled)
+
+    def set_directory_switching(self, switching):
+        self.switching_directory = switching
+        self.update_directory_controls()
+        if not switching:
+            self.directory_edit.setText(self.directory)
+
+    def browse_directory(self):
+        dialog = BrowseServerDirectory(self)
+        if dialog.exec() == QDialog.Accepted and not self.closed:
+            self.open_directory(dialog.files.directory)
+        dialog.deleteLater()
+
+    def request_directory(self, path):
+        if self.closed or self.switching_directory or not getattr(self.client, "connected", True):
+            return
+        self.set_directory_switching(True)
+
+        def received(value, error):
+            if error:
+                self.status.showMessage(str(error))
+                self.set_directory_switching(False)
+            else:
+                self.open_directory(value["directory"])
+
+        self.submit("list_dir", dict(directory=path), received)
+
+    def open_directory(self, directory):
+        if self.closed or not directory:
+            return
+        self.set_directory_switching(True)
+        if self.owner is not None:
+            self.owner.switch_remote_workspace(self, directory)
+        else:
+            self.set_directory_switching(False)
+
+    def load_siblings(self):
+        menu = self.siblings_menu
+        menu.clear()
+        menu.addAction(T("读取中…")).setEnabled(False)
+
+        def received(value, error):
+            if self.siblings_menu is not menu:
+                return
+            menu.clear()
+            if error:
+                menu.addAction(str(error)).setEnabled(False)
+                return
+            rows = sorted((row for row in value["files"] if row["directory"]), key=lambda row: row["name"])
+            for row in rows:
+                directory = posixpath.join(value["directory"], row["name"])
+                action = menu.addAction(row["name"])
+                action.setCheckable(True)
+                action.setChecked(directory == self.directory)
+                action.triggered.connect(lambda checked=False, path=directory: self.request_directory(path))
+            if value.get("truncated"):
+                menu.addAction(T("只显示前 {n} 项", n=len(value["files"]))).setEnabled(False)
+
+        self.submit("list_dir", dict(directory=posixpath.dirname(self.directory)), received)
+
+    def recent_matches(self, host, identity):
+        return identity == self.key[0] if identity else host == self.client.host
+
+    def load_recent(self):
+        menu = self.recent_menu
+        menu.clear()
+        paths = dict.fromkeys(path for host, path, identity in remote_recent_entries()
+                              if path != self.directory and self.recent_matches(host, identity))
+        for path in list(paths)[:12]:
+            action = menu.addAction(path)
+            action.triggered.connect(lambda checked=False, directory=path: self.request_directory(directory))
+        if paths:
+            menu.addSeparator()
+        menu.addAction(T("清除此主机的最近目录")).triggered.connect(self.clear_recent)
+
+    def clear_recent(self):
+        entries = [entry for entry in remote_recent_entries() if not self.recent_matches(entry[0], entry[2])]
+        core.save_config(remote_recent=entries)
 
     def has_draft(self):
         return self.calc.editor is not None and self.calc.editor.draft is not None
@@ -1818,18 +2012,23 @@ class RemoteWorkspace(QWidget):
         if entry in self.detached:
             self.detached.remove(entry)
 
-    def may_close(self):
+    def may_close(self, *, switching=False):
         creation = getattr(self.calc, "import_dialog", None)
         if not any(dialog.busy for dialog in self.transfer_dialogs) and not (creation and creation.busy):
             return True
-        return QMessageBox.question(self, T("取消传输"),
-                                    T("传输仍在进行，关闭工作区将取消传输。是否取消并关闭？"),
+        prompt = (T("传输仍在进行，切换目录将取消传输。是否取消传输并切换？") if switching else
+                  T("传输仍在进行，关闭工作区将取消传输。是否取消并关闭？"))
+        return QMessageBox.question(self, T("取消传输"), prompt,
                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
 
     def shutdown(self):
         if self.closed:
             return
         self.closed = True
+        if hasattr(self.source, "cancel"):
+            for request in self.read_requests:
+                self.source.cancel(request)
+        self.read_requests.clear()
         self.source.push.disconnect(self.push)
         self.source.notice.disconnect(self.status.showMessage)
         if hasattr(self.source, "connectionChanged"):
