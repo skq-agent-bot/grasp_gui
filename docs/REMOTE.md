@@ -7,6 +7,23 @@
 不使用 X11、TCP/agent 转发、反向隧道或监听端口；不自动检查更新或上传程序。
 Slurm 类型通过服务器已有的 Slurm 命令访问集群调度/记账服务，不访问互联网。
 
+### Server workspaces / 服务器工作区
+
+**File → Connect to server…** opens the selected directory as a tab in the main window. A tab is reused when
+the effective SSH user, host, port and absolute server directory match. Each tab uses its own SSH session
+and has its own **Server actions** menu and extra viewers. When a server tab is active, the local directory,
+import, export and parameter commands are disabled. Ctrl+PgUp/PgDn switch workspaces. Ctrl+1–3 switch pages
+in either workspace, with Ctrl+4 for Convergence in the Local workspace. Language and font changes preserve
+open tabs, sessions and in-progress reads and transfers. To reconnect after restarting the application,
+choose a saved directory in the connection dialogue.
+
+“文件 → 连接服务器…”在主窗口的标签中打开所选目录。SSH 用户、主机、端口及服务器绝对路径一致时复用标签。
+每个标签都有独立的 SSH 会话、“服务器操作”菜单和单独打开的查看器。服务器标签激活时，本机目录、导入导出和参数命令禁用。
+Ctrl+PgUp/PgDn 切换工作区，Ctrl+1–3 切换当前工作区页面，Ctrl+4 打开本机收敛页。切换语言或字号时保留标签、会话、
+进行中的读取和传输。重启应用后，可从连接对话框手动打开最近使用的服务器目录。
+
+[English screenshot](images/en_server_workspaces.png) / [中文截图](images/zh_server_workspaces.png)。
+
 ### Server type / 服务器类型
 
 Choose **Workstation (工作站)** or **Slurm cluster (Slurm 集群)** in the connection dialog. The choice is saved
@@ -40,7 +57,7 @@ win over the server's defaults. Opening the dialog, **Check**, and confirmation 
 checks. The report lists missing serial/MPI programs and launcher, plus input preflight for the chosen range.
 Missing programs default to Cancel; explicit confirmation can continue. New warnings found during automatic
 checking require another confirmation. Cancel saves nothing; confirm stores `remote_hosts[host]["run"]` only
-on the desktop, alongside `slurm`. The remote window's **File → Server run settings…** checks/saves a loaded
+on the desktop, alongside `slurm`. The workspace's **Server actions → Server run settings…** checks/saves a loaded
 pipeline's settings without running it.
 
 `hello.capabilities` includes `run_settings_v1`; protocol remains 1. Workstation `run_plan` and `run`, and
@@ -71,7 +88,7 @@ path, or arrange the required library paths in the server's noninteractive login
 路径属于服务器，不使用本机目录选择器或 CPU 数限制。桌面按主机保存的值优先，否则用服务器默认值；
 打开、点“检查”和修改后确认前都由服务器核对程序、MPI 和所选范围的输入。缺少程序时默认取消，仍可明确继续；
 自动检查新发现警告时须再确认。取消不保存，确认只写桌面 `remote_hosts[host]["run"]`，与 `slurm` 并列。
-远程窗口“文件 → 服务器运行设置…”可针对已载入的流程检查、保存而不运行。旧服务器只读显示、提示更新，
+工作区的“服务器操作 → 服务器运行设置…”可针对已载入的流程检查、保存而不运行。旧服务器只读显示、提示更新，
 不发送新参数；Slurm 和服务器 MCP 不变。远程预检不保存首次默认进程数，显式设置也不读写服务器偏好。
 上传预览遇到失效的主机设置时改用服务器默认值检查，返回可选 `run_settings_warning`，在预览和确认中显示；
 实际运行保持严格校验。表单留空表示 PATH，启动交接前补非空默认目录，避免 PATH 中出现代表当前目录的空项。
@@ -175,7 +192,7 @@ without this flag remain Failed. The request alone never establishes a terminal 
 如果无法识别 token，必须确认该用户队列为空才能归档。查询失败时拒绝清除，需先恢复 Slurm 客户端/调度连接。
 
 Slurm 的 COMPLETED/退出码 0 仅表示作业正常退出，不证明物理结果正确；逐步运行摘要不会把调度状态当作每步成功的证据。
-本机日志和现有后台记录的格式不变；Slurm 使用独立记录。关闭远程窗口只断开查看，不会 scancel 作业。
+本机日志和现有后台记录的格式不变；Slurm 使用独立记录。关闭服务器标签只断开查看，不会 scancel 作业。
 
 Screenshots / 截图：[English](images/en_server_type.png) / [中文](images/zh_server_type.png)。
 Resources / 资源设置：[English](images/en_slurm_submit.png) / [中文](images/zh_slurm_submit.png)。
@@ -248,13 +265,13 @@ using a sanitized configuration title; edit it to choose another absent/empty se
 The existing upload dialog previews the pipeline, missing server programs/inputs, attached files and custom
 commands. **Also upload local input files…** optionally selects an existing local input directory and uses the
 ordinary input table/rsync flow: small files checked, large/generated files unchecked, server names retained.
-Missing external inputs may be supplied later through the remote File menu. Custom commands need a separate
+Use **Server actions** to upload missing external inputs later. Custom commands need a separate
 confirmation; the final host/path confirmation defaults to No. The record is created before file transfer.
 A failed transfer retains the record and offers a checked retry. Successful creation opens the new remote directory;
-from an empty remote window it replaces that view using the same SSH connection.
+from an empty server workspace it replaces the tab using the same SSH connection.
 
 预览显示服务器缺少的程序/输入、流程、附带文件和自定义命令。“同时从本机上传输入文件…”可选现有输入目录，沿用文件表和 rsync；
-也可先创建流程，稍后从远程窗口“文件 → 从本机上传…”补齐输入。自定义命令单独确认，最终确认默认否，先写记录再传文件。
+也可先创建流程，稍后从工作区“服务器操作 → 从本机上传…”补齐输入。自定义命令单独确认，最终确认默认否，先写记录再传文件。
 勾选“新建并运行”后仍走普通工作站或 Slurm 的运行预检和确认，不会直接跳过调度器或运行确认。
 
 **Create and run** opens the ordinary run-plan/confirmation flow for the chosen Workstation or Slurm type.
@@ -283,8 +300,8 @@ This evidence precedes the confirmation/entry-visibility review fixes; repeat ag
 
 ### Local editing and upload / 在本机编辑并上传
 
-Remote pipelines remain read-only in the remote viewer. Use the existing desktop Calculation tab for editing;
-no additional workspace tabs or remote editor are introduced. This requires a server advertising
+The Calculation page in a server workspace shows a read-only pipeline. To edit a copy, use **Edit locally…**
+and continue in the Local workspace. This requires a server advertising
 `capabilities: ["workdir_write_v1"]`. Missing capability disables the edit button and gives an explicit
 Install / update server message before any upload request. Protocol/GREETING remain 1; `server_types` is unchanged.
 
@@ -305,7 +322,7 @@ Install / update server message before any upload request. Protocol/GREETING rem
    are not. Internal `.grasp*` files are excluded. Custom commands require their own confirmation, and the final
    upload confirmation defaults to No. Shared attached text files travel with the record; selected other inputs
    use the existing rsync transport after the record has been saved.
-5. **Run:** Upload and run opens the usual remote window and `run_plan` confirmation flow, using the selected
+5. **Run:** Upload and run opens the server workspace and `run_plan` confirmation flow, using the selected
    host's workstation or Slurm mode. Required inputs are checked again with the actual run settings. Uploading
    a record with unresolved missing inputs does not bypass the final run preflight.
 
@@ -333,7 +350,7 @@ Unlink local copy asks default-No and changes only local preferences, leaving th
 上传先预览差异并确认，再在锁内核对修订号和运行状态，先建/更新记录再传输入。记录或任务状态冲突时拒绝覆盖，提供重新取出。
 同名服务器文件保留；传输失败只需补传，不删除记录。丢失回答先核对：配置一致则关联；修订号仍等于保存值则提示“写入未执行，
 可以再次确认上传”，保留本机修改。新建没有记录时须先证明目标仍为空，才允许用户重新确认创建。均不自动重发；其他变化保持冲突。
-上传完成后点“打开远程窗口”，再用其中的运行范围按钮及工作站/Slurm 确认启动；上传不再自动运行。
+上传完成后点“打开远程工作区”，再用其中的运行范围按钮及工作站/Slurm 确认启动；上传不再自动运行。
 “上传并运行…”入口已合并到“上传到服务器…”，已关联时显示“更新服务器流程…”。
 
 The upload target is the directory being browsed. New or directly typed nonexistent targets are marked for
@@ -346,7 +363,7 @@ connection default, so cancelling the upload does not leave a nonexistent defaul
 改存最近浏览的已有目录（新建子目录时为上级），尚未浏览时用服务器 HOME，避免取消后默认路径不存在。
 Upload/download tables share Select all, Deselect all and Restore defaults. No selection means pipeline-only
 upload, with missing inputs listed; configuration-attached files keep their existing treatment. Completion
-offers Open remote window, reusing and refreshing the same host/directory if already open, without starting
+offers **Open server workspace**, reusing and refreshing the same connection/directory if already open, without starting
 any run. Then use the existing workstation/Slurm range controls. Direct server Create and run is unchanged.
 Only desktop interactions change: server methods/capabilities, revisions, unknown-write recovery and the
 retain-existing-file policy are unchanged. See [upload interface details](INTERFACE.md#upload-local-pipeline--上传本机流程).
@@ -438,15 +455,15 @@ OpenSSH 的 `confirm` 提示仍用默认“否”的确认框；`none` (如 FIDO
 定义。
 更旧的 OpenSSH 使用 BatchMode，仅允许密钥/agent，并在界面说明；需要密码时先升级本机 OpenSSH。
 
-每个远程窗口使用一个常驻 SSH stdio 会话；额外的查看器窗口共享它。ControlMaster/ControlPersist=60 仅用于复用认证，
+每个服务器工作区使用一个常驻 SSH stdio 会话；额外的查看器窗口共享它。ControlMaster/ControlPersist=60 仅用于复用认证，
 控制套接字在当前用户的 0700 缓存目录；路径过长时改用 0700 临时目录。复用被拒绝时重连为普通 SSH。
 `ServerAliveInterval=15`、`ServerAliveCountMax=3` 检测中断。自动重连最多连续失败三次 (等待 2、4 秒)；
 耗时的读取请求至少等 180 秒，其他请求至少 30 秒，均再加 20 倍测得的请求往返时间。
-停止自动重连后，可用远程窗口“窗口 → 重新连接”。
+停止自动重连后，可用工作区的“服务器操作 → 重新连接”。
 
 ### 查看与计算
 
-远程窗口顶部和独立查看器标题显示“服务器 host:/path”。计算页流程、参数、输入预览只读；可以运行全部、从选中步骤运行、
+服务器工作区顶部和独立查看器标题显示“服务器 host:/path”。计算页流程、参数、输入预览只读；可以运行全部、从选中步骤运行、
 停止和查看日志。含自定义命令时必须在桌面确认；服务器在启动时再次核对目录记录的修订号。
 能级图先显示能量，再补 jj/LSJ 主要组成和已算跃迁；需要更多组成时点“读取更多组成” (最多 500 项)。
 拖动能级只选择已算跃迁，不在这里另建跃迁计算。图上标记仅保留在当前窗口。
@@ -650,15 +667,15 @@ MCP 开关仍由用户控制，绘图工具在没有 Qt 时返回明确错误。
 
 ## Selected file transfer / 选中文件传输
 
-The remote window File menu transfers only confirmed files using the system **rsync** on both computers.
+The **Server actions** menu transfers only confirmed files using the system **rsync** on both computers.
 Analysis still runs on the server; no raw files are downloaded merely to view results. There is no scp/sftp
 fallback and no bundled rsync or Python dependency. A custom server rsync path is stored per host.
 
 Transfer windows are non-modal: analysis and the main window remain usable, with progress also shown in the
 remote status bar. Closing a busy transfer window asks whether to cancel (default No); declining keeps the
-window open and the transfer running. Closing the remote window cancels all of its transfers directly.
+window open and the transfer running. Closing the server tab also asks before cancelling active transfers.
 传输窗口为非模态，传输时仍可分析结果、操作主窗口，远程状态栏同步显示进度。
-传输中关闭传输窗口需确认取消（默认否）；拒绝时窗口保持打开，传输继续。关闭远程窗口直接取消其全部传输。
+传输中关闭传输窗口需确认取消（默认否）；拒绝时窗口保持打开，传输继续。关闭服务器标签也要确认取消进行中的传输。
 
 Close confirmation / 关闭确认：[English](images/en_rsync_cancel.png) / [中文](images/zh_rsync_cancel.png)。
 
