@@ -152,7 +152,7 @@ EN = {
     "退出": "Quit",
     "语言": "Language",
     "工作目录": "Working directory",
-    "GRASP bin 目录": "GRASP bin directory",
+    "GRASP 程序目录 (bin)": "GRASP programs (bin directory)",
     "浏览…": "Browse…",
     "查看文件": "List files",
     "预览输入": "Preview input",
@@ -433,8 +433,8 @@ EN = {
     "LSJ 组成取自 {f}": "LSJ composition from {f}",
     "(找不到对应的 CSF 文件，只显示 CSF 序号)": "(no matching CSF file: CSF numbers only)",
     "没有对应的 jj2lsj 结果 (.lsj.lbl)": "No matching jj2lsj result (.lsj.lbl)",
-    "展开或收起 GRASP bin 目录和 MPI 设置": "Show or hide the GRASP bin directory and MPI settings",
-    "GRASP bin：{b}　·　{m}": "GRASP bin: {b}  ·  {m}",
+    "展开或收起 GRASP 程序目录 (bin) 和 MPI 设置": "Show or hide the GRASP programs (bin directory) and MPI settings",
+    "GRASP 程序目录 (bin)：{b}　·　{m}": "GRASP programs (bin directory): {b}  ·  {m}",
     "MPI {n} 进程": "MPI, {n} processes",
     "串行": "serial",
     "流程为空：先在各标签页点击“加入流程”。": "The pipeline is empty: click “Add to pipeline” on a tab first.",
@@ -730,7 +730,7 @@ EN = {
     "如 2-00:00:00 (2 天)": "e.g. 2-00:00:00 (2 days)",
     "内存": "Memory",
     "如 64G；空 = 不指定": "e.g. 64G; empty = not set",
-    "服务器上的 GRASP bin 目录": "GRASP bin directory on server",
+    "服务器上的 GRASP 程序目录 (bin)": "GRASP programs (bin directory) on server",
     "加载模块等命令": "Environment setup\n(module load …)",
     "每行一条，如 module load openmpi": "one per line, e.g. module load openmpi",
     "MPI 启动命令": "MPI launch command",
@@ -1000,7 +1000,7 @@ A symbolic link named grasp_levels or grasp_wfn opens that page directly, e.g.
 不需要图形界面；源码中也可以用 python3 grasp_config.py 代替 grasp_gui。""": """Usage:
   grasp_gui check CONFIG.json                 check a configuration: warnings and custom commands; exit code 1 on errors
   grasp_gui script CONFIG.json [options]      print a shell script that runs the whole pipeline in the current directory
-      --bindir DIR                            GRASP bin directory (default: as in the GUI)
+      --bindir DIR                            GRASP programs (bin directory) (default: as in the GUI)
       --mpi "mpirun -np 4"                    run programs that have a parallel version as <prog>_mpi
   grasp_gui script WORKDIR                   rebuild scripts in grasp_run/ from the work-directory record
   grasp_gui steps                             print the reference of all program tabs and fields (Markdown)
@@ -1261,36 +1261,37 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "传输 {n}% · {s} · 剩余 {t}": "Transfer {n}% · {s} · remaining {t}",
     "传输失败，请查看 SSH 连接状态": "Transfer failed; check the SSH connection",
     "已按所选规则处理 {n} 个文件": "Processed {n} files using the selected policy",
-    "可安装捆绑服务器版，或在此设置已有程序的完整路径。": (
+    "可安装捆绑的 GRASP GUI 服务器版，或在此设置已有程序的完整路径。": (
         "Install the bundled server, or enter the absolute path of an existing executable here."),
-    "服务器版本较旧": "Older server version",
+    "GRASP GUI 服务器版较旧": "Older GRASP GUI server version",
     # 捆绑服务器版的显式安装
-    "本构建不含服务器版": "This build does not include the server package",
+    "本构建不含 GRASP GUI 服务器版": "This build does not include the GRASP GUI server package",
     "服务器压缩包校验失败": "Server archive checksum failed",
     "服务器压缩包包含不安全的路径或文件类型": "Server archive contains unsafe paths or file types",
-    "服务器版本记录无效": "Invalid server version record",
+    "GRASP GUI 服务器版版本记录无效": "Invalid GRASP GUI server version record",
     "捆绑服务器版的版本或协议与桌面版不一致": "Bundled server version or protocol does not match this desktop build",
-    "安装目录必须是完整路径或 ~/ 路径": "Install directory must be an absolute or ~/ path",
+    "GRASP GUI 服务器版安装目录必须是完整路径或 ~/ 路径": "GRASP GUI server installation directory must be an absolute or ~/ path",
     "无法识别服务器安装检查结果": "Cannot read server installation checks",
     "服务器需要 glibc 2.17 或更新版本": "Server requires glibc 2.17 or newer",
-    "服务器安装目录空间不足": "Not enough space in the server installation directory",
+    "GRASP GUI 服务器版安装目录空间不足": "Not enough space in the server installation directory",
     "安装已取消": "Installation cancelled",
     "服务器安装请求超时": "Server installation request timed out",
     "服务器安装失败": "Server installation failed",
     "从服务器移除": "Remove from server",
     "从服务器移除…": "Remove from server…",
-    "安装 / 更新服务器版": "Install / update server",
-    "安装 / 更新服务器版…": "Install / update server…",
+    "安装 / 更新 GRASP GUI 服务器版": "Install / update GRASP GUI server",
+    "安装 / 更新 GRASP GUI 服务器版…": "Install / update GRASP GUI server…",
     "安装与分析会话依次进行；不使用 sudo，不修改 PATH 或 shell 配置。": (
         "Installation and analysis sessions run sequentially. No sudo, PATH or shell configuration changes."),
-    "安装目录": "Installation directory",
+    "GRASP GUI 服务器版安装目录": "GRASP GUI server installation directory",
     "检查服务器": "Check server",
     "确认移除": "Confirm removal",
     "确认安装": "Confirm installation",
     "捆绑版本：{v}；大小：{n} MiB": "Bundled version: {v}; size: {n} MiB",
     "没有本程序安装的版本": "No versions installed by this application",
     "架构：{a}；{g}；可用空间：{n} MiB": "Architecture: {a}; {g}; free space: {n} MiB",
-    "安装目录：{p}\n链接：{l}\n已安装版本：\n{v}": "Install directory: {p}\nLink: {l}\nInstalled versions:\n{v}",
+    "GRASP GUI 服务器版安装目录：{p}\n链接：{l}\n已安装版本：\n{v}":
+        "GRASP GUI server installation directory: {p}\nLink: {l}\nInstalled versions:\n{v}",
     "移除下面列出的版本目录及本程序创建的链接；不删除计算目录或结果。": (
         "Remove the listed version directories and the application-created link. "
         "Calculation directories and results are kept."),
@@ -1298,7 +1299,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "Transfer and verify the bundled archive, then switch the link. Keep the previous and any running versions."),
     "服务器 {v}，桌面 {d}；协议兼容，可继续使用。现在安装捆绑版本吗？": (
         "Server {v}, desktop {d}: the protocol is compatible, so you can continue. Install the bundled version now?"),
-    "服务器端不可用": "Server executable unavailable",
+    "GRASP GUI 服务器版不可用": "GRASP GUI server unavailable",
     "使用已有的路径": "Use an existing path",
     # 本机编辑服务器流程与上传
     "新建服务器流程：{n} 步": "Create a server pipeline: {n} steps",
@@ -1310,8 +1311,8 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "本机目录已有其他内容，请换一个目录。": (
         "The local directory contains other data. Choose another directory."),
     "上传到服务器…": "Upload to server…",
-    "服务器端版本较旧，请用“安装 / 更新服务器版…”更新。": (
-        "This server build lacks remote editing. Use Install / update server… to update it."),
+    "GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。": (
+        "This server build lacks remote editing. Use Install / update GRASP GUI server… to update it."),
     "在本机编辑…": "Edit locally…",
     "本机工作目录": "Local working directory",
     "选择流程上传目标": "Choose pipeline upload target",
@@ -1329,8 +1330,8 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "写入未执行，可以再次确认上传。": "The write was not applied. You can confirm the upload again.",
     "已核对上次写入；请再次确认当前上传内容。": "The previous write was verified. Confirm the current upload again.",
     "解除本机关联…": "Unlink local copy…",
-    "只解除本机副本关联，不改变服务器目录。结果未确认的请求须先人工核对。是否继续？": (
-        "Unlink only this local copy and leave the server directory intact? "
+    "只解除本机副本关联，不改变服务器上的工作目录。结果未确认的请求须先人工核对。是否继续？": (
+        "Unlink only this local copy and leave the working directory on server intact? "
         "Check unconfirmed requests manually first."),
     "输入文件由服务器检查；实际运行前将再次检查。": "Inputs are checked on the server and checked again before running.",
     "输入预检通过。": "Input preflight passed.",
@@ -1366,13 +1367,13 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "请选择服务器类型": "Choose the server type",
     "主机设置已更改，请重新连接": "The host has changed. Connect again",
     "服务器类型：{kind}": "Server type: {kind}",
-    "服务器端尚不支持 Slurm，请先更新服务器端程序。": "The server does not support Slurm yet. Update the server program first.",
+    "GRASP GUI 服务器版尚不支持 Slurm，请先更新。": "The server does not support Slurm yet. Update the GRASP GUI server first.",
     "提交 Slurm 作业": "Submit Slurm job",
     "正在提交 Slurm 作业…": "Submitting Slurm job…",
     "提交": "Submit",
     "脚本在服务器现有工作目录中通过 sbatch 提交；请核对分区、资源和模块命令。": (
         "The script is submitted with sbatch in the existing server directory. Check partition, resources and module commands."),
-    "将在服务器目录 {p} 提交 Slurm 作业，是否确认？": "Submit a Slurm job in server directory {p}?",
+    "将在服务器上的工作目录 {p} 提交 Slurm 作业，是否确认？": "Submit a Slurm job in the working directory on server {p}?",
     "Slurm 作业记录无效": "Invalid Slurm job record",
     "Slurm 命令失败：{e}": "Slurm command failed: {e}",
     "服务器缺少 Slurm 命令：{names}": "Slurm commands missing on the server: {names}",
@@ -1402,7 +1403,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "请通过管理员或其他可信渠道核对主机指纹；一致后再输入 yes 或指纹，不确定请取消。":
         "Verify the host fingerprint with your administrator or another trusted channel. "
         "Enter yes or the fingerprint only if it matches; otherwise cancel.",
-    "服务器端程序请填写完整路径或 ~/ 路径": "Enter a full server executable path or a ~/ path",
+    "GRASP GUI 服务器版程序路径请填写完整路径或 ~/ 路径": "Enter a full GRASP GUI server program path or a ~/ path",
     "连接服务器…": "Connect to server…",
     "连接服务器": "Connect to server",
     "SSH 主机（沿用 ~/.ssh/config）": "SSH host (uses ~/.ssh/config)",
@@ -1411,7 +1412,7 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "SSH 连接已关闭": "SSH connection closed",
     "SSH 连接已断开": "SSH connection lost",
     "上一级": "Parent directory",
-    "使用此目录": "Use this directory",
+    "打开此工作目录": "Open this working directory",
     "使用用户 scope": "Use user scope",
     "参数": "Parameters",
     "启动或停止的结果无法确认；重连后请先核对状态，不要直接重复操作":
@@ -1427,11 +1428,32 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "Disconnection will end the calculation; choose a user scope, Slurm, or explicitly start normally",
     "服务器 {h} 延迟 {n} ms": "Server {h}: latency {n} ms",
     "服务器 {h}:{p}": "Server {h}:{p}",
-    "服务器握手失败，请检查程序路径并安装或更新服务器端":
-        "Server handshake failed; check the executable path and install or update the server program",
+    "服务器握手失败，请检查程序路径并安装或更新 GRASP GUI 服务器版":
+        "Server handshake failed; check the executable path and install or update the GRASP GUI server",
     "服务器未开启 lingering，不能使用用户 scope": "Lingering is disabled on the server; a user scope cannot be used",
-    "服务器目录": "Server directory",
-    "服务器端程序": "Server executable",
+    "服务器上的工作目录": "Working directory on server",
+    "服务器 {h} · 工作目录 {p}": "Server {h} · Working directory {p}",
+    "GRASP GUI 服务器版 (程序路径)": "GRASP GUI server (program path)",
+    "计算的输入和结果所在的目录，例如 ~/calc/Fe_XVII":
+        "Directory containing calculation inputs and results, for example ~/calc/Fe_XVII",
+    "服务器上的 grasp_gui 程序；留空时自动查找 ~/.local/bin/grasp_gui 和 PATH":
+        "The grasp_gui program on the server. Leave blank to search ~/.local/bin/grasp_gui and PATH.",
+    "rmcdhf、rci 等 GRASP 程序所在的目录": "Directory containing GRASP programs such as rmcdhf and rci",
+    "GRASP GUI 服务器版较旧，无法自动检查 GRASP，请更新。":
+        "This GRASP GUI server version cannot check GRASP automatically. Update it to enable the check.",
+    "GRASP：{path} ({origin})": "GRASP: {path} ({origin})",
+    "来自 GRASP_BINDIR": "from GRASP_BINDIR",
+    "来自 PATH": "from PATH",
+    "来自安装树": "from the installation tree",
+    "此主机保存的设置": "settings saved for this host",
+    "未找到程序文件：{names}": "Program files not found: {names}",
+    "未找到 GRASP 程序。SSH 非交互启动看不到仅为交互终端设置的变量。":
+        "GRASP programs were not found. Non-interactive SSH cannot see variables set only for interactive shells.",
+    "保存的程序目录不可用：{path}": "The saved programs directory is unavailable: {path}",
+    "此检查仅代表 Slurm 登录节点。": "This check applies to the Slurm login node only.",
+    "设置…": "Settings…",
+    "工作目录尚无流程。已检查程序目录。":
+        "This working directory has no pipeline yet. The programs directory was checked.",
     "服务器退出登录会结束计算。可使用用户 scope（须开启 lingering），导出 Slurm，或明确选择照常启动。":
         "Logging out will end the calculation. Use a user scope (requires lingering), export Slurm, or explicitly "
         "start normally.",
@@ -1443,12 +1465,11 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "用户 scope 失败时可导出 Slurm，或重新选择照常启动；请先核对运行状态。":
         "If a user scope fails, export Slurm or explicitly start normally; check the run state first.",
     "组成尚在读取": "Composition loading",
-    "自动尝试 ~/.local/bin/grasp_gui 和 PATH；也可填完整路径": "Tries ~/.local/bin/grasp_gui then PATH; or enter the full path",
     "请输入有效的 SSH 主机或 user@host": "Enter a valid SSH host or user@host",
     "读取更多组成": "Load more components",
     "读取期间远程文件已改变，请刷新": "Remote files changed while reading; refresh",
-    "远程协议不兼容，请更新服务器端程序": "Incompatible remote protocol; update the server program",
-    "远程文件请在服务器目录中选择": "Select remote files in the server directory",
+    "远程协议不兼容，请更新 GRASP GUI 服务器版": "Incompatible remote protocol; update the GRASP GUI server",
+    "远程文件请在服务器上的工作目录中选择": "Select remote files in the working directory on server",
     "远程模式只查看已算跃迁；计算请运行服务器上的流程。": "Remote mode displays existing transitions; use the server pipeline to compute them.",
     "远程流程": "Remote pipeline",
     "远程流程包含可运行任意程序的自定义命令。确认运行吗？":
@@ -1497,7 +1518,10 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "配置只包含各程序的参数和计算流程 (以及少量附带的输入文件)，不含计算结果。导入到一个空目录后，点“▶ 运行全部”即可从头计算；各程序页显示该程序在流程中最后一次使用的参数。": "A configuration contains only the parameters of the programs and the pipeline (and possibly a few small input files), no results. Import it into an empty directory and press “▶ Run all” to compute from scratch; each program tab shows the parameters of the last use of that program in the pipeline.",
     "已导入“{t}”到 {p}；点“▶ 运行全部”开始计算": "Imported “{t}” into {p}; press “▶ Run all” to start",
     "已导出配置 {p} ({n} 步)": "Exported configuration {p} ({n} steps)",
-    "配置保存当前流程中各步的参数，不含计算结果，也不含 GRASP bin 目录、MPI 进程数等与机器有关的设置。别人导入后可以从头重复这个计算。": "The configuration stores the parameters of the steps of the current pipeline — no results, and no machine-specific settings such as the GRASP bin directory or the number of MPI processes. Others can import it and repeat the calculation from scratch.",
+    "配置保存当前流程中各步的参数，不含计算结果，也不含 GRASP 程序目录 (bin)、MPI 进程数等与机器有关的设置。别人导入后可以从头重复这个计算。":
+        "The configuration stores the parameters of the steps of the current pipeline — no results, and no machine-specific "
+        "settings such as the GRASP programs (bin directory) or the number of MPI processes. "
+        "Others can import it and repeat the calculation from scratch.",
     "标题": "Title",
     "说明": "Description",
     "计算的内容和目的": "what is computed and why",
@@ -1551,11 +1575,11 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "服务器运行设置": "Server run settings",
     "服务器运行设置…": "Server run settings…",
     "服务器运行设置的格式有误": "Invalid server run settings",
-    "GRASP bin 目录必须是服务器上存在的绝对路径，或留空。":
-        "The GRASP bin directory must be an existing absolute path on the server, or empty.",
+    "GRASP 程序目录 (bin) 必须是服务器上存在的绝对路径，或留空。":
+        "The GRASP programs (bin directory) must be an existing absolute path on the server, or empty.",
     "服务器运行设置仅用于工作站模式。": "Server run settings apply only to workstation mode.",
-    "服务器端版本较旧，设置只读；请用“安装 / 更新服务器版…”更新后再修改。":
-        "Settings are read-only on this older server; use Install / update server… before editing.",
+    "GRASP GUI 服务器版较旧，设置只读；请用“安装 / 更新 GRASP GUI 服务器版…”更新后再修改。":
+        "Settings are read-only on this older server; use Install / update GRASP GUI server… before editing.",
     "设置已改变，请检查；确认前会自动检查。": "Settings changed. Check them; confirmation also checks automatically.",
     "正在检查服务器运行设置…": "Checking server run settings…",
     "确认运行": "Confirm run",
@@ -1615,7 +1639,6 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
         "Cleanup result is unknown. The file list will refresh. Check it before trying again.",
     # 多工作区 (#52)
     "本机：{name}": "Local: {name}",
-    "最近的服务器目录": "Recent server directories",
     "服务器操作": "Server actions",
     "已连接": "Connected",
     "已断开": "Disconnected",
@@ -1623,10 +1646,10 @@ No window is opened; from the sources, python3 grasp_config.py can be used inste
     "传输仍在进行，关闭工作区将取消传输。是否取消并关闭？":
         "A transfer is active. Cancel the transfer and close this workspace?",
     # 服务器工作区编辑与草稿 (#52)
-    "由服务器按服务器目录检查流程。": "The server checks the pipeline in the server directory.",
+    "由服务器按服务器上的工作目录检查流程。": "The server checks the pipeline in the working directory on server.",
     "草稿": "Draft",
     "{e}\n文件已保留；在此之前服务器流程只读。": "{e}\nThe file was kept. The server pipeline stays read-only until then.",
-    "此服务器目录有 {time} 保存的草稿。": "This server directory has a draft saved at {time}.",
+    "此服务器上的工作目录有 {time} 保存的草稿。": "This working directory on server has a draft saved at {time}.",
     "服务器流程在此之后已改变；恢复后保存会被拒绝，可导出草稿。":
         "The server pipeline has changed since then. Saving a restored draft will be refused; you can export it.",
     "恢复草稿": "Restore draft",
@@ -1828,21 +1851,26 @@ def update_config(key, edit):
     return _edit_config(update)
 
 
-def default_bindir(*, use_saved=True):
-    """GRASP 程序目录：$GRASP_BINDIR → 用户在界面中设置的目录 (存在即采用) → PATH 中 rmcdhf 所在目录
-    → 本程序上一级目录的 bin (放在 GRASP 源码树中时)。"""
+def bindir_selection(*, use_saved=True):
+    """给运行与连接检查共用的程序目录和来源。"""
+    env = os.environ.get("GRASP_BINDIR", "")
     saved = load_config().get("bindir", "") if use_saved else ""
-    if not os.environ.get("GRASP_BINDIR") and saved and os.path.isdir(saved):
-        return saved
-    candidates = [os.environ.get("GRASP_BINDIR", ""), saved]
+    if not env and saved and os.path.isdir(saved):
+        return saved, "saved"
+    candidates = [(env, "env"), (saved, "saved")]
     p = shutil.which("rmcdhf")
     if p:
-        candidates.append(os.path.dirname(p))
-    candidates.append(os.path.join(REPO_DIR, "bin"))
-    for d in candidates:
+        candidates.append((os.path.dirname(p), "path"))
+    fallback = os.path.join(REPO_DIR, "bin")
+    candidates.append((fallback, "tree"))
+    for d, source in candidates:
         if d and os.path.isfile(os.path.join(d, "rmcdhf")):
-            return d
-    return os.environ.get("GRASP_BINDIR") or os.path.join(REPO_DIR, "bin")
+            return d, source
+    return env or fallback, None
+
+
+def default_bindir(*, use_saved=True):
+    return bindir_selection(use_saved=use_saved)[0]
 
 
 def yn(flag):

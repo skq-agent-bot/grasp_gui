@@ -24,7 +24,7 @@ def supported(source, parent):
     if edit.CAPABILITY in getattr(source, "server", {}).get("capabilities", []):
         return True
     QMessageBox.warning(parent, T("上传到服务器…"),
-                        T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
+                        T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。"))
     return False
 
 
@@ -421,7 +421,7 @@ class UploadDialog(TransferDialog):
 
     def preview(self, names, callback):
         if edit.CAPABILITY not in getattr(self.source, "server", {}).get("capabilities", []):
-            callback(None, ValueError(T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。")))
+            callback(None, ValueError(T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。")))
             return
         self.preview_generation += 1
         generation = self.preview_generation
@@ -440,7 +440,7 @@ class UploadDialog(TransferDialog):
         if self.closed:
             return
         if not error and self.remote_only and "missing_programs" not in value:
-            error = ValueError(T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
+            error = ValueError(T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。"))
         if error:
             self.ready = False
             self.status.setText(str(error))
@@ -466,7 +466,7 @@ class UploadDialog(TransferDialog):
             if self.closed:
                 return
             if not error and self.remote_only and "missing_programs" not in value:
-                error = ValueError(T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
+                error = ValueError(T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。"))
             if error:
                 self.controls(False)
                 self.status.setText(str(error))
@@ -569,7 +569,7 @@ class UploadDialog(TransferDialog):
         self.pending = True
         self.start_button.setEnabled(False)
         if edit.CAPABILITY not in getattr(self.source, "server", {}).get("capabilities", []):
-            self.status.setText(T("服务器端版本较旧，请用“安装 / 更新服务器版…”更新。"))
+            self.status.setText(T("GRASP GUI 服务器版较旧，请用“安装 / 更新 GRASP GUI 服务器版…”更新。"))
             return
         def received(value, error):
             if self.closed:
@@ -632,7 +632,7 @@ class UploadDialog(TransferDialog):
         if self.busy:
             return
         if QMessageBox.question(self, T("解除本机关联…"),
-                T("只解除本机副本关联，不改变服务器目录。结果未确认的请求须先人工核对。是否继续？"),
+                T("只解除本机副本关联，不改变服务器上的工作目录。结果未确认的请求须先人工核对。是否继续？"),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
             self.save_link(None)
             self.refresh_link()

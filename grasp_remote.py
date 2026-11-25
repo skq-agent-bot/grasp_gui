@@ -11,6 +11,7 @@ from pathlib import Path
 import pwd
 import queue
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -64,6 +65,19 @@ def integer(value, low, high):
     return value
 
 
+GRASP_CHECK = "grasp_check_v1"
+GRASP_PROGRAMS = ("rnucleus", "rcsfgenerate", "rangular", "rwfnestimate", "rmcdhf", "rci")
+
+
+def grasp_check():
+    directory, source = core.bindir_selection()
+    names = [name + suffix for suffix in ("", "_mpi") for name in GRASP_PROGRAMS]
+    programs = {name: bool(core.program_path(directory, name)) for name in names}
+    return dict(directory=directory if source else "", source=source, programs=programs,
+                path_programs=[name for name in names if shutil.which(name)],
+                bindir_env=os.environ.get("GRASP_BINDIR", ""), path_env=os.environ.get("PATH", ""))
+
+
 class Operations(service.Service):
     def __init__(self, cancel=None):
         super().__init__("/")
@@ -79,12 +93,13 @@ class Operations(service.Service):
 
     def hello(self, protocol, version=""):
         if type(protocol) is not int or protocol != PROTOCOL:
-            raise ValueError(T("远程协议不兼容，请更新服务器端程序"))
+            raise ValueError(T("远程协议不兼容，请更新 GRASP GUI 服务器版"))
         executable = os.environ.get("GRASP_GUI_REMOTE_EXECUTABLE") or (
             sys.executable if getattr(sys, "frozen", False) else sys.argv[0])
         return dict(protocol=PROTOCOL, version=core.VERSION, executable=os.path.abspath(executable),
-                    home=str(Path.home()), server_types=["workstation", "slurm"],
-                    capabilities=["workdir_write_v1", "run_range_v1", "run_settings_v1", "workdir_clean_v1"])
+                    home=str(Path.home()), server_types=["workstation", "slurm"], grasp_check=grasp_check(),
+                    capabilities=["workdir_write_v1", "run_range_v1", "run_settings_v1", "workdir_clean_v1",
+                                  GRASP_CHECK])
 
     def preview_clean(self, directory):
         return workdir.preview_clean(self.path(directory, directory=True))
