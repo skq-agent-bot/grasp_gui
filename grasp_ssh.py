@@ -447,6 +447,9 @@ class Client:
                 profile = host_profiles().get(self.identity)
                 if isinstance(profile, dict):
                     self.program = profile.get("program", "")
+                elif self.profile_key and self.profile_key != self.host:
+                    # 旧别名条目首次迁移时仍使用其路径；已解析的旧主机设置不能用于新主机。
+                    self.program = ""
             while not self.closed.is_set():
                 try:
                     if not self.connected:

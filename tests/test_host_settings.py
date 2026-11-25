@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -35,6 +36,30 @@ def test_aliases_share_settings_and_legacy_migrates_on_use(preferences):
     assert ssh.profile_for_alias("alpha")[0] == first.identity
     assert set(ssh.host_profiles()) == {first.identity, "unused"}
     assert ssh.host_profiles()["unused"] == {"np": 8}
+
+
+@pytest.mark.parametrize(("profile_key", "expected_program"), [
+    ("user@old:22", ""), ("alias", "/old/bin"), (None, "/old/bin"),
+])
+def test_worker_chooses_program_before_connecting_to_unconfigured_identity(
+        preferences, monkeypatch, profile_key, expected_program):
+    connected = Event()
+    attempts = []
+
+    def connect(client):
+        attempts.append(client.program)
+        client.closed.set()
+        connected.set()
+
+    monkeypatch.setattr(ssh, "connection_identity", lambda client, *, resolve=True: "user@new:22")
+    monkeypatch.setattr(ssh.Client, "_connect", connect)
+    monkeypatch.setattr(ssh, "cache_root", lambda: preferences.parent / "cache")
+    client = ssh.Client("alias", "/old/bin", profile_key=profile_key)
+    try:
+        assert connected.wait(5)
+        assert attempts == [expected_program]
+    finally:
+        client.close()
 
 
 @pytest.mark.parametrize("raw", (b"{lost", b"[]", b"\xff"))
@@ -159,5 +184,28 @@ def test_connect_uses_resolved_identity_and_explicit_settings(preferences, qapp,
         assert dialog.program.text() == "/new/bin" and dialog.server_type.currentData() == "slurm"
         assert "user@correct:22" in dialog.profile_message
         assert ssh.profile_for_alias("alias")[0] == "user@correct:22"
+    finally:
+        dialog.reject()
+
+
+@pytest.mark.gui
+def test_alias_retargeted_to_unconfigured_host_refreshes_program_and_directory(preferences, qapp, monkeypatch):
+    from remote_panel import ConnectDialog
+
+    core.save_config(remote_hosts={"user@old:22": dict(aliases=["alias"], directory="/old", program="/old/bin",
+                                                      server_type="workstation")})
+    dialog = ConnectDialog()
+    try:
+        dialog.host.setCurrentText("alias")
+        assert dialog.program.text() == "/old/bin"
+        client = SimpleNamespace(host="alias", identity="user@new:22", program="")
+        dialog.source = SimpleNamespace(client=client, server={"version": core.VERSION}, close=lambda: None)
+        requests = []
+        monkeypatch.setattr(dialog, "connect_server", lambda: requests.append(dialog.path.text()))
+        assert dialog.apply_connected_profile()
+        assert dialog.program.text() == "" and requests == ["~"]
+        assert "user@new:22" in dialog.profile_status.text()
+        assert dialog.server_type.currentData() == ""
+        assert ssh.host_profiles()["user@old:22"]["program"] == "/old/bin"
     finally:
         dialog.reject()

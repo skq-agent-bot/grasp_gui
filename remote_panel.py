@@ -245,7 +245,8 @@ class ConnectDialog(QDialog):
         self.profile_key, saved = ssh.profile_for_alias(host.strip())
         self.profile_message = ""
         self.profile_status.clear()
-        self.server_type.setCurrentIndex(self.server_type.findData(saved.get("server_type", "")))
+        self.profile_type = saved.get("server_type", "")
+        self.server_type.setCurrentIndex(self.server_type.findData(self.profile_type))
         self.profile_program = saved.get("program", "")
         self.profile_directory = saved.get("directory", "~")
         self.program.setText(self.profile_program)
@@ -276,18 +277,28 @@ class ConnectDialog(QDialog):
             parent = self.parentWidget()
             if hasattr(parent, "statusBar"):
                 parent.statusBar().showMessage(message)
-        if self.profile_key == identity or not isinstance(saved, dict):
+        if self.profile_key == identity:
+            return False
+        if isinstance(saved, dict):
+            server_type = saved.get("server_type", "")
+            note = T("此别名指向 {host}，已使用该主机保存的设置。", host=identity)
+        elif self.profile_key and self.profile_key != source.client.host:
+            saved = {}
+            selected_type = self.server_type.currentData()
+            server_type = "" if selected_type == self.profile_type else selected_type
+            note = T("此别名指向 {host}。该主机没有已保存的设置，程序路径留空时将自动查找。", host=identity)
+        else:
             return False
         selected = self.path.text()
         self.profile_key = identity
         self.profile_program = saved.get("program", "")
         self.program.setText(source.client.program)
-        self.server_type.setCurrentIndex(self.server_type.findData(saved.get("server_type", "")))
+        self.profile_type = server_type
+        self.server_type.setCurrentIndex(self.server_type.findData(server_type))
         directory = saved.get("directory", "~")
         use_saved = selected == self.profile_directory and not getattr(self, "link", None)
         self.profile_directory = directory
-        self.profile_message = "\n".join(filter(None, (
-            self.profile_message, T("此别名指向 {host}，已使用该主机保存的设置。", host=identity))))
+        self.profile_message = "\n".join(filter(None, (self.profile_message, note)))
         self.profile_status.setText(self.profile_message)
         if use_saved and selected != directory:
             self.path.setText(directory)

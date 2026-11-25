@@ -14,6 +14,8 @@ effective SSH user, host and port, including aliases, program and installation p
 server type, run settings and transfer preferences. The first connection using an old alias migrates its
 settings. If a connection already has settings, it keeps them and adds the alias. `remote_recent` lists
 recent server directories, and `remote_copies` links editable local copies to their server directories.
+If an alias is redirected to a previously unconfigured host, a program path inherited from the old
+host is cleared so the GRASP GUI server can be discovered automatically.
 A damaged preferences file is renamed to `grasp_gui.json.broken-YYYYmmdd-HHMMSS` and defaults are used.
 The desktop shows its backup path and reports write failures in the status bar. An unreadable file stays in place.
 
@@ -29,6 +31,7 @@ GRASP GUI stores no passwords. OpenSSH manages `known_hosts`.
 Linux 和 macOS 的设置均保存到 `~/.config/grasp_gui.json`。`remote_hosts` 按生效的 SSH 用户、主机和端口保存
 别名、程序及安装路径、上次目录、服务器类型、运行和传输设置。第一次用旧别名连接时迁移该条目。标识下已有设置时保留
 已有设置，并加入别名。`remote_recent` 保存最近服务器目录，`remote_copies` 关联可编辑的本机副本与服务器目录。
+别名改指向没有设置的新主机时，会清空从旧主机预填的程序路径，按默认规则查找服务器版。
 设置文件损坏时将原件改名为 `grasp_gui.json.broken-YYYYmmdd-HHMMSS`，再使用默认设置。桌面会提示备份位置。
 保存失败时在状态栏提示。暂时读不了的文件保留原位。
 

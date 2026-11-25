@@ -111,6 +111,8 @@ EN = {
     "设置未能保存：{reason}": "Could not save settings: {reason}",
     "此别名指向 {host}，已使用该主机保存的设置。":
         "This alias points to {host}. The settings saved for that host are in use.",
+    "此别名指向 {host}。该主机没有已保存的设置，程序路径留空时将自动查找。":
+        "This alias points to {host}. This host has no saved settings. A blank program path enables discovery.",
     "旧服务器设置已合并到 {host}。": "The previous server settings were merged into {host}.",
     # 直接导入服务器 (#48)
     "在此新建计算…": "Create calculation here…",
