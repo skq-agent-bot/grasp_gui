@@ -259,7 +259,7 @@ def test_settings_entry_points_receive_async_answers_during_modal_dialog(qapp, p
             panel.prepare_run(1)
         else:
             show_server_run_settings(None, source, "/server/calc")
-        loop.exec()
+        (getattr(loop, "exec", None) or loop.exec_)()
         assert result == {"checked": "/new/bin"}
         assert core.load_config()["remote_hosts"]["@fixture:22"]["run"]["bindir"] == "/new/bin"
         if run:
@@ -278,6 +278,9 @@ def test_modal_callback_keeps_queued_responses_progress_and_push_events_moving(q
     source.push.connect(lambda event: received.append(event["event"]))
     source.notice.connect(received.append)
     outer_loop = QEventLoop()
+    outer_deadline = QTimer()
+    outer_deadline.setSingleShot(True)
+    outer_deadline.timeout.connect(outer_loop.quit)
 
     def modal_callback(*_):
         dialog = QDialog()
@@ -286,18 +289,23 @@ def test_modal_callback_keeps_queued_responses_progress_and_push_events_moving(q
         client.events.put(dict(event="log"))
         client.events.put(dict(event="state"))
         client.events.put(dict(event="notice", text="notice"))
-        QTimer.singleShot(1000, dialog.reject)
+        deadline = QTimer(dialog)
+        deadline.setSingleShot(True)
+        deadline.timeout.connect(dialog.reject)
+        deadline.start(1000)
         received.append(dialog.exec())
+        deadline.stop()
         outer_loop.quit()
 
     try:
         source.submit("watch", {}, modal_callback)
         source.submit("watch", {}, lambda *_: received.append("response"))
         progress_id = source.submit("hold", {}, lambda *_: None, received.append)
-        QTimer.singleShot(2000, outer_loop.quit)
-        outer_loop.exec()
+        outer_deadline.start(2000)
+        (getattr(outer_loop, "exec", None) or outer_loop.exec_)()
         assert received == ["response", "progress", "log", "state", "notice", QDialog.Accepted]
     finally:
+        outer_deadline.stop()
         source.close()
 
 
