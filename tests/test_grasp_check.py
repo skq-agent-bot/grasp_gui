@@ -121,7 +121,8 @@ def test_batch_lookup_matches_individual_programs(tmp_path, monkeypatch):
 
 @pytest.mark.gui
 @pytest.mark.parametrize("field", ["programs", "missing_files"])
-def test_older_server_reports_hide_nonexistent_mpi_programs(qapp, field):
+def test_older_server_reports_hide_nonexistent_mpi_programs(field):
+    pytest.importorskip("PySide6.QtWidgets")
     from remote_panel import grasp_check_text
 
     obsolete = ["rnucleus_mpi", "rcsfgenerate_mpi", "rwfnestimate_mpi"]
